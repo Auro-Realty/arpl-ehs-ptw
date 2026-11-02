@@ -12,10 +12,14 @@
         apiKey: "__FIREBASE_API_KEY__",
         authDomain: "prj-aurorealty-ehs-ptw-dev.firebaseapp.com",
         projectId: "prj-aurorealty-ehs-ptw-dev",
-        storageBucket: "prj-aurorealty-ehs-ptw-dev.appspot.com",
-        messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
-        appId: "__FIREBASE_APP_ID__"
+        storageBucket: "prj-aurorealty-ehs-ptw-dev.firebasestorage.app",
+        messagingSenderId: "1045760890879",
+        appId: "1:1045760890879:web:b7dac1bd13d481fcc179ca",
+        measurementId: "G-GF258H8BBQ"
     };
+
+    // Global alias for compatibility
+    window.firebaseConfig = window.__FIREBASE_CONFIG__;
 
     /**
      * Retrieve the API key injected from GitHub Secrets
