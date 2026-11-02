@@ -58,4 +58,4 @@ jobs:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
         run: |
           npm install -g firebase-tools
-          firebase deploy --project prj-aurorealty-ehs-ptw-dev --non-interactive
+          firebase deploy --project prj-aurorealty-ehs-ptw-dev --non-interactive --force
