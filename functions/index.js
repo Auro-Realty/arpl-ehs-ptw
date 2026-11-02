@@ -351,11 +351,17 @@ exports.adminConfigureGeolocation = onCall({ region: REGION }, async (request) =
     throw new HttpsError("invalid-argument", "projectId, lat, and lng are required.");
   }
 
-  const isSuperAdmin = request.auth.token.superAdmin === true;
-  const isProjAdmin = request.auth.token.role === "project-admin" && request.auth.token.projectId === projectId;
+  const isProjAdmin =
+    (request.auth.token.role === "project-admin" ||
+      request.auth.token.role === "site-admin" ||
+      request.auth.token.admin === true) &&
+    request.auth.token.projectId === projectId;
 
-  if (!isSuperAdmin && !isProjAdmin) {
-    throw new HttpsError("permission-denied", "Unauthorized to configure geolocation for this project.");
+  if (!isProjAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Unauthorized: Only the assigned Site Administrator can configure worksite geolocation and geofencing."
+    );
   }
 
   await db.collection("projects").doc(projectId).set(
@@ -389,11 +395,17 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("invalid-argument", "email, role, and projectId are required.");
   }
 
-  const isSuperAdmin = request.auth.token.superAdmin === true;
-  const isProjAdmin = request.auth.token.role === "project-admin" && request.auth.token.projectId === projectId;
+  const isProjAdmin =
+    (request.auth.token.role === "project-admin" ||
+      request.auth.token.role === "site-admin" ||
+      request.auth.token.admin === true) &&
+    request.auth.token.projectId === projectId;
 
-  if (!isSuperAdmin && !isProjAdmin) {
-    throw new HttpsError("permission-denied", "Unauthorized: Only Project Admin can assign roles for this project.");
+  if (!isProjAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Unauthorized: Only the assigned Site Administrator can provision on-site personnel accounts for this project."
+    );
   }
 
   // Allowed Approval Flow Roles
@@ -450,6 +462,79 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 });
 
 // ============================================================================
+// ============================================================================
+// 6b. SITE ADMIN: RESET ONSITE PERSONNEL PASSWORD
+// ============================================================================
+exports.adminResetPersonnelPassword = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+
+  const { uid, projectId, newPassword } = request.data;
+  if (!uid || !projectId) {
+    throw new HttpsError("invalid-argument", "uid and projectId are required.");
+  }
+
+  const isProjAdmin =
+    (request.auth.token.role === "project-admin" ||
+      request.auth.token.role === "site-admin" ||
+      request.auth.token.admin === true) &&
+    request.auth.token.projectId === projectId;
+
+  if (!isProjAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Unauthorized: Only the assigned Site Administrator can reset passwords for personnel on this project."
+    );
+  }
+
+  const tempPassword = newPassword || ("ARPL#Temp" + Math.floor(1000 + Math.random() * 9000) + "!");
+  await auth.updateUser(uid, { password: tempPassword });
+
+  await db.collection("projects").doc(projectId).collection("personnel").doc(uid).set(
+    {
+      passwordResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      passwordResetBy: request.auth.uid,
+      mustChangePasswordOnLogin: true
+    },
+    { merge: true }
+  );
+
+  return { success: true, uid, temporaryPassword: tempPassword };
+});
+
+// ============================================================================
+// 6c. SITE ADMIN: DELETE ONSITE PERSONNEL ACCOUNT
+// ============================================================================
+exports.adminDeletePersonnelAccount = onCall({ region: REGION }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+
+  const { uid, projectId } = request.data;
+  if (!uid || !projectId) {
+    throw new HttpsError("invalid-argument", "uid and projectId are required.");
+  }
+
+  const isProjAdmin =
+    (request.auth.token.role === "project-admin" ||
+      request.auth.token.role === "site-admin" ||
+      request.auth.token.admin === true) &&
+    request.auth.token.projectId === projectId;
+
+  if (!isProjAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "Unauthorized: Only the assigned Site Administrator can delete personnel accounts on this project."
+    );
+  }
+
+  await auth.deleteUser(uid);
+  await db.collection("projects").doc(projectId).collection("personnel").doc(uid).delete();
+
+  return { success: true, uid };
+});
+
 // 7. ATOMIC PERMIT STATE TRANSITION & GEOFENCE ENFORCEMENT
 // ============================================================================
 exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {

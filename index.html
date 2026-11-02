@@ -9,6 +9,10 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Font Awesome 6.5.1: Pinned CDN with Subresource Integrity (SRI) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous" referrerpolicy="no-referrer">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <!-- jsPDF 2.5.1: Pinned CDN with Subresource Integrity (SRI) and deferred loading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <!-- Firebase Configuration (Injected dynamically from GitHub Secrets) -->
@@ -10712,29 +10716,51 @@
         function renderAdminConfigView() {
             // Dynamically customize Header and Tab Bar based on whether Super Admin or Site Admin
             const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
+            const isSiteAdmin = currentUser && currentUser.key === 'admin';
             const titleEl = document.getElementById('adminConsoleHeaderTitle');
             const subEl = document.getElementById('adminConsoleHeaderSub');
+            const btnSaveGeofence = document.getElementById('btnAdminSaveGeofence');
+
             if (titleEl && subEl) {
                 if (isSuperAdmin) {
                     titleEl.innerHTML = '<i class="fa-solid fa-crown" style="color:var(--orange);"></i> Super Administrator Governance Center';
-                    subEl.textContent = 'Enterprise control: Provision Project Admins, register/modify project sites, manage towers, contractors, SLA & system parameters';
+                    subEl.textContent = 'Enterprise Master Scope: Provision Site Administrators and configure Projects & Sites Master.';
                 } else {
                     titleEl.innerHTML = '<i class="fa-solid fa-map-location-dot" style="color:var(--orange);"></i> Site Administrator Worksite Console';
-                    subEl.textContent = 'Site Administrator authority: Tag worksite GPS coordinates, configure geofence radius, and provision on-site staff accounts';
+                    subEl.textContent = 'Site Administrator Authority: Worksite GPS & Geofencing, and On-Site Personnel Accounts (full lifecycle: creation, deletion, password reset).';
                 }
             }
 
-            // Tabs visibility control
-            const superAdminTabs = ['tabBtnSuperAdmins', 'tabBtnProjects', 'tabBtnContractors', 'tabBtnSla', 'tabBtnPermits'];
+            if (btnSaveGeofence) {
+                btnSaveGeofence.style.display = (isSiteAdmin && adminCurrentTab === 'gps') ? 'inline-flex' : 'none';
+            }
+
+            // Strictly separate tab visibility:
+            // Super Admin ONLY sees: Provision Site Admins & Projects & Sites Master
+            const superAdminTabs = ['tabBtnSuperAdmins', 'tabBtnProjects'];
+            // Site Admin ONLY sees: Worksite GPS & Geofencing & On-Site Personnel Accounts
+            const siteAdminTabs = ['tabBtnGps', 'tabBtnAccounts'];
+            const hiddenTabs = ['tabBtnContractors', 'tabBtnSla', 'tabBtnPermits'];
+
             superAdminTabs.forEach(tabId => {
                 const btn = document.getElementById(tabId);
                 if (btn) btn.style.display = isSuperAdmin ? 'flex' : 'none';
             });
-            const siteAdminTabs = ['tabBtnGps', 'tabBtnAccounts'];
             siteAdminTabs.forEach(tabId => {
                 const btn = document.getElementById(tabId);
-                if (btn) btn.style.display = 'flex';
+                if (btn) btn.style.display = isSiteAdmin ? 'flex' : 'none';
             });
+            hiddenTabs.forEach(tabId => {
+                const btn = document.getElementById(tabId);
+                if (btn) btn.style.display = 'none';
+            });
+
+            // Enforce default active tab if currently on an unauthorized tab
+            if (isSuperAdmin && !['superadmins', 'projects'].includes(adminCurrentTab)) {
+                adminCurrentTab = 'superadmins';
+            } else if (isSiteAdmin && !['gps', 'accounts'].includes(adminCurrentTab)) {
+                adminCurrentTab = 'gps';
+            }
 
             const sel = document.getElementById('adminProjectSelect');
             if (!sel) return;
@@ -11123,15 +11149,21 @@
         }
 
         /* ---------------- DYNAMIC ADMIN CENTER ENGINE ---------------- */
-        let adminCurrentTab = 'gps';
+        let adminCurrentTab = 'superadmins';
 
         function switchAdminTab(tab) {
             const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
 
-            // Role restriction guard for Site Administrator
+            // Role restriction guard: Super Admin ONLY has access to Provisioning Site Admins and Projects & Sites Master
+            if (isSuperAdmin && !['superadmins', 'projects'].includes(tab)) {
+                showToast('Access Restricted: Super Admin authority is strictly limited to Provisioning Site Admins and Projects & Sites Master.', 'warn');
+                tab = 'superadmins';
+            }
+
+            // Role restriction guard: Site Admin ONLY has access to Worksite GPS & Geofencing and On-Site Personnel Accounts
             if (isSiteAdmin && !['gps', 'accounts'].includes(tab)) {
-                showToast('Access Restricted: Site Administrators can only configure Geolocation and On-Site Accounts. Master site & policy configs are reserved for Super Admin.', 'warn');
+                showToast('Access Restricted: Site Administrators manage Worksite GPS & Geofencing and On-Site Personnel Accounts.', 'warn');
                 tab = 'gps';
             }
 
@@ -11154,13 +11186,15 @@
                 }
             });
 
+            const btnSaveGeofence = document.getElementById('btnAdminSaveGeofence');
+            if (btnSaveGeofence) {
+                btnSaveGeofence.style.display = (isSiteAdmin && tab === 'gps') ? 'inline-flex' : 'none';
+            }
+
             if (tab === 'superadmins') renderSuperAdminAdminsTab();
             if (tab === 'projects') renderAdminProjectsTab();
             if (tab === 'gps') renderAdminConfigView();
             if (tab === 'accounts') renderAdminAccountsTab();
-            if (tab === 'contractors') renderAdminContractorsTab();
-            if (tab === 'sla') renderAdminSlaTab();
-            if (tab === 'permits') renderAdminPermitsTab();
         }
 
         /* --- Super Admin: Provision Project / Site Admins --- */
@@ -11258,15 +11292,34 @@
         }
 
         function renderAdminAccountsTab() {
+            const isSiteAdmin = currentUser && currentUser.key === 'admin';
             const filterSel = document.getElementById('filterPersonnelProjectSelect');
             const newPrjSel = document.getElementById('newStaffProject');
+
+            // Site Admin defaults to their assigned project (e.g. PRJ-PEARL)
+            const defaultPrjId = (isSiteAdmin && currentUser.projectId) ? currentUser.projectId : (PROJECTS[0] ? PROJECTS[0].id : 'PRJ-PEARL');
+
             if (filterSel) {
-                const curVal = filterSel.value;
-                filterSel.innerHTML = '<option value="">All Worksites</option>' + PROJECTS.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + '</option>').join('');
+                const curVal = filterSel.value || defaultPrjId;
+                filterSel.innerHTML = (isSiteAdmin ? '' : '<option value="">All Worksites</option>') +
+                    PROJECTS.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + p.id + ')</option>').join('');
                 filterSel.value = curVal;
+                if (isSiteAdmin && currentUser.projectId) {
+                    filterSel.value = currentUser.projectId;
+                    filterSel.disabled = true;
+                } else {
+                    filterSel.disabled = false;
+                }
             }
             if (newPrjSel) {
                 newPrjSel.innerHTML = PROJECTS.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + p.id + ')</option>').join('');
+                if (filterSel && filterSel.value) {
+                    newPrjSel.value = filterSel.value;
+                }
+                if (isSiteAdmin && currentUser.projectId) {
+                    newPrjSel.value = currentUser.projectId;
+                    newPrjSel.disabled = true;
+                }
                 onStaffProjectChange();
             }
 
@@ -11276,26 +11329,32 @@
         function renderSitePersonnelTable() {
             const tbody = document.getElementById('sitePersonnelTableBody');
             if (!tbody) return;
-            const filterPrj = document.getElementById('filterPersonnelProjectSelect') ? document.getElementById('filterPersonnelProjectSelect').value : '';
+            const isSiteAdmin = currentUser && currentUser.key === 'admin';
+            const filterSel = document.getElementById('filterPersonnelProjectSelect');
+            const filterPrj = filterSel ? filterSel.value : ((isSiteAdmin && currentUser.projectId) ? currentUser.projectId : 'PRJ-PEARL');
             const list = filterPrj ? SITE_PERSONNEL_ACCOUNTS.filter(s => s.projectId === filterPrj) : SITE_PERSONNEL_ACCOUNTS;
 
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted);">No on-site personnel accounts found for selected site. Provision staff above.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted);">No on-site personnel accounts found for selected site. Use the form to provision staff.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = list.map((stf, idx) => {
+            tbody.innerHTML = list.map((stf) => {
                 const isAct = stf.status === 'Active';
                 const rInfo = roleInfo(stf.role);
+                const pwdNote = stf.tempPassword ? ('<div style="font-size:10.5px;color:var(--orange);margin-top:2px;" class="mono"><i class="fa-solid fa-key"></i> Temp: ' + escapeHtml(stf.tempPassword) + '</div>') : '';
+                const resetNote = stf.passwordResetAt ? ('<div style="font-size:10px;color:var(--text-muted);"><i class="fa-solid fa-clock-rotate-left"></i> Reset ' + fmtDate(stf.passwordResetAt) + '</div>') : '';
+
                 return '<tr style="border-bottom:1px solid var(--border);">' +
-                    '<td style="padding:10px 12px;"><div style="font-weight:700;color:var(--navy);">' + escapeHtml(stf.name) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(stf.email) + ' &bull; ' + escapeHtml(stf.phone || '') + '</div></td>' +
+                    '<td style="padding:10px 12px;"><div style="font-weight:700;color:var(--navy);">' + escapeHtml(stf.name) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(stf.email) + ' &bull; ' + escapeHtml(stf.phone || '') + '</div>' + pwdNote + resetNote + '</td>' +
                     '<td style="padding:10px 12px;"><span class="badge" style="background:rgba(232,96,10,0.1);color:var(--orange);font-size:11px;font-weight:600;"><i class="fa-solid ' + (rInfo.icon || 'fa-user') + '"></i> ' + escapeHtml(stf.roleLabel || stf.role) + '</span></td>' +
                     '<td style="padding:10px 12px;"><div style="font-weight:600;color:var(--navy);font-size:12px;">' + escapeHtml(stf.projectName || stf.projectId) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(stf.location || 'Site Wide') + '</div></td>' +
                     '<td style="padding:10px 12px;" class="mono">' + escapeHtml(stf.empId || 'N/A') + '</td>' +
                     '<td style="padding:10px 12px;"><span class="badge ' + (isAct ? 'st-active' : 'st-draft') + '" style="font-size:10.5px;"><i class="fa-solid ' + (isAct ? 'fa-circle-check' : 'fa-ban') + '"></i> ' + stf.status + '</span></td>' +
                     '<td style="padding:10px 12px;white-space:nowrap;">' +
-                    '<button class="btn btn-xs ' + (isAct ? 'btn-ghost' : 'btn-primary') + '" onclick="siteAdminToggleStaffStatus(' + idx + ')" style="padding:2px 8px;font-size:11px;margin-right:6px;">' + (isAct ? 'Deactivate' : 'Activate') + '</button>' +
-                    '<button class="btn btn-xs btn-ghost" onclick="siteAdminRemoveStaff(' + idx + ')" style="color:var(--red);padding:2px 6px;" title="Remove Staff Account"><i class="fa-solid fa-trash-can"></i></button>' +
+                    '<button class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + stf.id + '\')" style="color:var(--blue);padding:2px 8px;font-size:11px;margin-right:6px;" title="Reset Login Password"><i class="fa-solid fa-key"></i> Reset Pwd</button>' +
+                    '<button class="btn btn-xs ' + (isAct ? 'btn-ghost' : 'btn-primary') + '" onclick="siteAdminToggleStaffStatus(\'' + stf.id + '\')" style="padding:2px 8px;font-size:11px;margin-right:6px;">' + (isAct ? 'Deactivate' : 'Activate') + '</button>' +
+                    '<button class="btn btn-xs btn-ghost" onclick="siteAdminRemoveStaff(\'' + stf.id + '\')" style="color:var(--red);padding:2px 6px;" title="Permanently Delete Account"><i class="fa-solid fa-trash-can"></i></button>' +
                     '</td>' +
                     '</tr>';
             }).join('');
@@ -11324,6 +11383,7 @@
             const tower = (towerSel && towerSel.value) ? towerSel.value : 'Full Worksite';
             const empId = (empIdEl && empIdEl.value.trim()) ? empIdEl.value.trim().toUpperCase() : ('ARPL-STF-' + Math.floor(100 + Math.random() * 900));
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '+91 98111 22334';
+            const tempPass = 'ARPL@' + Math.floor(1000 + Math.random() * 9000) + '!';
 
             SITE_PERSONNEL_ACCOUNTS.unshift({
                 id: 'stf-' + uid(),
@@ -11336,8 +11396,10 @@
                 location: tower,
                 empId: empId,
                 phone: phone,
+                tempPassword: tempPass,
                 status: 'Active',
-                createdAt: nowTime()
+                createdAt: nowTime(),
+                createdBy: currentUser.name || 'Site Administrator'
             });
 
             nameEl.value = '';
@@ -11345,24 +11407,56 @@
             if (empIdEl) empIdEl.value = '';
             if (phoneEl) phoneEl.value = '';
             saveState();
-            showToast('On-Site Account for "' + name + '" (' + roleText + ') created at ' + targetPrj.name + '!', 'ok');
+            showToast('On-Site Account created for "' + name + '"! Temp Password: ' + tempPass, 'ok');
             renderSitePersonnelTable();
         }
 
-        function siteAdminToggleStaffStatus(idx) {
-            if (!SITE_PERSONNEL_ACCOUNTS[idx]) return;
-            const stf = SITE_PERSONNEL_ACCOUNTS[idx];
+        function siteAdminResetStaffPassword(staffId) {
+            const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s.id === staffId);
+            if (!stf) return;
+            const tempPass = 'ARPL#' + Math.floor(1000 + Math.random() * 9000) + '!Ehs';
+            if (!confirm('Generate a new temporary password for ' + stf.name + ' (' + stf.email + ')?')) return;
+            stf.tempPassword = tempPass;
+            stf.passwordResetAt = nowTime();
+            stf.passwordResetBy = currentUser.name || 'Site Administrator';
+            saveState();
+            renderSitePersonnelTable();
+
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-key" style="color:var(--orange);"></i> Temporary Password Generated';
+            document.getElementById('actionModalBody').innerHTML =
+                '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.6;">' +
+                '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;"><i class="fa-solid fa-circle-check" style="color:var(--green);"></i> Password Reset Successfully</div>' +
+                '<div><b>Personnel Name:</b> ' + escapeHtml(stf.name) + ' (' + escapeHtml(stf.roleLabel || stf.role) + ')</div>' +
+                '<div><b>Assigned Worksite:</b> ' + escapeHtml(stf.projectName || stf.projectId) + '</div>' +
+                '<div><b>Login Email ID:</b> <span class="mono">' + escapeHtml(stf.email) + '</span></div>' +
+                '<div style="margin:14px 0 8px;padding:12px;background:var(--bg);border:1px dashed var(--orange);border-radius:6px;display:flex;align-items:center;justify-content:space-between;">' +
+                '<div><div style="font-size:11px;color:var(--text-muted);">TEMPORARY LOGIN PASSWORD:</div><div class="mono" style="font-size:16px;font-weight:700;color:var(--orange);letter-spacing:1px;" id="dispTempPass">' + tempPass + '</div></div>' +
+                '<button class="btn btn-xs btn-primary" onclick="navigator.clipboard.writeText(\'' + tempPass + '\');showToast(\'Temporary password copied to clipboard!\', \'ok\');"><i class="fa-solid fa-copy"></i> Copy</button>' +
+                '</div>' +
+                '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;"><i class="fa-solid fa-shield-halved"></i> <b>Statutory Compliance (DPDP Act 2023):</b> This temporary credential must be changed by the staff member upon their first login.</div>' +
+                '</div>';
+            document.getElementById('actionModalFoot').innerHTML = '<button class="btn btn-primary" onclick="closeModal(\'actionModal\')">Done</button>';
+            openModal('actionModal');
+            showToast('Temporary password generated for ' + stf.name, 'ok');
+        }
+
+        function siteAdminToggleStaffStatus(staffId) {
+            const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s.id === staffId);
+            if (!stf) return;
             stf.status = stf.status === 'Active' ? 'Deactivated' : 'Active';
             saveState();
-            showToast('Staff ' + stf.name + ' status updated to ' + stf.status, 'info');
+            showToast('Personnel ' + stf.name + ' status updated to ' + stf.status, 'info');
             renderSitePersonnelTable();
         }
 
-        function siteAdminRemoveStaff(idx) {
-            if (!confirm('Remove this on-site staff account permanently?')) return;
-            const removed = SITE_PERSONNEL_ACCOUNTS.splice(idx, 1);
+        function siteAdminRemoveStaff(staffId) {
+            const idx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.id === staffId);
+            if (idx === -1) return;
+            const stf = SITE_PERSONNEL_ACCOUNTS[idx];
+            if (!confirm('Permanently delete account for ' + stf.name + ' (' + stf.email + ')?\n\nThis will permanently delete this account and revoke all on-site approval authority.')) return;
+            SITE_PERSONNEL_ACCOUNTS.splice(idx, 1);
             saveState();
-            showToast('Account for ' + (removed[0] ? removed[0].name : '') + ' removed.', 'ok');
+            showToast('Personnel account for ' + stf.name + ' deleted permanently.', 'ok');
             renderSitePersonnelTable();
         }
 
@@ -12995,6 +13089,13 @@
         function switchRole(roleKey) {
             currentUser = Object.assign({ name: '' }, roleInfo(roleKey));
             currentUser.name = '';
+            if (roleKey === 'super-admin') {
+                adminCurrentTab = 'superadmins';
+            } else if (roleKey === 'admin') {
+                adminCurrentTab = 'gps';
+                currentUser.projectId = currentUser.projectId || 'PRJ-PEARL';
+                currentUser.projectName = currentUser.projectName || 'The Pearl';
+            }
             const roleBadge = document.getElementById('roleBadgeValue');
             if (roleBadge) roleBadge.textContent = currentUser.label;
             const personaSelect = document.getElementById('quickPersonaDropdown');
@@ -22542,6 +22643,7 @@ ptypeOf(p) === 'general' ?
             }
         };
     </script>
+    <script src="patch-auth.js"></script>
 </body>
 
 </html>
