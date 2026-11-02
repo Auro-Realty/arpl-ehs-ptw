@@ -4541,6 +4541,69 @@
         body.modal-open {
             overflow: hidden;
         }
+                /* ================= CUSTOM ARPL THEMED LOGIN PORTAL ================= */
+        .login-container-card {
+            background: linear-gradient(135deg, #FFFFFF 0%, #F8FAFC 100%) !important;
+            border: 2px solid #E2E8F0 !important;
+            border-radius: 16px !important;
+            max-width: 450px !important;
+            width: 100% !important;
+            padding: 36px !important;
+            box-shadow: 0 24px 48px rgba(10, 22, 40, 0.22) !important;
+            margin: 40px auto !important;
+            position: relative;
+            z-index: 999;
+            box-sizing: border-box !important;
+        }
+        .login-input {
+            width: 100% !important;
+            padding: 14px 16px !important;
+            font-size: 14px !important;
+            border: 2px solid #CBD1DA !important;
+            border-radius: 10px !important;
+            margin-bottom: 16px !important;
+            background: #FFFFFF !important;
+            color: #0A1628 !important;
+            font-weight: 500 !important;
+            transition: all 0.2s ease-in-out !important;
+            box-sizing: border-box !important;
+        }
+        .login-input:focus {
+            border-color: #E8600A !important;
+            box-shadow: 0 0 0 4px rgba(232, 96, 10, 0.18) !important;
+            background: #FFFDFB !important;
+        }
+        .login-btn-submit {
+            background: linear-gradient(135deg, #E8600A 0%, #C94F06 100%) !important;
+            border: none !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+            font-size: 14.5px !important;
+            padding: 14px 24px !important;
+            border-radius: 10px !important;
+            width: 100% !important;
+            cursor: pointer !important;
+            box-shadow: 0 4px 14px rgba(232, 96, 10, 0.3) !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 10px !important;
+            transition: all 0.2s ease !important;
+        }
+        .login-btn-submit:hover {
+            transform: translateY(-1px) !important;
+            box-shadow: 0 6px 20px rgba(232, 96, 10, 0.4) !important;
+        }
+        .login-btn-submit:active {
+            transform: translateY(1px) !important;
+        }
+        .login-btn-submit:disabled {
+            background: #CBD1DA !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
         /* ================================================================
            UNIFIED ENTERPRISE LOGIN SCREEN (FIREBASE AUTH)
            ================================================================ */
@@ -7048,6 +7111,7 @@
             return (rec.equipment || []).map(e => (e === 'Others' && rec.equipmentOther) ? 'Others — ' + rec.equipmentOther : e).join(', ');
         }
 
+        window.PROJECT_MASTER = window.PROJECTS || [];
         let PROJECTS = [
             {
                 id: 'PRJ-PEARL',
@@ -7095,6 +7159,8 @@
                 tagMethod: null
             }
         ];
+        window.PROJECTS = PROJECTS;
+        window.PROJECT_MASTER = PROJECTS;
 
         /* Centralized Dynamic Structural Accessors */
         function getProject(projIdOrName) {
