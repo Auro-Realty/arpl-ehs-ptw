@@ -383,16 +383,16 @@ exports.adminConfigureGeolocation = onCall({ region: REGION }, async (request) =
 });
 
 // ============================================================================
-// 6. PROJECT ADMIN: CREATE & ASSIGN SITE APPROVAL ROLES
+// 6. SITE ADMIN: ON-SITE PERSONNEL ACCOUNTS LIFECYCLE (CREATE, RESET PWD, DELETE, TOGGLE)
 // ============================================================================
 exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
-  const { email, password, displayName, role, projectId } = request.data;
-  if (!email || !role || !projectId) {
-    throw new HttpsError("invalid-argument", "email, role, and projectId are required.");
+  const { action, email, password, newPassword, displayName, role, projectId, uid } = request.data;
+  if (!projectId) {
+    throw new HttpsError("invalid-argument", "projectId is required.");
   }
 
   const isProjAdmin =
@@ -404,8 +404,59 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   if (!isProjAdmin) {
     throw new HttpsError(
       "permission-denied",
-      "Unauthorized: Only the assigned Site Administrator can provision on-site personnel accounts for this project."
+      "Unauthorized: Only the assigned Site Administrator can manage on-site personnel accounts for this project."
     );
+  }
+
+  // Action: Reset Password
+  if (action === "reset-password") {
+    if (!uid) {
+      throw new HttpsError("invalid-argument", "uid is required for password reset.");
+    }
+    const tempPassword = newPassword || ("ARPL#Temp" + Math.floor(1000 + Math.random() * 9000) + "!");
+    await auth.updateUser(uid, { password: tempPassword });
+    await db.collection("users").doc(uid).set(
+      {
+        passwordResetAt: admin.firestore.FieldValue.serverTimestamp(),
+        passwordResetBy: request.auth.uid,
+        mustChangePasswordOnLogin: true
+      },
+      { merge: true }
+    );
+    return { success: true, uid, temporaryPassword: tempPassword };
+  }
+
+  // Action: Delete Personnel
+  if (action === "delete") {
+    if (!uid) {
+      throw new HttpsError("invalid-argument", "uid is required for deletion.");
+    }
+    await auth.deleteUser(uid);
+    await db.collection("users").doc(uid).delete();
+    return { success: true, uid };
+  }
+
+  // Action: Toggle Status (Disable / Enable)
+  if (action === "toggle-status") {
+    if (!uid) {
+      throw new HttpsError("invalid-argument", "uid is required.");
+    }
+    const user = await auth.getUser(uid);
+    const updated = await auth.updateUser(uid, { disabled: !user.disabled });
+    await db.collection("users").doc(uid).set(
+      {
+        disabled: updated.disabled,
+        status: updated.disabled ? "Deactivated" : "Active",
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      },
+      { merge: true }
+    );
+    return { success: true, uid, disabled: updated.disabled };
+  }
+
+  // Default Action: Create or Assign Role
+  if (!email || !role) {
+    throw new HttpsError("invalid-argument", "email and role are required to provision an account.");
   }
 
   // Allowed Approval Flow Roles
@@ -424,7 +475,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   ];
 
   if (!validRoles.includes(role)) {
-    throw new HttpsError("invalid-argument", `Invalid role: ${role}. Must be an approved PTW role.`);
+    throw new HttpsError("invalid-argument", "Invalid role: " + role + ". Must be an approved PTW role.");
   }
 
   let userRecord;
@@ -459,80 +510,6 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   );
 
   return { success: true, uid: userRecord.uid, email, role, projectId };
-});
-
-// ============================================================================
-// ============================================================================
-// 6b. SITE ADMIN: RESET ONSITE PERSONNEL PASSWORD
-// ============================================================================
-exports.adminResetPersonnelPassword = onCall({ region: REGION }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "User must be authenticated.");
-  }
-
-  const { uid, projectId, newPassword } = request.data;
-  if (!uid || !projectId) {
-    throw new HttpsError("invalid-argument", "uid and projectId are required.");
-  }
-
-  const isProjAdmin =
-    (request.auth.token.role === "project-admin" ||
-      request.auth.token.role === "site-admin" ||
-      request.auth.token.admin === true) &&
-    request.auth.token.projectId === projectId;
-
-  if (!isProjAdmin) {
-    throw new HttpsError(
-      "permission-denied",
-      "Unauthorized: Only the assigned Site Administrator can reset passwords for personnel on this project."
-    );
-  }
-
-  const tempPassword = newPassword || ("ARPL#Temp" + Math.floor(1000 + Math.random() * 9000) + "!");
-  await auth.updateUser(uid, { password: tempPassword });
-
-  await db.collection("projects").doc(projectId).collection("personnel").doc(uid).set(
-    {
-      passwordResetAt: admin.firestore.FieldValue.serverTimestamp(),
-      passwordResetBy: request.auth.uid,
-      mustChangePasswordOnLogin: true
-    },
-    { merge: true }
-  );
-
-  return { success: true, uid, temporaryPassword: tempPassword };
-});
-
-// ============================================================================
-// 6c. SITE ADMIN: DELETE ONSITE PERSONNEL ACCOUNT
-// ============================================================================
-exports.adminDeletePersonnelAccount = onCall({ region: REGION }, async (request) => {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "User must be authenticated.");
-  }
-
-  const { uid, projectId } = request.data;
-  if (!uid || !projectId) {
-    throw new HttpsError("invalid-argument", "uid and projectId are required.");
-  }
-
-  const isProjAdmin =
-    (request.auth.token.role === "project-admin" ||
-      request.auth.token.role === "site-admin" ||
-      request.auth.token.admin === true) &&
-    request.auth.token.projectId === projectId;
-
-  if (!isProjAdmin) {
-    throw new HttpsError(
-      "permission-denied",
-      "Unauthorized: Only the assigned Site Administrator can delete personnel accounts on this project."
-    );
-  }
-
-  await auth.deleteUser(uid);
-  await db.collection("projects").doc(projectId).collection("personnel").doc(uid).delete();
-
-  return { success: true, uid };
 });
 
 // 7. ATOMIC PERMIT STATE TRANSITION & GEOFENCE ENFORCEMENT
