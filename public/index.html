@@ -4517,6 +4517,171 @@
         body.modal-open {
             overflow: hidden;
         }
+        /* ================================================================
+           UNIFIED ENTERPRISE LOGIN SCREEN (FIREBASE AUTH)
+           ================================================================ */
+        .unified-login-card {
+            width: 100%;
+            max-width: 480px;
+            margin: 24px auto 32px;
+            background: #FFFFFF;
+            border: 1px solid rgba(226, 232, 240, 0.95);
+            border-radius: 14px;
+            padding: 34px 32px 24px;
+            box-shadow: 0 20px 45px -12px rgba(10, 22, 40, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.04);
+            position: relative;
+            z-index: 10;
+            box-sizing: border-box;
+        }
+        .ulc-header {
+            text-align: center;
+            margin-bottom: 24px;
+        }
+        .ulc-icon {
+            width: 54px;
+            height: 54px;
+            margin: 0 auto 12px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(232, 96, 10, 0.12), rgba(232, 96, 10, 0.04));
+            border: 1px solid rgba(232, 96, 10, 0.25);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            color: var(--orange);
+        }
+        .ulc-title {
+            font-size: 20px;
+            font-weight: 800;
+            color: var(--navy);
+            letter-spacing: -0.3px;
+            margin-bottom: 5px;
+        }
+        .ulc-sub {
+            font-size: 13px;
+            color: var(--text-muted);
+            line-height: 1.4;
+        }
+        .ulc-error-banner {
+            background: #FEF2F2;
+            border: 1px solid #FCA5A5;
+            border-left: 4px solid #EF4444;
+            color: #991B1B;
+            padding: 12px 14px;
+            border-radius: 8px;
+            font-size: 13px;
+            line-height: 1.45;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+        }
+        .ulc-field {
+            margin-bottom: 18px;
+            text-align: left;
+        }
+        .ulc-field label {
+            display: block;
+            font-size: 12px;
+            font-weight: 700;
+            color: var(--navy);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+        }
+        .ulc-field label i {
+            color: var(--orange);
+            margin-right: 4px;
+        }
+        .ulc-input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+        .ulc-input {
+            width: 100%;
+            padding: 11px 14px;
+            font-size: 14px;
+            font-family: inherit;
+            border: 1.5px solid #CBD5E1;
+            border-radius: 8px;
+            background: #F8FAFC;
+            color: var(--navy);
+            transition: all 0.15s ease;
+            outline: none;
+            box-sizing: border-box;
+        }
+        .ulc-input:focus {
+            background: #FFFFFF;
+            border-color: var(--orange);
+            box-shadow: 0 0 0 3px rgba(232, 96, 10, 0.15);
+        }
+        .ulc-toggle-pwd {
+            position: absolute;
+            right: 12px;
+            background: none;
+            border: none;
+            cursor: pointer;
+            color: #94A3B8;
+            padding: 4px;
+            font-size: 14px;
+        }
+        .ulc-toggle-pwd:hover {
+            color: var(--navy);
+        }
+        .ulc-link-btn {
+            background: none;
+            border: none;
+            padding: 0;
+            font-size: 11.5px;
+            font-weight: 600;
+            color: var(--orange);
+            cursor: pointer;
+            font-family: inherit;
+            text-decoration: underline;
+        }
+        .ulc-link-btn:hover {
+            color: var(--orange-dark);
+        }
+        .ulc-submit-btn {
+            width: 100%;
+            padding: 13px 20px;
+            background: linear-gradient(135deg, #E8600A 0%, #C94F06 100%);
+            color: #FFFFFF;
+            font-size: 14.5px;
+            font-weight: 700;
+            font-family: inherit;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 14px rgba(232, 96, 10, 0.35);
+            transition: all 0.15s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin-top: 8px;
+        }
+        .ulc-submit-btn:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 6px 18px rgba(232, 96, 10, 0.45);
+        }
+        .ulc-submit-btn:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .ulc-compliance-footer {
+            margin-top: 24px;
+            padding-top: 16px;
+            border-top: 1px solid #E2E8F0;
+            font-size: 11px;
+            color: #64748B;
+            text-align: center;
+            line-height: 1.5;
+        }
+        #landingRoleSection, #roleCardsGrid, #roleFilterTabs, .role-grid {
+            display: none !important;
+        }
     </style>
 </head>
 
@@ -4602,24 +4767,45 @@
             </div>
         </div>
 
-        <!-- Interactive Role Switcher Header & Filter Tabs -->
-        <div class="landing-role-section" id="landingRoleSection">
-            <div class="landing-role-header">
-                <div>
-                    <h2><i class="fa-solid fa-users-gear" style="color:var(--orange);"></i> Enterprise Role Authorization &amp; Access</h2>
-                    <p>Select an authorized operational role to access the permit governance portal. User permissions, verification gates, and statutory sign-off authority are strictly enforced based on role assignments.</p>
-                </div>
-                <div class="role-filter-tabs" id="roleFilterTabs">
-                    <button class="rf-tab active" onclick="filterRoles('all', this)"><i class="fa-solid fa-border-all"></i> All Roles (17)</button>
-                    <button class="rf-tab" onclick="filterRoles('initiator', this)"><i class="fa-solid fa-user-pen"></i> Initiators (5)</button>
-                    <button class="rf-tab" onclick="filterRoles('verification', this)"><i class="fa-solid fa-hard-hat"></i> Field &amp; Clearances (4)</button>
-                    <button class="rf-tab" onclick="filterRoles('approver', this)"><i class="fa-solid fa-user-tie"></i> Domain Approvers (4)</button>
-                    <button class="rf-tab" onclick="filterRoles('ehs', this)"><i class="fa-solid fa-shield-halved"></i> EHS Safety (2)</button>
-                    <button class="rf-tab" onclick="filterRoles('admin', this)"><i class="fa-solid fa-user-gear"></i> Administration (2)</button>
-                </div>
+                <!-- Single Unified Enterprise Login Card -->
+        <div class="unified-login-card" id="unifiedLoginCard">
+            <div class="ulc-header">
+                <div class="ulc-icon"><i class="fa-solid fa-shield-halved"></i></div>
+                <div class="ulc-title">ARPL EHS Enterprise Sign-In</div>
+                <div class="ulc-sub">Auro Realty Digital Safety &amp; Statutory Governance Portal</div>
             </div>
 
-            <div class="role-grid" id="roleCardsGrid"></div>
+            <!-- Inline Error Banner -->
+            <div class="ulc-error-banner" id="unifiedLoginError" style="display:none;"></div>
+
+            <form id="unifiedLoginForm" onsubmit="handleUnifiedLogin(event); return false;">
+                <div class="ulc-field">
+                    <label for="unifiedLoginEmail"><i class="fa-solid fa-envelope"></i> Official Email ID <span class="req">*</span></label>
+                    <input type="email" id="unifiedLoginEmail" class="ulc-input" placeholder="e.g. name@aurorealty.com" required autocomplete="username" />
+                </div>
+
+                <div class="ulc-field">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <label for="unifiedLoginPassword" style="margin-bottom:0;"><i class="fa-solid fa-lock"></i> Password <span class="req">*</span></label>
+                        <button type="button" class="ulc-link-btn" id="unifiedForgotPassBtn" onclick="handleUnifiedForgotPassword()">Forgot Password?</button>
+                    </div>
+                    <div class="ulc-input-wrapper">
+                        <input type="password" id="unifiedLoginPassword" class="ulc-input" placeholder="Enter your portal password" required autocomplete="current-password" />
+                        <button type="button" class="ulc-toggle-pwd" onclick="togglePasswordVisibility('unifiedLoginPassword', this)" title="Show/Hide Password">
+                            <i class="fa-solid fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <button type="submit" class="ulc-submit-btn" id="unifiedLoginSubmitBtn">
+                    <span class="btn-text"><i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to EHS Portal</span>
+                    <span class="btn-spinner" style="display:none;"><i class="fa-solid fa-circle-notch fa-spin"></i> Authenticating...</span>
+                </button>
+            </form>
+
+            <div class="ulc-compliance-footer">
+                <i class="fa-solid fa-shield-check" style="color:var(--green);"></i> Protected by Firebase Authentication &bull; Data Residency: <b>asia-south1 (Mumbai)</b> &bull; DPDP Act 2023 Compliant
+            </div>
         </div>
 
         <!-- ARPL Weekend Governance Protocol Ribbon (Positioned at bottom to ensure clear visual hierarchy) -->
@@ -4665,10 +4851,7 @@
         <div class="landing-footer" style="order:10;">
             <div class="lf-title"><i class="fa-solid fa-shield-halved" style="color:var(--orange);"></i> ARPL Digital Permit-to-Work (PTW) Management System</div>
             <div id="landingFooterPermits">PTW-001 Excavation &bull; PTW-002 Hot Work &bull; PTW-003 Guard Rail &bull; PTW-004 Confined Space &bull; PTW-005 Shaft Work &bull; PTW-006 Electrical Work &bull; PTW-007 Drilling &amp; Blasting &bull; PTW-008 General Work &bull; PTW-009 Lifting Operations &bull; PTW-010 Night Shift</div>
-            <div>Demo Build &bull; September 2026</div>
-            <div style="margin-top:8px;"><a href="#" onclick="resetDemoData();return false;"
-                    style="color:var(--orange);font-weight:700;"><i class="fa-solid fa-rotate-left"></i> Reset Demo
-                    Data</a></div>
+            <div>Production Build &bull; Enterprise Governance &bull; DPDP Act 2023 Compliant</div>
         </div>
     </div>
 
@@ -4727,39 +4910,11 @@
                 <a href="ptw_swimlanes.html" target="_blank" class="btn btn-sm no-print" title="View Process Swimlanes &amp; Approval Topologies (ptw_swimlanes.html)" style="display:inline-flex;align-items:center;gap:6px;padding:5px 10px;border-radius:6px;border:1px solid #CBD5E1;background:#fff;color:var(--navy);font-size:11.5px;font-weight:700;text-decoration:none;box-shadow:0 1px 2px rgba(0,0,0,0.04);margin-right:2px;">
                     <i class="fa-solid fa-diagram-project" style="color:var(--orange);"></i> <span class="d-none-sm">Swimlanes</span>
                 </a>
-                <div class="role-badge no-print" style="position:relative;display:inline-flex;align-items:center;gap:8px;padding:4px 10px;border-radius:8px;background:rgba(255,255,255,0.95);border:1.5px solid #CBD5E1;box-shadow:0 1px 3px rgba(0,0,0,0.06);"><i class="fa-solid fa-user-shield" style="color:var(--orange);"></i>
-                    <div style="display:flex;flex-direction:column;line-height:1.15;">
-                        <div class="role-badge-label" style="font-size:9.5px;text-transform:uppercase;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;">Active Persona</div>
-                        <select id="quickPersonaDropdown" onchange="switchRole(this.value)" style="background:transparent;border:none;outline:none;font-size:12px;font-weight:700;color:var(--navy);cursor:pointer;padding:0;margin:0;font-family:inherit;">
-                            <optgroup label="Tier 1 · Permittees &amp; Field Specialists">
-                                <option value="site-supervisor">Site Supervisor (Civil / General Permittee)</option>
-                                <option value="electrician">Electrician (PTW-006 Electrical Specialist)</option>
-                                <option value="blasting-incharge">Blasting In-charge (PTW-007 Specialist)</option>
-                                <option value="lift-supervisor">Lifting Supervisor (PTW-009 Specialist)</option>
-                                <option value="night-supervisor">Night Site Supervisor (PTW-010 Handover)</option>
-                            </optgroup>
-                            <optgroup label="Tier 2 · Field Verification &amp; Clearance">
-                                <option value="site-engineer">Site Engineer (Physical Ground Check)</option>
-                                <option value="mep">MEP Engineer (Power &amp; Utility Clearance)</option>
-                                <option value="pm">P&amp;M Engineer (Plant &amp; Machinery Fitness)</option>
-                                <option value="it">IT Engineer (Telecom &amp; OFC Clearance)</option>
-                            </optgroup>
-                            <optgroup label="Tier 3 · Domain Approvers &amp; Section Heads">
-                                <option value="quality-engineer">Quality Engineer (Batching Plant Clearance)</option>
-                                <option value="excavation-head">Excavation Head (Earthwork Section Head)</option>
-                                <option value="hw-section-head">Tower Incharge (Tower Section Head)</option>
-                                <option value="project-manager">Project Manager (Critical Lift Plan Executive)</option>
-                            </optgroup>
-                            <optgroup label="Tier 4 · Statutory Endorsement">
-                                <option value="ehs-manager">EHS Safety Manager (Statutory Endorsement)</option>
-                                <option value="ehs-officer">EHS Safety Officer (Field Surveillance)</option>
-                            </optgroup>
-                            <optgroup label="Tier 5 · Administration &amp; Governance">
-                                <option value="super-admin">Super Administrator (Enterprise Master &amp; Sites)</option>
-                                <option value="admin">Site Administrator (Geofence &amp; On-Site Accounts)</option>
-                            </optgroup>
-                        </select>
-                        <div class="role-badge-value" id="roleBadgeValue" style="display:none;">&mdash;</div>
+                <div class="role-badge no-print" style="position:relative;display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;background:rgba(255,255,255,0.95);border:1.5px solid #CBD5E1;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
+                    <i class="fa-solid fa-user-shield" style="color:var(--orange);font-size:14px;"></i>
+                    <div style="display:flex;flex-direction:column;line-height:1.2;">
+                        <div class="role-badge-label" style="font-size:9px;text-transform:uppercase;font-weight:700;color:var(--text-muted);letter-spacing:0.5px;">Active Session</div>
+                        <div class="role-badge-value" id="roleBadgeValue" style="display:inline-block;font-size:12px;font-weight:700;color:var(--navy);">&mdash;</div>
                     </div>
                 </div>
                 <button class="btn-switch-user no-print" onclick="doLogout()" title="Logout to Landing Portal"><i
@@ -13055,83 +13210,333 @@
         } catch (err) {
             console.error('Initial landing rendering error:', err);
         }
-        function doLogin(roleKey) {
-            currentUser = Object.assign({ name: '' }, roleInfo(roleKey));
-            currentUser.name = ''; // DPDP Act: no person name tagged to role
-            document.getElementById('loadingText').textContent = 'Signing in as ' + currentUser.label + '\u2026';
-            document.getElementById('loadingOverlay').classList.add('show');
-            setTimeout(() => {
-                document.getElementById('landingScreen').style.display = 'none';
-                document.getElementById('appRoot').style.display = 'flex';
-                document.getElementById('loadingOverlay').classList.remove('show');
-                buildNav();
-                const rb = document.getElementById('roleBadgeValue');
-                if (rb) rb.textContent = currentUser.label;
-                const personaSelect = document.getElementById('quickPersonaDropdown');
-                if (personaSelect) personaSelect.value = currentUser.key;
-                startEscalationTimer();
-                goTo('dashboard');
-                refreshNotifBell();
-            }, 550);
-        }
-        function doLogout() {
-            stopEscalationTimer();
-            currentUser = null; currentDetailId = null;
-            closeModal('actionModal'); closeModal('gpsModal'); closeModal('photoModal');
-            const loading = document.getElementById('loadingOverlay');
-            if (loading) loading.classList.remove('show');
-            document.getElementById('appRoot').style.display = 'none';
-            document.getElementById('landingScreen').style.display = 'flex';
-            window.scrollTo({ top: 0, behavior: 'instant' });
-            renderLandingDynamicSections();
-            buildRoleCards();
-        }
-        function switchRole(roleKey) {
-            currentUser = Object.assign({ name: '' }, roleInfo(roleKey));
-            currentUser.name = '';
-            if (roleKey === 'super-admin') {
-                adminCurrentTab = 'superadmins';
-            } else if (roleKey === 'admin') {
-                adminCurrentTab = 'gps';
-                currentUser.projectId = currentUser.projectId || 'PRJ-PEARL';
-                currentUser.projectName = currentUser.projectName || 'The Pearl';
-            }
-            const roleBadge = document.getElementById('roleBadgeValue');
-            if (roleBadge) roleBadge.textContent = currentUser.label;
-            const personaSelect = document.getElementById('quickPersonaDropdown');
-            if (personaSelect && personaSelect.value !== roleKey) personaSelect.value = roleKey;
-            buildNav();
-            applyRoleVisibility();
-            refreshNotifBell();
+                /* ================================================================
+           AUTHORITATIVE FIREBASE AUTHENTICATION & STRICT ROLE ISOLATION
+           ================================================================ */
 
-            // Dynamic in-app view reactivity across all views
-            const curV = (typeof currentView !== 'undefined' && currentView) ? currentView : 'dashboard';
-            if (curV === 'dashboard') {
-                buildDashboard();
-                if (typeof updateKpis === 'function') updateKpis();
-            } else if (curV === 'ptype') {
-                buildPermitTypeCards();
-            } else if (curV === 'register') {
-                buildRegisterFilters();
-                buildRegisterTable();
-            } else if (curV === 'detail' || (typeof currentDetailId !== 'undefined' && currentDetailId)) {
-                if (currentDetailId) {
-                    const p = PERMITS.find(x => x.id === currentDetailId);
-                    const scope = currentUser ? roleTypeScope(currentUser.key) : null;
-                    if (p && isPermitVisibleToRole(p, currentUser.key) && permitMatchesScope(p, scope)) {
-                        viewDetail(currentDetailId, true);
-                    } else {
-                        showToast('Role switched to ' + currentUser.label + '. Switched away from permit outside scope.', 'info');
-                        goTo('register');
+        const ROLE_PERMITTED_ROUTES = {
+            'site-supervisor': ['dashboard', 'ptype', 'create', 'create-permit', 'register', 'permits', 'detail', 'permit-detail', 'checklists', 'notifications'],
+            'electrician': ['dashboard', 'ptype', 'create', 'create-permit', 'register', 'permits', 'detail', 'permit-detail', 'checklists', 'notifications'],
+            'blasting-incharge': ['dashboard', 'ptype', 'create', 'create-permit', 'register', 'permits', 'detail', 'permit-detail', 'checklists', 'notifications'],
+            'lift-supervisor': ['dashboard', 'ptype', 'create', 'create-permit', 'register', 'permits', 'detail', 'permit-detail', 'checklists', 'notifications'],
+            'night-supervisor': ['dashboard', 'ptype', 'create', 'create-permit', 'register', 'permits', 'detail', 'permit-detail', 'checklists', 'notifications'],
+
+            'site-engineer': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'excavation-head': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'hw-section-head': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'mep': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'pm': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'quality-engineer': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'project-manager': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+
+            'ehs-officer': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'statutory-pdf', 'audit-log', 'analytics', 'notifications'],
+            'ehs-manager': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'statutory-pdf', 'audit-log', 'analytics', 'notifications'],
+
+            'admin': ['dashboard', 'admin-config', 'geofence', 'role-empanelment', 'register', 'permits', 'notifications'],
+            'super-admin': ['dashboard', 'super-admin', 'admin-config', 'geofence', 'role-empanelment', 'register', 'permits', 'detail', 'permit-detail', 'audit-log', 'analytics', 'notifications']
+        };
+
+        function normalizeViewName(view) {
+            if (!view) return 'dashboard';
+            if (view === 'create-permit') return 'ptype';
+            if (view === 'permits') return 'register';
+            if (view === 'permit-detail') return 'detail';
+            if (view === 'geofence' || view === 'role-empanelment' || view === 'super-admin') return 'admin-config';
+            return view;
+        }
+
+        function isRouteAllowedForRole(roleKey, view) {
+            if (!roleKey) return false;
+            const allowed = ROLE_PERMITTED_ROUTES[roleKey];
+            if (!allowed) return false;
+            if (allowed.includes(view)) return true;
+            const norm = normalizeViewName(view);
+            if (allowed.includes(norm)) return true;
+            if (view === 'notifications') return true;
+            return false;
+        }
+
+        function buildRoleCards() {
+            // Enterprise mode: Demo role cards are permanently disabled.
+            const grid = document.getElementById('roleCardsGrid');
+            if (grid) grid.innerHTML = '';
+        }
+
+        function setLoginButtonLoading(isLoading) {
+            const btn = document.getElementById('unifiedLoginSubmitBtn');
+            if (!btn) return;
+            btn.disabled = isLoading;
+            const txt = btn.querySelector('.btn-text');
+            const spn = btn.querySelector('.btn-spinner');
+            if (txt) txt.style.display = isLoading ? 'none' : 'inline-flex';
+            if (spn) spn.style.display = isLoading ? 'inline-flex' : 'none';
+        }
+
+        function showLoginError(msg) {
+            const errBanner = document.getElementById('unifiedLoginError');
+            if (!errBanner) return;
+            errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size:16px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(msg) + '</div>';
+            errBanner.style.display = 'flex';
+        }
+
+        function togglePasswordVisibility(inputId, btn) {
+            const input = document.getElementById(inputId);
+            if (!input) return;
+            const isPassword = input.type === 'password';
+            input.type = isPassword ? 'text' : 'password';
+            const icon = btn.querySelector('i');
+            if (icon) {
+                icon.className = isPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+            }
+        }
+
+        async function handleUnifiedLogin(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            const emailInput = document.getElementById('unifiedLoginEmail');
+            const passInput = document.getElementById('unifiedLoginPassword');
+            const errBanner = document.getElementById('unifiedLoginError');
+            if (errBanner) {
+                errBanner.style.display = 'none';
+                errBanner.innerHTML = '';
+            }
+            const email = (emailInput ? emailInput.value : '').trim();
+            const password = passInput ? passInput.value : '';
+
+            if (!email || !password) {
+                showLoginError('Please enter both your official email ID and password.');
+                return;
+            }
+
+            setLoginButtonLoading(true);
+
+            try {
+                if (typeof firebase === 'undefined' || !firebase.auth) {
+                    throw new Error('Firebase Authentication SDK is not initialized.');
+                }
+
+                // 1. Authenticate against Firebase Auth
+                const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
+                const user = cred.user;
+
+                // 2. Force token refresh to get up-to-date claims
+                const tokenResult = await user.getIdTokenResult(true);
+                const claims = tokenResult.claims || {};
+
+                // 3. Resolve role & project scope
+                let resolvedRole = claims.role || claims.ptwRole || null;
+                let resolvedProjectId = claims.projectId || null;
+
+                // Secondary source: Firestore /users/{uid} fallback
+                if (!resolvedRole || !resolvedProjectId) {
+                    if (firebase.firestore) {
+                        try {
+                            const snap = await firebase.firestore().collection('users').doc(user.uid).get();
+                            if (snap.exists) {
+                                const d = snap.data() || {};
+                                if (!resolvedRole && d.role) resolvedRole = d.role;
+                                if (!resolvedProjectId && d.projectId) resolvedProjectId = d.projectId;
+                            }
+                        } catch (fsErr) {
+                            console.warn('Firestore fallback user query failed:', fsErr);
+                        }
                     }
                 }
-            } else if (curV === 'create') {
-                if (!INITIATOR_PERMIT_RULES[roleKey]) {
-                    showToast('Role switched to ' + currentUser.label + '. Form creation is reserved for permittees.', 'warn');
-                    goTo('dashboard');
+
+                // Emergency Super Admin bootstrap check
+                if (user.email && user.email.toLowerCase() === 'ehs.superadmin@aurorealty.com') {
+                    resolvedRole = 'super-admin';
+                    resolvedProjectId = resolvedProjectId || 'PRJ-MASTER';
+                }
+
+                // 4. Deny unassigned accounts
+                if (!resolvedRole) {
+                    await firebase.auth().signOut();
+                    throw new Error('Access Denied: Your account has not been assigned an EHS role by your Project Administrator.');
+                }
+
+                // Role Key Normalization: map project-admin or site-admin to frontend admin
+                let uiRoleKey = resolvedRole;
+                if (resolvedRole === 'project-admin' || resolvedRole === 'site-admin') {
+                    uiRoleKey = 'admin';
+                }
+
+                const info = typeof roleInfo === 'function' ? roleInfo(uiRoleKey) : {};
+                const safeUser = {
+                    key: uiRoleKey,
+                    rawRole: resolvedRole,
+                    label: info.label || resolvedRole,
+                    name: user.displayName || claims.name || user.email.split('@')[0],
+                    email: user.email,
+                    uid: user.uid,
+                    projectId: resolvedProjectId || 'PRJ-PEARL',
+                    projectName: (resolvedProjectId && PROJECT_MASTER[resolvedProjectId]) ? PROJECT_MASTER[resolvedProjectId].name : 'The Pearl'
+                };
+
+                completeAuthenticatedLogin(safeUser);
+            } catch (err) {
+                console.error('Unified login error:', err);
+                setLoginButtonLoading(false);
+                let msg = err.message || 'Authentication failed. Please check your credentials.';
+                if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
+                    msg = 'Invalid email or password. Please verify your credentials.';
+                } else if (err.code === 'auth/too-many-requests') {
+                    msg = 'Account temporarily locked due to consecutive failed attempts. Please reset password or try again later.';
+                } else if (err.code === 'auth/network-request-failed') {
+                    msg = 'Network connection error. Please ensure you are connected to the corporate network.';
+                }
+                showLoginError(msg);
+            }
+        }
+
+        async function handleUnifiedForgotPassword() {
+            const emailInput = document.getElementById('unifiedLoginEmail');
+            let email = emailInput ? emailInput.value.trim() : '';
+            if (!email) {
+                email = prompt('Enter your official ARPL email address to receive a secure password reset link:');
+                if (!email) return;
+                email = email.trim();
+            }
+            try {
+                if (typeof firebase === 'undefined' || !firebase.auth) {
+                    throw new Error('Firebase Authentication is not ready.');
+                }
+                await firebase.auth().sendPasswordResetEmail(email);
+                showToast('Password reset link has been dispatched to ' + email + '. Check your inbox.', 'ok');
+            } catch (err) {
+                console.error('Password reset error:', err);
+                showToast('Password reset failed: ' + (err.message || 'Unknown error'), 'err');
+            }
+        }
+
+        function completeAuthenticatedLogin(safeUser) {
+            // 1. Remove Persona Switcher UI permanently
+            const personaDropdown = document.getElementById('quickPersonaDropdown');
+            if (personaDropdown) personaDropdown.remove();
+            document.querySelectorAll('.persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid').forEach(el => el.remove());
+
+            // 2. Set Active Session badge in top navigation
+            const rb = document.getElementById('roleBadgeValue');
+            if (rb) {
+                rb.style.display = 'inline-block';
+                rb.innerHTML = '<span style="font-weight:700;color:var(--navy);">' + escapeHtml(safeUser.label) + '</span> ' +
+                    '<span style="font-size:11px;color:var(--text-muted);font-weight:600;">(' + escapeHtml(safeUser.projectName || safeUser.projectId) + ')</span>';
+            }
+            const rLabel = document.querySelector('.role-badge-label');
+            if (rLabel) rLabel.textContent = 'Active Session';
+
+            // 3. Freeze currentUser to prevent console tampering
+            window.currentUser = Object.freeze(safeUser);
+
+            // 4. Disable role switching and manual in-memory logins
+            window.switchRole = function () {
+                console.warn('Blocked: Role switching is disabled in production enterprise environment.');
+                showToast('Unauthorized: Persona switching is disabled. You must log out to switch accounts.', 'warn');
+                return false;
+            };
+            window.doLogin = function () {
+                console.warn('Blocked: Direct in-memory login disabled.');
+                return false;
+            };
+
+            // 5. Worksite Project Scope Isolation
+            if (safeUser.key !== 'super-admin') {
+                const regProj = document.getElementById('regProjectFilter');
+                if (regProj) {
+                    regProj.value = safeUser.projectName || safeUser.projectId;
+                    regProj.disabled = true;
+                    regProj.title = 'Project locked to your assigned worksite (' + (safeUser.projectName || safeUser.projectId) + ')';
+                }
+                const adminProj = document.getElementById('adminProjectSelect');
+                if (adminProj) {
+                    adminProj.value = safeUser.projectId;
+                    adminProj.disabled = true;
+                }
+                const filterProj = document.getElementById('filterPersonnelProjectSelect');
+                if (filterProj) {
+                    filterProj.value = safeUser.projectId;
+                    filterProj.disabled = true;
                 }
             }
-            showToast('Active persona switched to ' + currentUser.label + '.', 'info');
+
+            // 6. Transition Screen
+            document.getElementById('landingScreen').style.display = 'none';
+            document.getElementById('appRoot').style.display = 'flex';
+            setLoginButtonLoading(false);
+
+            // 7. Navigation & Route Setup
+            buildNav();
+            filterUnauthorizedNavLinks();
+            startEscalationTimer();
+
+            // Default landing route per role
+            let defaultRoute = 'dashboard';
+            if (safeUser.key === 'site-supervisor' || safeUser.key === 'electrician' || safeUser.key === 'blasting-incharge' || safeUser.key === 'lift-supervisor' || safeUser.key === 'night-supervisor') {
+                defaultRoute = 'dashboard';
+            } else if (safeUser.key === 'admin') {
+                defaultRoute = 'admin-config';
+            } else if (safeUser.key === 'super-admin') {
+                defaultRoute = 'dashboard';
+            }
+
+            goTo(defaultRoute);
+            refreshNotifBell();
+            showToast('Welcome back, ' + safeUser.name + '. Authenticated as ' + safeUser.label + '.', 'ok');
+        }
+
+        function filterUnauthorizedNavLinks() {
+            if (!currentUser) return;
+            document.querySelectorAll('[data-page], .nav-item, .sidebar-link').forEach(el => {
+                const page = el.getAttribute('data-page') || (el.querySelector('[data-nav]') ? el.querySelector('[data-nav]').getAttribute('data-nav') : null);
+                if (page && !isRouteAllowedForRole(currentUser.key, page)) {
+                    el.style.display = 'none';
+                }
+            });
+        }
+
+        async function doLogout() {
+            stopEscalationTimer();
+            try {
+                if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+                    await firebase.auth().signOut();
+                }
+            } catch (e) {
+                console.warn('Sign out warning:', e);
+            }
+            currentUser = null;
+            currentDetailId = null;
+
+            closeModal('actionModal');
+            closeModal('gpsModal');
+            closeModal('photoModal');
+            const loading = document.getElementById('loadingOverlay');
+            if (loading) loading.classList.remove('show');
+
+            document.getElementById('appRoot').style.display = 'none';
+            document.getElementById('landingScreen').style.display = 'flex';
+
+            const pInput = document.getElementById('unifiedLoginPassword');
+            if (pInput) pInput.value = '';
+            const errBanner = document.getElementById('unifiedLoginError');
+            if (errBanner) {
+                errBanner.style.display = 'none';
+                errBanner.innerHTML = '';
+            }
+            setLoginButtonLoading(false);
+
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            renderLandingDynamicSections();
+            showToast('Signed out of ARPL EHS Portal.', 'info');
+        }
+
+        function switchRole(roleKey) {
+            console.warn('Blocked: Role switching is disabled in production.');
+            showToast('Unauthorized: Persona switching is disabled. You must log out to switch accounts.', 'warn');
+            return false;
+        }
+
+        function doLogin(roleKey) {
+            console.warn('Blocked: Direct in-memory login disabled.');
+            return false;
         }
 
         /* ================================================================
@@ -13156,7 +13561,9 @@
             }
             items.push({ id: 'register', label: (['site-supervisor', 'electrician', 'blasting-incharge', 'lift-supervisor', 'night-supervisor', 'site-engineer'].includes(roleKey)) ? 'My Permits' : 'Permit Register', icon: 'fa-table-list' });
             items.push({ id: 'notifications', label: 'Notifications', icon: 'fa-bell', badge: true });
-            return items;
+            
+            // Strictly filter by permitted routes for this role
+            return items.filter(it => isRouteAllowedForRole(roleKey, it.id));
         }
         function buildNav() {
             const items = navItemsFor(currentUser.key);
@@ -13225,6 +13632,17 @@
         }
 
         function goTo(view, skipHistory) {
+            if (!view) view = 'dashboard';
+
+            // Comprehensive Role-Based Route Guard
+            if (currentUser && !isRouteAllowedForRole(currentUser.key, view)) {
+                showToast('Access Restricted: Your role (' + (currentUser.label || currentUser.key) + ') is not authorized to access the \'' + view + '\' module.', 'err');
+                console.warn('Access denied to view \'' + view + '\' for role \'' + currentUser.key + '\'');
+                if (currentView !== 'dashboard') {
+                    goTo('dashboard');
+                }
+                return;
+            }
             // Sunday Zero-Creation Lockout Route Guard
             if ((view === 'ptype' || view === 'create') && !isPermitRaisingAllowedToday()) {
                 showToast('Sunday Lockout: No permits can be raised on Sunday. All permits for Sunday work must be pre-authorized on Saturday.', 'err');
@@ -13881,6 +14299,11 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             }).join('');
             const pSel = document.getElementById('regProjectFilter');
             pSel.innerHTML = '<option value="">All Projects</option>' + PROJECTS.map(p => '<option value="' + p.name + '">' + p.name + '</option>').join('');
+            if (currentUser && currentUser.key !== 'super-admin') {
+                pSel.value = currentUser.projectName || currentUser.projectId;
+                pSel.disabled = true;
+                pSel.title = 'Project locked to your assigned worksite (' + (currentUser.projectName || currentUser.projectId) + ')';
+            }
         }
         function buildRegisterTable() {
             const q = (document.getElementById('regSearch').value || '').toLowerCase();
@@ -13889,6 +14312,13 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const tf = document.getElementById('regTypeFilter') ? document.getElementById('regTypeFilter').value : '';
             const scope = roleTypeScope(currentUser.key);
             let rows = PERMITS.filter(p => {
+                if (currentUser && currentUser.key !== 'super-admin') {
+                    const userProj = (currentUser.projectName || currentUser.projectId || '').toLowerCase();
+                    const permitProj = (p.project || p.projectId || '').toLowerCase();
+                    if (userProj && permitProj && !permitProj.includes(userProj) && !userProj.includes(permitProj)) {
+                        return false;
+                    }
+                }
                 if (!isPermitVisibleToRole(p, currentUser ? currentUser.key : null)) return false;
                 if (!permitMatchesScope(p, scope)) return false;   // Tower Incharge only sees allowed modules
                 if (tf) {
@@ -15912,9 +16342,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             if (idx >= 0) {
                 adminConfigState.selectedProjectIndex = idx;
             }
-            if (!currentUser || (currentUser.key !== 'admin' && currentUser.key !== 'super-admin')) {
-                switchRole('admin');
-            }
+            if (!currentUser || (currentUser.key !== 'admin' && currentUser.key !== 'super-admin')) { showToast('Unauthorized: Administrator privileges required.', 'warn'); return; }
             showView('admin-config');
         }
 
@@ -22633,6 +23061,97 @@ ptypeOf(p) === 'general' ?
 
         /* keep the sidebar notification badge in sync too */
         const _origRefreshBell = refreshNotifBell;
+                // Setup Firebase Real-Time Auth Listener
+        async function setupUnifiedAuthListener() {
+            try {
+                if (typeof firebase === 'undefined' || !firebase.auth) {
+                    let config = null;
+                    try {
+                        const res = await fetch('/__/firebase/init.json');
+                        if (res.ok) config = await res.json();
+                    } catch (e) {}
+                    if (!config && typeof window !== 'undefined' && window.firebaseConfig) {
+                        config = window.firebaseConfig;
+                    }
+                    if (config && typeof firebase !== 'undefined' && (!firebase.apps || firebase.apps.length === 0)) {
+                        firebase.initializeApp(config);
+                    }
+                }
+
+                if (typeof firebase !== 'undefined' && firebase.auth) {
+                    firebase.auth().onAuthStateChanged(async (user) => {
+                        if (user) {
+                            try {
+                                const tokenResult = await user.getIdTokenResult(true);
+                                const claims = tokenResult.claims || {};
+                                let resolvedRole = claims.role || claims.ptwRole || null;
+                                let resolvedProjectId = claims.projectId || null;
+
+                                if (!resolvedRole || !resolvedProjectId) {
+                                    if (firebase.firestore) {
+                                        try {
+                                            const snap = await firebase.firestore().collection('users').doc(user.uid).get();
+                                            if (snap.exists) {
+                                                const d = snap.data() || {};
+                                                if (!resolvedRole && d.role) resolvedRole = d.role;
+                                                if (!resolvedProjectId && d.projectId) resolvedProjectId = d.projectId;
+                                            }
+                                        } catch (fsErr) {
+                                            console.warn('Firestore fallback user query failed:', fsErr);
+                                        }
+                                    }
+                                }
+
+                                if (user.email && user.email.toLowerCase() === 'ehs.superadmin@aurorealty.com') {
+                                    resolvedRole = 'super-admin';
+                                    resolvedProjectId = resolvedProjectId || 'PRJ-MASTER';
+                                }
+
+                                if (!resolvedRole) {
+                                    await firebase.auth().signOut();
+                                    showLoginError('Access Denied: Your account has not been assigned an EHS role by your Project Administrator.');
+                                    document.getElementById('appRoot').style.display = 'none';
+                                    document.getElementById('landingScreen').style.display = 'flex';
+                                    return;
+                                }
+
+                                let uiRoleKey = resolvedRole;
+                                if (resolvedRole === 'project-admin' || resolvedRole === 'site-admin') {
+                                    uiRoleKey = 'admin';
+                                }
+
+                                const info = typeof roleInfo === 'function' ? roleInfo(uiRoleKey) : {};
+                                const safeUser = {
+                                    key: uiRoleKey,
+                                    rawRole: resolvedRole,
+                                    label: info.label || resolvedRole,
+                                    name: user.displayName || claims.name || user.email.split('@')[0],
+                                    email: user.email,
+                                    uid: user.uid,
+                                    projectId: resolvedProjectId || 'PRJ-PEARL',
+                                    projectName: (resolvedProjectId && PROJECT_MASTER[resolvedProjectId]) ? PROJECT_MASTER[resolvedProjectId].name : 'The Pearl'
+                                };
+
+                                completeAuthenticatedLogin(safeUser);
+                            } catch (err) {
+                                console.error('Auth state resolution error:', err);
+                                document.getElementById('appRoot').style.display = 'none';
+                                document.getElementById('landingScreen').style.display = 'flex';
+                            }
+                        } else {
+                            document.getElementById('appRoot').style.display = 'none';
+                            document.getElementById('landingScreen').style.display = 'flex';
+                            const personaDropdown = document.getElementById('quickPersonaDropdown');
+                            if (personaDropdown) personaDropdown.remove();
+                            document.querySelectorAll('.persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid').forEach(el => el.remove());
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('setupUnifiedAuthListener error:', err);
+            }
+        }
+        setupUnifiedAuthListener();
         refreshNotifBell = function () {
             _origRefreshBell();
             const navBadge = document.getElementById('navNotifBadge');
