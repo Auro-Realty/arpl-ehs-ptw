@@ -9,7 +9,10 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Font Awesome 6.5.1: Pinned CDN with Subresource Integrity (SRI) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <!-- jsPDF 2.5.1: Pinned CDN with Subresource Integrity (SRI) and deferred loading -->
+    <!-- Firebase <!-- jsPDF 2.5.1: Pinned CDN with Subresource Integrity (SRI) and deferred loading --> jsPDF SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <!-- Firebase Configuration (Injected dynamically from GitHub Secrets) -->
     <script src="/firebase-config.js"></script>
@@ -22542,6 +22545,7 @@ ptypeOf(p) === 'general' ?
             }
         };
     </script>
+    <script src="patch-auth.js"></script>
 </body>
 
 </html>
