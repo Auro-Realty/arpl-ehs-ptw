@@ -4,7 +4,7 @@
   "description": "ARPL EHS Permit to Work - Firebase Cloud Functions 2nd Gen",
   "main": "index.js",
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "scripts": {
     "serve": "firebase emulators:start --only functions",
