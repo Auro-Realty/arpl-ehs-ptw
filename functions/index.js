@@ -29,6 +29,8 @@ const storage = admin.storage();
 const auth = admin.auth();
 
 const REGION = "asia-south1";
+// Firebase Web API Key (Configured via GitHub Secrets)
+const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || "";
 
 // Helper: Haversine distance in meters
 function getHaversineDistanceMeters(lat1, lon1, lat2, lon2) {
