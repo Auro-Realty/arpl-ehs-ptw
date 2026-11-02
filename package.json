@@ -1,0 +1,28 @@
+{
+  "name": "arpl-ehs-permit-to-work",
+  "version": "3.0.0",
+  "description": "Enterprise-Grade Digital Safety Governance & Permit-to-Work System for Construction Operations",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run_all_tests.js",
+    "test:audit": "node tests/run_extended_audit_tests.js",
+    "test:ci": "node tests/run_all_tests.js && node tests/run_extended_audit_tests.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "ehs",
+    "permit-to-work",
+    "ptw",
+    "construction-safety",
+    "safety-governance",
+    "finite-state-machine",
+    "rbac",
+    "dpdp-act-2023",
+    "jspdf"
+  ],
+  "author": "Mohith, Prasanna, Abigna",
+  "license": "MIT"
+}

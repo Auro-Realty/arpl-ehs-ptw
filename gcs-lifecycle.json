@@ -1,0 +1,17 @@
+{
+  "lifecycle": {
+    "rule": [
+      {
+        "action": {
+          "type": "Delete"
+        },
+        "condition": {
+          "age": 1,
+          "matchesPrefix": [
+            "temp-images/"
+          ]
+        }
+      }
+    ]
+  }
+}

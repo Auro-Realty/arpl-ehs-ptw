@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+package-lock.json
+
+# Local Environment & Secrets (NEVER COMMIT)
+*.env
+*.env.*
+*.json.key
+*credentials*.json
+*service-account*.json
+sa-*.json
+key.json
+
+# Firebase Cache & Logs
+.firebase/
+firebase-debug.log*
+firestore-debug.log*
+ui-debug.log*
+
+# OS & Editor Files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

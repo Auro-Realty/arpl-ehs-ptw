@@ -1,0 +1,101 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.superAdmin == true;
+    }
+
+    function isProjectAdmin(projectId) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        (request.auth.token.role == 'project-admin' && request.auth.token.projectId == projectId)
+      );
+    }
+
+    function hasProjectAccess(projectId) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.token.projectId == projectId ||
+        (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds)
+      );
+    }
+
+    function isEhsRole(projectId) {
+      return hasProjectAccess(projectId) && (
+        request.auth.token.role in ['ehs-manager', 'ehs-officer']
+      );
+    }
+
+    // Projects Collection: Geolocation & Towers configuration
+    match /projects/{projectId} {
+      allow read: if isAuthenticated();
+      // Only Super Admin or the designated Project Admin can update site coordinates & radius
+      allow update: if isProjectAdmin(projectId);
+      allow create, delete: if isSuperAdmin();
+    }
+
+    // Users Collection: User directory and role binding
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      // Direct client profile write is blocked; account creation & role grants handled by Cloud Functions
+      allow write: if isSuperAdmin();
+    }
+
+    // Contractors Directory
+    match /contractors/{contractorId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Permits Collection
+    match /permits/{permitId} {
+      allow read: if isAuthenticated() && hasProjectAccess(resource.data.projectId);
+
+      // Create: Site supervisors or permissible creators
+      allow create: if isAuthenticated() &&
+                    hasProjectAccess(request.resource.data.projectId) &&
+                    request.resource.data.statutoryDownload.isDownloaded == false;
+
+      // Update: State changes handled via server-side Cloud Function runTransaction
+      // Direct updates are protected: users cannot tamper with statutoryDownload flags
+      allow update: if isAuthenticated() &&
+                    hasProjectAccess(resource.data.projectId) &&
+                    request.resource.data.statutoryDownload.isDownloaded == resource.data.statutoryDownload.isDownloaded;
+
+      allow delete: if false; // Permits can never be deleted (DPDP Act audit requirement)
+
+      // Subcollection: Immutable Activity Log (Append-only audit trail)
+      match /activity_log/{logId} {
+        allow read: if isAuthenticated() && hasProjectAccess(get(/databases/$(database)/documents/permits/$(permitId)).data.projectId);
+        allow create: if isAuthenticated();
+        allow update, delete: if false; // Tamper-proof guarantee
+      }
+
+      // Subcollection: Safety Observations
+      match /observations/{obsId} {
+        allow read: if isAuthenticated() && hasProjectAccess(get(/databases/$(database)/documents/permits/$(permitId)).data.projectId);
+        allow create, update: if isAuthenticated() && hasProjectAccess(get(/databases/$(database)/documents/permits/$(permitId)).data.projectId);
+        allow delete: if false;
+      }
+    }
+
+    // Notifications Collection
+    match /notifications/{notifId} {
+      allow read: if isAuthenticated();
+      allow update: if isAuthenticated() && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readBy']);
+      allow create, delete: if false; // Server-dispatched only
+    }
+
+    // System Counters (Atomic sequential numbers)
+    match /counters/{counterId} {
+      allow read: if isAuthenticated();
+      allow write: if false; // Managed exclusively by Cloud Functions transaction
+    }
+  }
+}

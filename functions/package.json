@@ -1,0 +1,23 @@
+{
+  "name": "arpl-ehs-functions",
+  "version": "2.0.0",
+  "description": "ARPL EHS Permit to Work - Firebase Cloud Functions 2nd Gen",
+  "main": "index.js",
+  "engines": {
+    "node": "20"
+  },
+  "scripts": {
+    "serve": "firebase emulators:start --only functions",
+    "shell": "firebase functions:shell",
+    "start": "npm run shell",
+    "deploy": "firebase deploy --only functions"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0",
+    "firebase-functions": "^5.0.0",
+    "sharp": "^0.33.3",
+    "pdf-lib": "^1.17.9",
+    "cors": "^2.8.5"
+  },
+  "private": true
+}

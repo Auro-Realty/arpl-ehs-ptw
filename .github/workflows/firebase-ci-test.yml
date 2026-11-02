@@ -1,0 +1,40 @@
+name: CI PR Security & Syntax Validation
+
+on:
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  validate:
+    name: Verify Rules & Cloud Functions
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20 LTS
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install Functions Dependencies
+        working-directory: functions
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            npm install
+          fi
+
+      - name: Validate Cloud Functions Syntax
+        working-directory: functions
+        run: node -c index.js
+
+      - name: Verify JSON Configurations
+        run: |
+          node -e "JSON.parse(require('fs').readFileSync('firebase.json'))"
+          node -e "JSON.parse(require('fs').readFileSync('firestore.indexes.json'))"
+          node -e "JSON.parse(require('fs').readFileSync('gcs-lifecycle.json'))"
+          node -e "JSON.parse(require('fs').readFileSync('public/config.projects.json'))"
+          echo "All JSON configuration files are syntactically valid."

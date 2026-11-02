@@ -1,0 +1,45 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isAuthenticated() && request.auth.token.superAdmin == true;
+    }
+
+    function hasProjectAccess(projectId) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.token.projectId == projectId ||
+        (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds)
+      );
+    }
+
+    // Temporary Field & Inspection Images (Targeted by 24h GCS Lifecycle Auto-Deletion)
+    match /temp-images/{projectId}/{permitId}/{imageId} {
+      allow read: if hasProjectAccess(projectId);
+      allow create: if hasProjectAccess(projectId)
+                    && request.resource.size < 10 * 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false; // Auto-deleted by GCS lifecycle after 24 hours
+    }
+
+    // Digital Signatures (Compressed PNG / WebP)
+    match /signatures/{projectId}/{permitId}/{signatureId} {
+      allow read: if hasProjectAccess(projectId);
+      allow create: if hasProjectAccess(projectId)
+                    && request.resource.size < 1024 * 1024
+                    && request.resource.contentType.matches('image/.*');
+      allow update, delete: if false;
+    }
+
+    // Statutory Permanent PDFs
+    // Strictly blocked from direct bucket read/write; served only via the single-use download Cloud Function
+    match /statutory-pdfs/{projectId}/{permitId}/{fileName} {
+      allow read, write: if false;
+    }
+  }
+}
