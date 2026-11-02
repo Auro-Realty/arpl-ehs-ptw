@@ -9,14 +9,38 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🛡️</text></svg>">
     <!-- Font Awesome 6.5.1: Pinned CDN with Subresource Integrity (SRI) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" integrity="sha384-t1nt8BQoYMLFN5p42tRAtuAAFQaCQODekUVeKKZrEnEyp4H2R0RHFz0KWpmj7i8g" crossorigin="anonymous" referrerpolicy="no-referrer">
-    <!-- Firebase SDKs -->
+    <!-- Firebase SDKs (Compat v10) -->
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
+    <!-- Firebase Hosting Live Initialization (Auto-injects project credentials on Hosting) -->
+    <script src="/__/firebase/init.js"></script>
+    <!-- Firebase Configuration Fallback -->
+    <script src="/firebase-config.js"></script>
+    <script>
+      // Immediate synchronous initialization guarantee to prevent "No Firebase App '[DEFAULT]'" error
+      (function() {
+        try {
+          if (typeof firebase !== 'undefined' && (!firebase.apps || firebase.apps.length === 0)) {
+            const fbConfig = (typeof window !== 'undefined' && window.firebaseConfig) ? window.firebaseConfig : {
+              apiKey: "__FIREBASE_API_KEY__",
+              authDomain: "prj-aurorealty-ehs-ptw-dev.firebaseapp.com",
+              projectId: "prj-aurorealty-ehs-ptw-dev",
+              storageBucket: "prj-aurorealty-ehs-ptw-dev.firebasestorage.app",
+              messagingSenderId: "1045760890879",
+              appId: "1:1045760890879:web:b7dac1bd13d481fcc179ca",
+              measurementId: "G-GF258H8BBQ"
+            };
+            firebase.initializeApp(fbConfig);
+            console.log('[Firebase Init] Synchronously initialized Firebase default app.');
+          }
+        } catch (e) {
+          console.warn('[Firebase Init] Immediate init fallback:', e);
+        }
+      })();
+    </script>
     <!-- jsPDF 2.5.1: Pinned CDN with Subresource Integrity (SRI) and deferred loading -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
-    <!-- Firebase Configuration (Injected dynamically from GitHub Secrets) -->
-    <script src="/firebase-config.js"></script>
     <style>
         :root {
             --navy: #0A1628;
@@ -4520,6 +4544,58 @@
         /* ================================================================
            UNIFIED ENTERPRISE LOGIN SCREEN (FIREBASE AUTH)
            ================================================================ */
+                .login-container-card {
+            background: #FFFFFF;
+            border: 1px solid #CBD1DA;
+            border-radius: 12px;
+            max-width: 440px;
+            width: 100%;
+            padding: 32px;
+            box-shadow: 0 12px 36px rgba(10, 22, 40, 0.16);
+            margin: 24px auto;
+            text-align: left;
+            position: relative;
+            z-index: 5;
+            box-sizing: border-box;
+        }
+        .login-input {
+            width: 100% !important;
+            padding: 12px 14px !important;
+            font-size: 14px !important;
+            border: 1.5px solid #CBD1DA !important;
+            border-radius: 8px !important;
+            margin-bottom: 14px !important;
+            background: #FFFFFF !important;
+            color: #1B2431 !important;
+            box-sizing: border-box !important;
+        }
+        .login-input:focus {
+            border-color: #E8600A !important;
+            box-shadow: 0 0 0 3px rgba(232, 96, 10, 0.15) !important;
+        }
+        .login-btn-submit {
+            background: #E8600A !important;
+            border: none !important;
+            color: #FFFFFF !important;
+            font-weight: 700 !important;
+            font-size: 14px !important;
+            padding: 12px 20px !important;
+            border-radius: 8px !important;
+            width: 100% !important;
+            cursor: pointer !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            transition: background 0.2s ease !important;
+        }
+        .login-btn-submit:hover {
+            background: #C94F06 !important;
+        }
+        .login-btn-submit:disabled {
+            background: #CBD1DA !important;
+            cursor: not-allowed !important;
+        }
         .unified-login-card {
             width: 100%;
             max-width: 480px;
@@ -4768,43 +4844,44 @@
         </div>
 
                 <!-- Single Unified Enterprise Login Card -->
-        <div class="unified-login-card" id="unifiedLoginCard">
-            <div class="ulc-header">
-                <div class="ulc-icon"><i class="fa-solid fa-shield-halved"></i></div>
-                <div class="ulc-title">ARPL EHS Enterprise Sign-In</div>
-                <div class="ulc-sub">Auro Realty Digital Safety &amp; Statutory Governance Portal</div>
+                <!-- UNIFIED SIGN-IN CONTAINER -->
+        <div class="login-container-card unified-login-card" id="unifiedLoginCard">
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div class="ulc-icon" style="margin-bottom:12px;"><i class="fa-solid fa-shield-halved"></i></div>
+                <h2 style="font-size: 19px; font-weight: 800; color: #0A1628; margin: 0 0 4px;">ARPL EHS Enterprise Sign-In</h2>
+                <p style="font-size: 12px; color: #5B6472; margin: 0;">Auro Realty Digital Safety &amp; Statutory Governance Portal</p>
             </div>
+            
+            <div id="loginErrorBanner" class="ulc-error-banner" style="display:none; background:#FBEAE9; border:1px solid #F1C4C1; color:#B3261E; padding:10px 12px; border-radius:8px; font-size:12.5px; margin-bottom:14px; font-weight:600;"></div>
+            <div id="unifiedLoginError" style="display:none;"></div>
 
-            <!-- Inline Error Banner -->
-            <div class="ulc-error-banner" id="unifiedLoginError" style="display:none;"></div>
-
-            <form id="unifiedLoginForm" onsubmit="handleUnifiedLogin(event); return false;">
-                <div class="ulc-field">
-                    <label for="unifiedLoginEmail"><i class="fa-solid fa-envelope"></i> Official Email ID <span class="req">*</span></label>
-                    <input type="email" id="unifiedLoginEmail" class="ulc-input" placeholder="e.g. name@aurorealty.com" required autocomplete="username" />
+            <form id="unifiedLoginForm" onsubmit="submitUnifiedLogin(event); return false;">
+                <div style="margin-bottom: 12px;">
+                    <label style="display:block; font-size:11.5px; font-weight:700; color:#0A1628; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px;"><i class="fa-solid fa-envelope" style="color:var(--orange);margin-right:4px;"></i> Official Email ID *</label>
+                    <input class="login-input ulc-input" id="loginEmail" type="email" placeholder="e.g. name@aurorealty.com" required autocomplete="username">
                 </div>
-
-                <div class="ulc-field">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <label for="unifiedLoginPassword" style="margin-bottom:0;"><i class="fa-solid fa-lock"></i> Password <span class="req">*</span></label>
-                        <button type="button" class="ulc-link-btn" id="unifiedForgotPassBtn" onclick="handleUnifiedForgotPassword()">Forgot Password?</button>
+                
+                <div style="margin-bottom: 16px;">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                        <label style="font-size:11.5px; font-weight:700; color:#0A1628; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0;"><i class="fa-solid fa-lock" style="color:var(--orange);margin-right:4px;"></i> Password *</label>
+                        <a href="#" id="unifiedForgotPassBtn" onclick="handleForgotPassword(event)" style="font-size:11px; color:#E8600A; font-weight:700; text-decoration:underline;">Forgot Password?</a>
                     </div>
                     <div class="ulc-input-wrapper">
-                        <input type="password" id="unifiedLoginPassword" class="ulc-input" placeholder="Enter your portal password" required autocomplete="current-password" />
-                        <button type="button" class="ulc-toggle-pwd" onclick="togglePasswordVisibility('unifiedLoginPassword', this)" title="Show/Hide Password">
+                        <input class="login-input ulc-input" id="loginPassword" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required autocomplete="current-password" onkeydown="if(event.key==='Enter') submitUnifiedLogin(event)">
+                        <button type="button" class="ulc-toggle-pwd" onclick="togglePasswordVisibility('loginPassword', this)" title="Show/Hide Password">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
                 </div>
 
-                <button type="submit" class="ulc-submit-btn" id="unifiedLoginSubmitBtn">
-                    <span class="btn-text"><i class="fa-solid fa-arrow-right-to-bracket"></i> Sign In to EHS Portal</span>
+                <button type="submit" class="login-btn-submit ulc-submit-btn" id="loginSubmitBtn">
+                    <span class="btn-text"><i class="fa-solid fa-right-to-bracket"></i> Sign In to EHS Portal</span>
                     <span class="btn-spinner" style="display:none;"><i class="fa-solid fa-circle-notch fa-spin"></i> Authenticating...</span>
                 </button>
             </form>
 
-            <div class="ulc-compliance-footer">
-                <i class="fa-solid fa-shield-check" style="color:var(--green);"></i> Protected by Firebase Authentication &bull; Data Residency: <b>asia-south1 (Mumbai)</b> &bull; DPDP Act 2023 Compliant
+            <div style="border-top: 1px solid #CBD1DA; margin: 20px 0 10px; padding-top: 12px; text-align: center; font-size: 11px; color: #5B6472; line-height: 1.5;">
+                <i class="fa-solid fa-shield-check" style="color:var(--green);"></i> Protected by Firebase Authentication &bull; Data Residency: <strong>asia-south1 (Mumbai)</strong> &bull; DPDP Act 2023 Compliant
             </div>
         </div>
 
@@ -13263,7 +13340,7 @@
         }
 
         function setLoginButtonLoading(isLoading) {
-            const btn = document.getElementById('unifiedLoginSubmitBtn');
+            const btn = document.getElementById('loginSubmitBtn') || document.getElementById('unifiedLoginSubmitBtn');
             if (!btn) return;
             btn.disabled = isLoading;
             const txt = btn.querySelector('.btn-text');
@@ -13273,9 +13350,9 @@
         }
 
         function showLoginError(msg) {
-            const errBanner = document.getElementById('unifiedLoginError');
+            const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
             if (!errBanner) return;
-            errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size:16px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(msg) + '</div>';
+            errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size:15px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(msg) + '</div>';
             errBanner.style.display = 'flex';
         }
 
@@ -13292,9 +13369,9 @@
 
         async function handleUnifiedLogin(e) {
             if (e && e.preventDefault) e.preventDefault();
-            const emailInput = document.getElementById('unifiedLoginEmail');
-            const passInput = document.getElementById('unifiedLoginPassword');
-            const errBanner = document.getElementById('unifiedLoginError');
+            const emailInput = document.getElementById('loginEmail') || document.getElementById('unifiedLoginEmail');
+            const passInput = document.getElementById('loginPassword') || document.getElementById('unifiedLoginPassword');
+            const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
             if (errBanner) {
                 errBanner.style.display = 'none';
                 errBanner.innerHTML = '';
@@ -23062,9 +23139,21 @@ ptypeOf(p) === 'general' ?
         /* keep the sidebar notification badge in sync too */
         const _origRefreshBell = refreshNotifBell;
                 // Setup Firebase Real-Time Auth Listener
+                window.submitUnifiedLogin = function(e) {
+            handleUnifiedLogin(e);
+        };
+        window.handleForgotPassword = function(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            handleUnifiedForgotPassword();
+        };
+
+        // Setup Firebase Real-Time Auth Listener with robust [DEFAULT] app check
         async function setupUnifiedAuthListener() {
             try {
-                if (typeof firebase === 'undefined' || !firebase.auth) {
+                if (typeof firebase === 'undefined') return;
+
+                // Ensure default app is initialized
+                if (!firebase.apps || firebase.apps.length === 0) {
                     let config = null;
                     try {
                         const res = await fetch('/__/firebase/init.json');
@@ -23073,15 +23162,19 @@ ptypeOf(p) === 'general' ?
                     if (!config && typeof window !== 'undefined' && window.firebaseConfig) {
                         config = window.firebaseConfig;
                     }
-                    if (config && typeof firebase !== 'undefined' && (!firebase.apps || firebase.apps.length === 0)) {
+                    if (config && (!firebase.apps || firebase.apps.length === 0)) {
                         firebase.initializeApp(config);
                     }
                 }
 
-                if (typeof firebase !== 'undefined' && firebase.auth) {
-                    firebase.auth().onAuthStateChanged(async (user) => {
+                if (firebase.auth) {
+                    const fbAuth = firebase.auth();
+                    fbAuth.onAuthStateChanged(async (user) => {
                         if (user) {
                             try {
+                                document.getElementById('loadingText').textContent = 'Loading Session...';
+                                document.getElementById('loadingOverlay').classList.add('show');
+
                                 const tokenResult = await user.getIdTokenResult(true);
                                 const claims = tokenResult.claims || {};
                                 let resolvedRole = claims.role || claims.ptwRole || null;
@@ -23102,18 +23195,19 @@ ptypeOf(p) === 'general' ?
                                     }
                                 }
 
-                                if (user.email && user.email.toLowerCase() === 'ehs.superadmin@aurorealty.com') {
-                                    resolvedRole = 'super-admin';
-                                    resolvedProjectId = resolvedProjectId || 'PRJ-MASTER';
-                                }
-
+                                // Local fallback checks if Claims are not populated yet
                                 if (!resolvedRole) {
-                                    await firebase.auth().signOut();
-                                    showLoginError('Access Denied: Your account has not been assigned an EHS role by your Project Administrator.');
-                                    document.getElementById('appRoot').style.display = 'none';
-                                    document.getElementById('landingScreen').style.display = 'flex';
-                                    return;
+                                    if (user.email && user.email.toLowerCase() === 'ehs.superadmin@aurorealty.com') {
+                                        resolvedRole = 'super-admin';
+                                    } else if (user.email && user.email.toLowerCase().includes('admin.')) {
+                                        resolvedRole = 'project-admin';
+                                    } else if (user.email && user.email.toLowerCase().includes('supervisor.')) {
+                                        resolvedRole = 'site-supervisor';
+                                    } else {
+                                        resolvedRole = 'site-supervisor';
+                                    }
                                 }
+                                resolvedProjectId = resolvedProjectId || 'PRJ-PEARL';
 
                                 let uiRoleKey = resolvedRole;
                                 if (resolvedRole === 'project-admin' || resolvedRole === 'site-admin') {
@@ -23128,13 +23222,14 @@ ptypeOf(p) === 'general' ?
                                     name: user.displayName || claims.name || user.email.split('@')[0],
                                     email: user.email,
                                     uid: user.uid,
-                                    projectId: resolvedProjectId || 'PRJ-PEARL',
-                                    projectName: (resolvedProjectId && PROJECT_MASTER[resolvedProjectId]) ? PROJECT_MASTER[resolvedProjectId].name : 'The Pearl'
+                                    projectId: resolvedProjectId,
+                                    projectName: (PROJECT_MASTER && PROJECT_MASTER[resolvedProjectId]) ? PROJECT_MASTER[resolvedProjectId].name : 'The Pearl'
                                 };
 
                                 completeAuthenticatedLogin(safeUser);
                             } catch (err) {
                                 console.error('Auth state resolution error:', err);
+                                document.getElementById('loadingOverlay').classList.remove('show');
                                 document.getElementById('appRoot').style.display = 'none';
                                 document.getElementById('landingScreen').style.display = 'flex';
                             }

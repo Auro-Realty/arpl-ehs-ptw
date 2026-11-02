@@ -40,6 +40,8 @@ jobs:
           if [ -n "${{ secrets.FIREBASE_API_KEY }}" ]; then
             sed -i "s|__FIREBASE_API_KEY__|${{ secrets.FIREBASE_API_KEY }}|g" public/firebase-config.js
             sed -i "s|__FIREBASE_API_KEY__|${{ secrets.FIREBASE_API_KEY }}|g" firebase-config.js 2>/dev/null || true
+            sed -i "s|__FIREBASE_API_KEY__|${{ secrets.FIREBASE_API_KEY }}|g" public/index.html 2>/dev/null || true
+            sed -i "s|__FIREBASE_API_KEY__|${{ secrets.FIREBASE_API_KEY }}|g" index.html 2>/dev/null || true
             echo "FIREBASE_API_KEY injected successfully."
           else
             echo "Warning: FIREBASE_API_KEY is not set in GitHub repository secrets."
