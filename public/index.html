@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -111,11 +111,64 @@
             --teal-bg: #E3F5F7;
             --teal-brd: #B4E3E8;
             --radius: 8px;
+            --shadow-xs: 0 1px 2px rgba(16, 71, 110, .04);
             --shadow-sm: 0 1px 3px rgba(16, 71, 110, .08);
             --shadow-md: 0 6px 20px rgba(16, 71, 110, .14);
             --shadow-lg: 0 20px 50px rgba(15, 41, 66, .28);
-            --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            --shadow-xl: 0 25px 60px rgba(15, 41, 66, .35);
+            --shadow-inner: inset 0 2px 4px rgba(16, 71, 110, .06);
+            --font-ui: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
             --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+            --max-content-width: 1600px;
+
+            /* Spacing Tokens */
+            --space-3xs: 2px;
+            --space-2xs: 4px;
+            --space-xs: 8px;
+            --space-sm: 12px;
+            --space-md: 16px;
+            --space-lg: 24px;
+            --space-xl: 32px;
+            --space-2xl: 48px;
+            --space-3xl: 64px;
+
+            /* Focus & Transitions */
+            --focus-ring: 0 0 0 3px rgba(0, 129, 96, 0.35);
+            --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+            --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* High-Contrast Universal Focus Rings (WCAG 2.2 AA) */
+        a:focus-visible,
+        button:focus-visible,
+        input:focus-visible,
+        select:focus-visible,
+        textarea:focus-visible,
+        .btn:focus-visible,
+        .icon-btn:focus-visible,
+        .nav-link:focus-visible,
+        .step-node.clickable:focus-visible,
+        .rf-tab:focus-visible,
+        [tabindex]:not([tabindex="-1"]):focus-visible {
+            outline: 2px solid var(--brand-primary);
+            outline-offset: 2px;
+            box-shadow: var(--focus-ring);
+        }
+
+        /* Target Scroll Margin & Visual Focus Pulse */
+        .view, .card, .admin-panel, .section-anchor, .dsec {
+            scroll-margin-top: 85px;
+        }
+
+        .highlight-target {
+            animation: highlightTargetPulse 2s ease-out;
+            scroll-margin-top: 85px;
+        }
+
+        @keyframes highlightTargetPulse {
+            0% { box-shadow: 0 0 0 4px rgba(0, 129, 96, 0.6); outline: 2px solid var(--brand-primary); }
+            50% { box-shadow: 0 0 0 6px rgba(0, 129, 96, 0.3); outline: 2px solid var(--brand-primary); }
+            100% { box-shadow: none; outline: none; }
         }
 
         *,
@@ -5068,10 +5121,10 @@
                     <div class="t1">ARPL PTW</div>
                     <div class="t2">Permit-to-Work</div>
                 </div>
-                <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar"><i
+                <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar" aria-label="Toggle Sidebar"><i
                         class="fa-solid fa-bars"></i></button>
                 <button class="sidebar-close-btn no-print" id="sidebarCloseBtn" onclick="toggleMobileNav(false)"
-                    title="Close Navigation"><i class="fa-solid fa-xmark"></i></button>
+                    title="Close Navigation" aria-label="Close Navigation Drawer"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div id="navContainer"></div>
             <div class="sidebar-footer">ARPL EHS Permit-to-Work &middot; Statutory Safety Portal<br>Enterprise Production &middot; Data Residency: asia-south1</div>
@@ -5081,7 +5134,7 @@
             <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleMobileNav(false)"></div>
             <div class="topbar">
                 <button class="icon-btn no-print" id="mobileNavBtn" style="display:none;" onclick="toggleMobileNav()"
-                    title="Menu"><i class="fa-solid fa-bars"></i></button>
+                    title="Menu" aria-label="Open Navigation Menu"><i class="fa-solid fa-bars"></i></button>
                 <div class="no-print" style="display:inline-flex;align-items:center;padding:3px 10px;background:#FFFFFF;border:1px solid #D8E4E8;border-radius:8px;margin-right:6px;flex-shrink:0;">
                     <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢" style="height:26px;width:auto;object-fit:contain;display:block;">
                 </div>
@@ -5099,8 +5152,8 @@
                 </div>
 
                 <button class="icon-btn no-print" id="notifBellBtn" onclick="goTo('notifications')"
-                    title="Notifications"><i class="fa-solid fa-bell"></i><span class="dot" id="notifDot"
-                        style="display:none;">0</span></button>
+                    title="Notifications" aria-label="View Notifications"><i class="fa-solid fa-bell"></i><span class="dot" id="notifDot"
+                        style="display:none;" aria-live="polite">0</span></button>
                 <div class="role-badge no-print" style="position:relative;display:inline-flex;align-items:center;gap:8px;padding:5px 12px;border-radius:8px;background:rgba(255,255,255,0.95);border:1.5px solid #CBD5E1;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                     <i class="fa-solid fa-user-shield" style="color:var(--orange);font-size:14px;"></i>
                     <div style="display:flex;flex-direction:column;line-height:1.2;">
@@ -5108,7 +5161,7 @@
                         <div class="role-badge-value" id="roleBadgeValue" style="display:inline-block;font-size:12px;font-weight:700;color:var(--navy);">&mdash;</div>
                     </div>
                 </div>
-                <button class="btn-switch-user no-print" onclick="doLogout()" title="Logout to Landing Portal"><i
+                <button class="btn-switch-user no-print" onclick="doLogout()" title="Logout to Landing Portal" aria-label="Sign Out of Portal"><i
                         class="fa-solid fa-right-from-bracket"></i>
                     <span class="btn-text">Logout</span></button>
             </div>
@@ -5951,11 +6004,11 @@
     </div>
 
     <!-- GPS MODAL -->
-    <div class="modal-overlay" id="gpsModal">
+    <div class="modal-overlay" id="gpsModal" role="dialog" aria-modal="true" aria-labelledby="gpsModalTitle">
         <div class="modal-box">
             <div class="modal-head">
-                <h3><i class="fa-solid fa-location-crosshairs"></i> Capture GPS Location</h3><button class="modal-close"
-                    onclick="closeModal('gpsModal')"><i class="fa-solid fa-xmark"></i></button>
+                <h3 id="gpsModalTitle"><i class="fa-solid fa-location-crosshairs"></i> Capture GPS Location</h3><button class="modal-close"
+                    onclick="closeModal('gpsModal')" aria-label="Close GPS dialog"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="gpsModalBody"></div>
             <div class="modal-foot"><button class="btn btn-ghost"
@@ -5965,11 +6018,11 @@
     </div>
 
     <!-- PHOTO MODAL -->
-    <div class="modal-overlay" id="photoModal">
+    <div class="modal-overlay" id="photoModal" role="dialog" aria-modal="true" aria-labelledby="photoModalTitle">
         <div class="modal-box">
             <div class="modal-head">
-                <h3><i class="fa-solid fa-camera"></i> Upload Photo Evidence</h3><button class="modal-close"
-                    onclick="closeModal('photoModal')"><i class="fa-solid fa-xmark"></i></button>
+                <h3 id="photoModalTitle"><i class="fa-solid fa-camera"></i> Upload Photo Evidence</h3><button class="modal-close"
+                    onclick="closeModal('photoModal')" aria-label="Close photo dialog"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="photoModalBody"></div>
             <div class="modal-foot"><button class="btn btn-ghost"
@@ -5980,10 +6033,10 @@
     </div>
 
     <!-- ACTION MODAL (generic: approve/reject/close/surrender/extension) -->
-    <div class="modal-overlay" id="actionModal">
+    <div class="modal-overlay" id="actionModal" role="dialog" aria-modal="true" aria-labelledby="actionModalTitle">
         <div class="modal-box modal-box-md">
             <div class="modal-head">
-                <h3 id="actionModalTitle">Action</h3><button class="modal-close" onclick="closeModal('actionModal')"><i
+                <h3 id="actionModalTitle">Action</h3><button class="modal-close" onclick="closeModal('actionModal')" aria-label="Close action dialog"><i
                         class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="actionModalBody"></div>
@@ -5992,11 +6045,11 @@
     </div>
 
     <!-- CRANE OPERATOR SIGNATURE MODAL -->
-    <div class="modal-overlay" id="craneOpSigModal">
+    <div class="modal-overlay" id="craneOpSigModal" role="dialog" aria-modal="true" aria-labelledby="craneOpSigModalTitle">
         <div class="modal-box modal-box-md">
             <div class="modal-head">
-                <h3><i class="fa-solid fa-id-card-clip" style="color:var(--orange);"></i> Crane Operator Signature &amp; DPDP Consent</h3>
-                <button class="modal-close" onclick="closeModal('craneOpSigModal')"><i class="fa-solid fa-xmark"></i></button>
+                <h3 id="craneOpSigModalTitle"><i class="fa-solid fa-id-card-clip" style="color:var(--orange);"></i> Crane Operator Signature &amp; DPDP Consent</h3>
+                <button class="modal-close" onclick="closeModal('craneOpSigModal')" aria-label="Close signature dialog"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="craneOpSigModalBody"></div>
             <div class="modal-foot">
@@ -6007,11 +6060,11 @@
     </div>
 
     <!-- SIGNALER / RIGGER SIGNATURE MODAL -->
-    <div class="modal-overlay" id="riggerSigModal">
+    <div class="modal-overlay" id="riggerSigModal" role="dialog" aria-modal="true" aria-labelledby="riggerSigModalTitle">
         <div class="modal-box modal-box-md">
             <div class="modal-head">
-                <h3><i class="fa-solid fa-vest" style="color:var(--orange);"></i> Signaler / Rigger Signature &amp; DPDP Consent</h3>
-                <button class="modal-close" onclick="closeModal('riggerSigModal')"><i class="fa-solid fa-xmark"></i></button>
+                <h3 id="riggerSigModalTitle"><i class="fa-solid fa-vest" style="color:var(--orange);"></i> Signaler / Rigger Signature &amp; DPDP Consent</h3>
+                <button class="modal-close" onclick="closeModal('riggerSigModal')" aria-label="Close signature dialog"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="riggerSigModalBody"></div>
             <div class="modal-foot">
@@ -9222,14 +9275,29 @@
             if (cb) cb(cap);
         }
 
+        let lastFocusedElementBeforeModal = null;
+
         function openModal(id) {
             const el = document.getElementById(id);
             if (!el) return;
+            lastFocusedElementBeforeModal = document.activeElement;
             el.classList.add('show');
             const mb = el.querySelector('.modal-body');
             if (mb) mb.scrollTop = 0;
             if (document.body) document.body.classList.add('modal-open');
+
+            // Move focus into modal (WCAG 2.2 AA)
+            setTimeout(() => {
+                const focusables = el.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])');
+                if (focusables.length > 0) {
+                    focusables[0].focus();
+                } else {
+                    el.setAttribute('tabindex', '-1');
+                    el.focus();
+                }
+            }, 40);
         }
+
         function closeModal(id) {
             const el = document.getElementById(id);
             if (!el) return;
@@ -9238,6 +9306,11 @@
             if (mb) mb.scrollTop = 0;
             const anyOpen = document.querySelector('.modal-overlay.show');
             if (!anyOpen && document.body) document.body.classList.remove('modal-open');
+
+            // Restore focus to pre-modal element
+            if (lastFocusedElementBeforeModal && typeof lastFocusedElementBeforeModal.focus === 'function') {
+                try { lastFocusedElementBeforeModal.focus(); } catch (e) {}
+            }
         }
         function openModalWith(id, title, body, foot) {
             const t = document.getElementById(id + 'Title');
@@ -15230,7 +15303,7 @@
                 startEscalationTimer();
             }
 
-            // Default landing route per role
+            // Default landing route per role with Intelligent URL Deep Link Restoration
             let defaultRoute = 'dashboard';
             if (safeUser.key === 'admin') {
                 defaultRoute = 'admin-config';
@@ -15238,7 +15311,12 @@
                 defaultRoute = 'dashboard';
             }
 
-            goTo(defaultRoute);
+            const initialRoute = parseCurrentRoute();
+            if (initialRoute && isRouteAllowedForRole(safeUser.key, initialRoute.view)) {
+                navigateToRoute(initialRoute, true);
+            } else {
+                goTo(defaultRoute);
+            }
             if (typeof refreshNotifBell === 'function') {
                 refreshNotifBell();
             }
@@ -15407,7 +15485,7 @@
                         }
                     });
 
-                    // Global Escape key listener to close topmost active modal
+                    // Global Escape & Modal Tab Trap listener (WCAG 2.2 AA)
                     document.addEventListener('keydown', function (e) {
                         if (e.key === 'Escape' || e.keyCode === 27) {
                             const openModals = document.querySelectorAll('.modal-overlay.show');
@@ -15415,13 +15493,184 @@
                                 const topModal = openModals[openModals.length - 1];
                                 closeModal(topModal.id);
                             }
+                        } else if (e.key === 'Tab' || e.keyCode === 9) {
+                            const activeModal = document.querySelector('.modal-overlay.show');
+                            if (activeModal) {
+                                const focusables = Array.from(activeModal.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')).filter(el => el.offsetParent !== null);
+                                if (focusables.length > 0) {
+                                    const first = focusables[0];
+                                    const last = focusables[focusables.length - 1];
+                                    if (e.shiftKey) {
+                                        if (document.activeElement === first || !activeModal.contains(document.activeElement)) {
+                                            e.preventDefault();
+                                            last.focus();
+                                        }
+                                    } else {
+                                        if (document.activeElement === last || !activeModal.contains(document.activeElement)) {
+                                            e.preventDefault();
+                                            first.focus();
+                                        }
+                                    }
+                                }
+                            }
                         }
                     });
                 }
             });
         }
 
-        // Browser Back / Forward History Listener
+        /* ================================================================
+           DEEP LINKING & UNIVERSAL URL ROUTING ENGINE (Phase 4 Perfection)
+           ================================================================ */
+        function parseCurrentRoute() {
+            if (typeof window === 'undefined') return null;
+            const rawHash = (window.location.hash || '').replace(/^#/, '').trim();
+            if (!rawHash) return null;
+
+            // Pattern 1: #detail/PTW-... or #detail?id=PTW-...
+            if (rawHash.startsWith('detail/')) {
+                const id = decodeURIComponent(rawHash.substring('detail/'.length));
+                return { view: 'detail', id: id };
+            }
+            if (rawHash.startsWith('detail?')) {
+                const queryPart = rawHash.substring('detail?'.length);
+                const params = new URLSearchParams(queryPart);
+                return { view: 'detail', id: params.get('id') };
+            }
+
+            // Pattern 2: #viewName?query=...
+            const qIdx = rawHash.indexOf('?');
+            if (qIdx !== -1) {
+                const view = rawHash.substring(0, qIdx);
+                const queryPart = rawHash.substring(qIdx + 1);
+                const params = new URLSearchParams(queryPart);
+                return {
+                    view: view,
+                    tab: params.get('tab'),
+                    status: params.get('status'),
+                    target: params.get('target')
+                };
+            }
+
+            // Pattern 3: #viewName#target or #viewName/target
+            const slashIdx = rawHash.indexOf('/');
+            if (slashIdx !== -1) {
+                const view = rawHash.substring(0, slashIdx);
+                const sub = rawHash.substring(slashIdx + 1);
+                return { view: view, target: sub };
+            }
+
+            return { view: rawHash };
+        }
+
+        function navigateToRoute(routeObj, skipHistory) {
+            if (!routeObj || !currentUser) return false;
+            let view = routeObj.view || 'dashboard';
+
+            // View alias normalizations
+            if (view === 'create-permit') view = 'ptype';
+            if (view === 'permits') view = 'register';
+            if (view === 'audit-log') view = 'audit-logs';
+            if (view === 'analytics') view = 'reports-mis';
+            if (view === 'permit-detail') view = 'detail';
+            if (view === 'geofence') {
+                view = 'admin-config';
+                routeObj.tab = 'gps';
+            }
+            if (view === 'role-empanelment') {
+                view = 'admin-config';
+                routeObj.tab = 'accounts';
+            }
+            if (view === 'super-admin') {
+                view = 'admin-config';
+                routeObj.tab = 'superadmins';
+            }
+
+            // Site Admin accessing users -> route to admin-config with accounts tab
+            if ((currentUser.key === 'admin' || currentUser.key === 'project-admin') && view === 'users') {
+                view = 'admin-config';
+                routeObj.tab = 'accounts';
+            }
+
+            // Permit detail deep link
+            if (view === 'detail' && routeObj.id) {
+                if (typeof viewDetail === 'function') {
+                    viewDetail(routeObj.id, false, skipHistory);
+                    return true;
+                }
+            }
+
+            // Role route guard check
+            if (!isRouteAllowedForRole(currentUser.key, view)) {
+                console.warn('Navigation: Route not permitted for role', currentUser.key, view);
+                goTo('dashboard', skipHistory);
+                return false;
+            }
+
+            goTo(view, skipHistory);
+
+            // Sub-tab switching
+            if (view === 'admin-config' && routeObj.tab) {
+                if (typeof switchAdminTab === 'function') {
+                    switchAdminTab(routeObj.tab);
+                }
+            }
+
+            // Register status filter
+            if (view === 'register' && routeObj.status) {
+                const st = document.getElementById('regStatusFilter');
+                if (st) {
+                    st.value = routeObj.status;
+                    if (typeof buildRegisterTable === 'function') buildRegisterTable();
+                }
+            }
+
+            // Target element smooth scrolling & highlight
+            if (routeObj.target) {
+                navigateToElement(routeObj.target);
+            }
+
+            return true;
+        }
+
+        function navigateToElement(targetId) {
+            if (!targetId) return;
+            const cleanId = targetId.replace(/^#/, '');
+            setTimeout(() => {
+                const el = document.getElementById(cleanId) || document.querySelector(targetId);
+                if (el) {
+                    const parentPanel = el.closest('.admin-panel');
+                    if (parentPanel && parentPanel.id) {
+                        const tabKey = parentPanel.id.replace('adminPanel', '').toLowerCase();
+                        if (typeof switchAdminTab === 'function') switchAdminTab(tabKey);
+                    }
+                    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    el.classList.add('highlight-target');
+                    setTimeout(() => el.classList.remove('highlight-target'), 2000);
+                }
+            }, 80);
+        }
+
+        // Global Anchor Link Listener for In-Page Element Navigation
+        if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+            document.addEventListener('click', function (e) {
+                const anchor = e.target.closest('a[href^="#"]');
+                if (!anchor) return;
+                const href = anchor.getAttribute('href');
+                if (!href || href === '#') return;
+
+                const hash = href.substring(1);
+                if (document.getElementById('view-' + hash)) {
+                    e.preventDefault();
+                    goTo(hash);
+                } else if (document.getElementById(hash)) {
+                    e.preventDefault();
+                    navigateToElement(hash);
+                }
+            });
+        }
+
+        // Browser Back / Forward History Listener with Deep Linking Support
         if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
             window.addEventListener('popstate', function (e) {
                 if (!currentUser) return;
@@ -15431,9 +15680,17 @@
                         viewDetail(state.id, false, true);
                     } else if (state.view) {
                         goTo(state.view, true);
+                        if (state.tab && state.view === 'admin-config' && typeof switchAdminTab === 'function') {
+                            switchAdminTab(state.tab);
+                        }
                     }
                 } else {
-                    goTo('dashboard', true);
+                    const parsed = parseCurrentRoute();
+                    if (parsed && isRouteAllowedForRole(currentUser.key, parsed.view)) {
+                        navigateToRoute(parsed, true);
+                    } else {
+                        goTo('dashboard', true);
+                    }
                 }
             });
         }
