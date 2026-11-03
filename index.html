@@ -18,12 +18,12 @@
     <!-- Global Project Master & Baseline Initialization (Runs before Firebase or UI initialization) -->
     <script>
       window.PROJECTS = window.PROJECTS || [
-        { id: 'PRJ-PEARL', name: 'The Pearl', configured: true },
-        { id: 'PRJ-REGENT', name: 'The Regent', configured: true },
-        { id: 'PRJ-SANSA', name: 'Sansa County', configured: true },
-        { id: 'PRJ-SA', name: 'Sansa County', configured: true }
+        { id: 'PRJ-PEARL', name: 'The Pearl', configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
+        { id: 'PRJ-REGENT', name: 'The Regent', configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
+        { id: 'PRJ-SANSA', name: 'Sansa County', configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} }
       ];
       window.PROJECT_MASTER = window.PROJECTS || [];
+      window.CONTRACTORS = [];
       var PROJECT_MASTER = window.PROJECT_MASTER;
     </script>
     <!-- Firebase Hosting Live Initialization (Auto-injects project credentials on Hosting) -->
@@ -6454,16 +6454,7 @@
                     { condition: 'Hazy', windSpeedKmH: 10, tempC: 29, desc: 'Reduced long-range visibility' }
                 ]
             },
-            contractorDirectory: [
-                { id: 'cnt-01', name: 'Apex Infrastructure Pvt Ltd', code: 'VND-101', category: 'General Civil & Heavy Structural', safetyRating: '5.0', status: 'Empaneled & Verified' },
-                { id: 'cnt-02', name: 'L&T Construction Heavy Civil', code: 'VND-102', category: 'Infrastructure & Deep Foundation', safetyRating: '4.9', status: 'Empaneled & Verified' },
-                { id: 'cnt-03', name: 'Shapoorji Pallonji & Co. Ltd', code: 'VND-103', category: 'High-Rise Superstructure & Civil', safetyRating: '4.8', status: 'Empaneled & Verified' },
-                { id: 'cnt-04', name: 'SteelFab Engineering Solutions', code: 'VND-104', category: 'Hot Work, Structural Steel & Façade', safetyRating: '4.7', status: 'Empaneled & Verified' },
-                { id: 'cnt-05', name: 'Apex Heavy Lift Ltd', code: 'VND-105', category: 'Tower Crane & Heavy Rigging Specialist', safetyRating: '5.0', status: 'Empaneled & Verified' },
-                { id: 'cnt-06', name: 'EnerSys Electrical & Power Infra', code: 'VND-106', category: 'HT/LT Substation & Plant Maintenance', safetyRating: '4.9', status: 'Empaneled & Verified' },
-                { id: 'cnt-07', name: 'RockBlast Geo-Technics India', code: 'VND-107', category: 'Licensed Explosives & Controlled Blasting', safetyRating: '5.0', status: 'Empaneled & Verified' },
-                { id: 'cnt-08', name: 'In-House Auro Engineering Corps', code: 'VND-100', category: 'Direct Developer Technical Division', safetyRating: '5.0', status: 'Internal Developer Force' }
-            ],
+            contractorDirectory: [],
             permitFormOptions: {
                 guardrailActivities: [
                     "Removal of Perimeter Guard Rails",
@@ -7330,8 +7321,15 @@
                 basements: ['Basement 3 (B3)', 'Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Podium Level 1 (P1)', 'Podium Level 2 (P2)'],
                 floors: ['Basement 3 (B3)', 'Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Floor 11', 'Floor 12', 'Floor 13', 'Floor 14', 'Floor 15', 'Floor 16', 'Floor 17', 'Floor 18', 'Floor 19', 'Floor 20', 'Floor 21', 'Floor 22', 'Floor 23', 'Floor 24', 'Floor 25', 'Floor 26', 'Floor 27', 'Floor 28', 'Floor 29', 'Floor 30', 'Floor 31', 'Floor 32', 'Floor 33', 'Floor 34', 'Floor 35', 'Terrace / Roof Level'],
                 zones: ['Zone 1 (Excavation & Shoring)', 'Zone 2 (Tower Footprint)', 'Zone 3 (Central Podium)', 'Zone 4 (Perimeter Boundary)'],
-                contractors: ['Apex Infrastructure Pvt Ltd', 'L&T Construction Heavy Civil', 'SteelFab Engineering Solutions', 'In-House Auro Engineering Corps'],
+                contractors: [],
                 site: { lat: null, lng: null, address: 'The Pearl, Hitec City, Hyderabad, Telangana' },
+                geofence: null,
+                lat: null,
+                lng: null,
+                adminName: null,
+                adminEmail: null,
+                employeeId: null,
+                roles: {},
                 radius: 200,
                 configured: false,
                 configuredAt: null,
@@ -7354,8 +7352,15 @@
                 basements: ['Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Podium Level 1'],
                 floors: ['Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Floor 11', 'Floor 12', 'Floor 14', 'Floor 15', 'Terrace Level'],
                 zones: ['Zone A (Office Core)', 'Zone B (Retail Atrium)', 'Zone C (Basement Utilities)'],
-                contractors: ['Shapoorji Pallonji & Co. Ltd', 'Apex Heavy Lift Ltd', 'EnerSys Electrical & Power Infra', 'In-House Auro Engineering Corps'],
+                contractors: [],
                 site: { lat: null, lng: null, address: 'The Regent, Financial District, Hyderabad, Telangana' },
+                geofence: null,
+                lat: null,
+                lng: null,
+                adminName: null,
+                adminEmail: null,
+                employeeId: null,
+                roles: {},
                 radius: 200,
                 configured: false,
                 configuredAt: null,
@@ -7374,8 +7379,15 @@
                 basements: ['Basement 1 (B1)', 'Ground Level (GL)', 'Podium Deck'],
                 floors: ['Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Terrace Level'],
                 zones: ['Zone 1 (Sector 1)', 'Zone 2 (Sector 2)', 'Zone 3 (Central Infrastructure)'],
-                contractors: ['Apex Infrastructure Pvt Ltd', 'RockBlast Geo-Technics India', 'In-House Auro Engineering Corps'],
+                contractors: [],
                 site: { lat: null, lng: null, address: 'Sansa County Development, Miyapur, Hyderabad, Telangana' },
+                geofence: null,
+                lat: null,
+                lng: null,
+                adminName: null,
+                adminEmail: null,
+                employeeId: null,
+                roles: {},
                 radius: 250,
                 configured: false,
                 configuredAt: null,
@@ -7385,6 +7397,7 @@
         ];
         window.PROJECTS = PROJECTS;
         window.PROJECT_MASTER = PROJECTS;
+        window.CONTRACTORS = [];
 
         /* Centralized Dynamic Structural Accessors & Location-Level Geofence Helpers */
         function ensureProjectLocations(prj) {
@@ -7519,10 +7532,10 @@
         function getProjectContractors(projIdOrName) {
             const p = getProject(projIdOrName);
             if (p && Array.isArray(p.contractors) && p.contractors.length > 0) return p.contractors;
-            if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.contractorDirectory && Array.isArray(APP_CONFIG.contractorDirectory)) {
+            if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.contractorDirectory && Array.isArray(APP_CONFIG.contractorDirectory) && APP_CONFIG.contractorDirectory.length > 0) {
                 return APP_CONFIG.contractorDirectory.map(c => c.name);
             }
-            return ['Apex Infrastructure Pvt Ltd', 'L&T Construction Heavy Civil', 'Shapoorji Pallonji & Co. Ltd', 'SteelFab Engineering Solutions', 'Apex Heavy Lift Ltd'];
+            return [];
         }
 
         function getContractorDirectory() {
@@ -8701,10 +8714,9 @@
            page reloads. Falls back gracefully if storage is unavailable
            or the quota is exceeded (e.g. very large photo evidence).
            ================================================================ */
-        const STORAGE_KEY = 'arpl_ehs_prod_clean_v2'; // Clean production persistence key
+        const STORAGE_KEY = 'arpl_ehs_prod_clean_v3'; // Clean production persistence key
         try {
-            localStorage.removeItem('arpl_ehs_ptw_state_v16_prod');
-            localStorage.removeItem('ARPL_EHS_PERMITS_V3');
+            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2'].forEach(k => localStorage.removeItem(k));
         } catch (_e) {}
         function saveState() {
             try {
@@ -12222,21 +12234,27 @@
             }
 
             const admRecord = {
-                id: 'adm-' + uid(),
+                id: authUid || ('adm-' + uid()),
                 uid: authUid || null,
                 name: name,
                 email: email,
-                role: 'admin',
+                role: 'project-admin',
+                uiRole: 'admin',
                 roleLabel: 'Site Administrator',
                 projectId: targetPrj.id,
                 projectName: targetPrj.name,
                 empId: empId,
+                employeeId: empId,
                 phone: phone,
                 tempPassword: password,
                 status: 'Active',
                 createdAt: nowTime(),
                 createdBy: (currentUser && currentUser.email) || 'ehs.superadmin@aurorealty.com'
             };
+
+            targetPrj.adminName = name;
+            targetPrj.adminEmail = email;
+            targetPrj.employeeId = empId;
 
             const existingIdx = PROJECT_ADMINS.findIndex(a => a.email && a.email.toLowerCase() === email);
             if (existingIdx >= 0) PROJECT_ADMINS[existingIdx] = admRecord;
@@ -12249,20 +12267,29 @@
                     name: name,
                     displayName: name,
                     email: email,
-                    role: 'admin',
+                    role: 'project-admin',
+                    uiRole: 'admin',
                     roleLabel: 'Site Administrator',
                     projectId: targetPrj.id,
                     projectName: targetPrj.name,
                     empId: empId,
+                    employeeId: empId,
                     phone: phone,
                     campusWide: true,
                     status: 'Active',
+                    createdBy: (currentUser && currentUser.email) || 'ehs.superadmin@aurorealty.com',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-                if (authUid) {
-                    db.collection('users').doc(authUid).set(userDocData, { merge: true }).catch(() => {});
-                }
+                db.collection('users').doc(authUid || admRecord.id).set(userDocData, { merge: true }).catch(() => {});
                 db.collection('project_admins').doc(admRecord.id).set(admRecord, { merge: true }).catch(() => {});
+                db.collection('projects').doc(targetPrj.id).set({
+                    adminUid: authUid || admRecord.id,
+                    adminName: name,
+                    adminEmail: email,
+                    employeeId: empId,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                }, { merge: true }).catch(() => {});
             }
 
             if (typeof recordAuditLog === 'function') {
@@ -12628,11 +12655,12 @@
             }
 
             const staffRecord = {
-                id: 'stf-' + uid(),
+                id: authUid || ('stf-' + uid()),
                 uid: authUid || null,
                 name: name,
                 email: email,
                 role: roleKey,
+                uiRole: roleKey,
                 roleLabel: roleText,
                 projectId: targetPrj.id,
                 projectName: targetPrj.name,
@@ -12642,11 +12670,12 @@
                 campusWide: isCampusWide,
                 allowedWorkflows: allowedWfs,
                 empId: empId,
+                employeeId: empId,
                 phone: phone,
                 tempPassword: password,
                 status: 'Active',
                 createdAt: nowTime(),
-                createdBy: (currentUser && currentUser.name) || 'Site Administrator'
+                createdBy: (currentUser && currentUser.email) || 'site-admin'
             };
 
             const existingIdx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.email && s.email.toLowerCase() === email);
@@ -12661,6 +12690,7 @@
                     displayName: name,
                     email: email,
                     role: roleKey,
+                    uiRole: roleKey,
                     roleLabel: roleText,
                     projectId: targetPrj.id,
                     projectName: targetPrj.name,
@@ -12670,13 +12700,14 @@
                     campusWide: isCampusWide,
                     allowedWorkflows: allowedWfs,
                     empId: empId,
+                    employeeId: empId,
                     phone: phone,
                     status: 'Active',
+                    createdBy: (currentUser && currentUser.email) || 'site-admin',
+                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-                if (authUid) {
-                    db.collection('users').doc(authUid).set(userDocData, { merge: true }).catch(() => {});
-                }
+                db.collection('users').doc(authUid || staffRecord.id).set(userDocData, { merge: true }).catch(() => {});
                 db.collection('site_personnel').doc(staffRecord.id).set(staffRecord, { merge: true }).catch(() => {});
             }
 
@@ -14601,12 +14632,12 @@
 
             if (emailLower === 'ehs.superadmin@aurorealty.com' || resolvedRole === 'super-admin') {
                 resolvedRole = 'super-admin';
-                resolvedRoleLabel = 'Enterprise Super Administrator';
-                resolvedProjectId = 'ALL';
+                resolvedRoleLabel = 'Enterprise Super Admin';
+                resolvedProjectId = null;
                 resolvedLocationId = null;
                 resolvedLocationName = null;
                 resolvedCampusWide = true;
-                resolvedName = resolvedName || 'ARPL EHS Super Administrator';
+                resolvedName = resolvedName || 'ARPL Super Admin';
                 if (typeof firebase !== 'undefined' && firebase.firestore && user && user.uid) {
                     firebase.firestore().collection('users').doc(user.uid).set({
                         uid: user.uid,
@@ -14614,8 +14645,8 @@
                         name: resolvedName,
                         role: 'super-admin',
                         uiRole: 'super-admin',
-                        projectId: 'ALL',
-                        projectName: 'All ARPL Worksites (Enterprise Master)',
+                        projectId: null,
+                        projectName: 'Global Enterprise Scope (All Sites)',
                         campusWide: true
                     }, { merge: true }).catch(() => {});
                 }
@@ -14632,7 +14663,7 @@
             }
 
             const info = typeof roleInfo === 'function' ? roleInfo(uiRoleKey) : {};
-            const finalProjId = (uiRoleKey === 'super-admin') ? 'ALL' : (resolvedProjectId || 'PRJ-PEARL');
+            const finalProjId = (uiRoleKey === 'super-admin') ? null : (resolvedProjectId || 'PRJ-PEARL');
             return {
                 key: uiRoleKey,
                 rawRole: resolvedRole,
@@ -14641,7 +14672,7 @@
                 email: user.email,
                 uid: user.uid,
                 projectId: finalProjId,
-                projectName: resolveProjectName(finalProjId),
+                projectName: (uiRoleKey === 'super-admin') ? 'Global Enterprise Scope (All Sites)' : resolveProjectName(finalProjId),
                 locationId: resolvedLocationId || null,
                 locationName: resolvedLocationName || null,
                 campusWide: resolvedCampusWide !== null ? resolvedCampusWide : (uiRoleKey === 'admin' || uiRoleKey === 'super-admin' || !resolvedLocationName),
@@ -14721,17 +14752,22 @@
             // 1. Remove Persona Switcher & Demo Role UI permanently
             document.querySelectorAll('#quickPersonaDropdown, .persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid, #landingRoleSection').forEach(el => el.remove());
 
-            // 2. Set Active Session badge in top navigation (Assigned Name + Role + Project/Location Scope)
+            // 2. Set Active Session Identity Pill in top navigation (User Full Name + Assigned Role + Scope Badge)
             const rb = document.getElementById('roleBadgeValue');
             if (rb) {
                 rb.style.display = 'inline-block';
                 const locInfo = safeUser.locationName ? (' &bull; ' + escapeHtml(safeUser.locationName)) : '';
-                const namePrefix = (safeUser.name && safeUser.name !== safeUser.label) ? (escapeHtml(safeUser.name) + ' &mdash; ') : '';
-                rb.innerHTML = '<span style="font-weight:700;color:var(--navy);">' + namePrefix + escapeHtml(safeUser.label) + '</span> ' +
-                    '<span style="font-size:11px;color:var(--text-muted);font-weight:600;">(' + escapeHtml(safeUser.projectName || safeUser.projectId) + locInfo + ')</span>';
+                const scopeText = (safeUser.key === 'super-admin')
+                    ? 'Global Enterprise Scope (All Sites)'
+                    : ('Assigned Site: ' + escapeHtml(safeUser.projectName || safeUser.projectId) + ' (' + escapeHtml(safeUser.projectId || '') + ')' + locInfo);
+                rb.innerHTML = '<span style="font-weight:800;color:var(--navy);">' + escapeHtml(safeUser.name) + '</span> ' +
+                    '<span style="font-size:11.5px;color:#008160;font-weight:700;">&bull; ' + escapeHtml(safeUser.label) + '</span> ' +
+                    '<span style="font-size:11px;color:var(--text-muted);font-weight:600;background:#EBF4F6;padding:2px 7px;border-radius:100px;margin-left:4px;">' + scopeText + '</span>';
             }
             const rLabel = document.querySelector('.role-badge-label');
-            if (rLabel) rLabel.textContent = 'Active Session';
+            if (rLabel) rLabel.textContent = 'Authenticated Identity';
+            const logoutBtnTxt = document.querySelector('.btn-switch-user .btn-text');
+            if (logoutBtnTxt) logoutBtnTxt.textContent = 'Sign Out';
 
             // 3. Set and freeze global currentUser (Immutable RBAC Session)
             const frozenUser = Object.freeze(Object.assign({}, safeUser));
@@ -15531,26 +15567,23 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="card card-pad"><div class="card-title">Recently Active on Site</div><ul class="feed">' +
                     (active.slice(0, 6).map(quickFeedRow).join('') || renderEmptyState('noActivePermits')) + '</ul></div></div>';
             } else if (rk === 'super-admin') {
-                // Enterprise Super Admin Dashboard
+                // Enterprise Super Admin Dashboard (100% Live Firestore-Backed Metrics)
                 const byStatus = {};
                 PERMITS.forEach(p => byStatus[p.status] = (byStatus[p.status] || 0) + 1);
                 const totalProjects = PROJECTS.length;
                 const activeProjects = PROJECTS.filter(p => p.configured).length;
-                const totalUsers = (PROJECT_ADMINS ? PROJECT_ADMINS.length : 0) + (SITE_PERSONNEL_ACCOUNTS ? SITE_PERSONNEL_ACCOUNTS.length : 0) + 1;
-                const activeUsers = ((PROJECT_ADMINS ? PROJECT_ADMINS.filter(a => a.status === 'Active').length : 0) + (SITE_PERSONNEL_ACCOUNTS ? SITE_PERSONNEL_ACCOUNTS.filter(s => s.status === 'Active').length : 0) + 1);
+                const pendingProjects = totalProjects - activeProjects;
                 const projectAdminsCount = PROJECT_ADMINS ? PROJECT_ADMINS.length : 0;
+                const contractorsCount = (typeof getContractorDirectory === 'function') ? getContractorDirectory().length : 0;
                 const totalPermits = PERMITS.length;
-                const pendingApprovals = PERMITS.filter(p => !['Draft', 'Active', 'Completed (Surrendered)', 'Closed - Pending Surrender', 'Expired', 'Cancelled'].includes(p.status)).length;
-                const approvedPermits = PERMITS.filter(p => p.status === 'Active' || p.status.startsWith('Active') || p.status === 'Completed (Surrendered)').length;
-                const rejectedPermits = (byStatus['Rejected'] || 0) + PERMITS.filter(p => p.history && p.history.some(h => h.action === 'Rejected')).length;
-                const expiredPermits = byStatus['Expired'] || 0;
+                const activePermitsNow = PERMITS.filter(p => p.status === 'Active' || (p.status && p.status.indexOf('Active') === 0)).length;
 
                 // Executive Banner
                 html += '<div style="background:linear-gradient(135deg, #0A1628 0%, #16283F 100%);border-radius:12px;padding:20px 24px;color:#fff;margin-bottom:20px;border-left:5px solid var(--orange);box-shadow:0 8px 24px rgba(10,22,40,0.18);display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;">' +
                     '<div>' +
                     '<div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">' +
                     '<span style="background:var(--orange);color:#fff;font-weight:800;font-size:11px;padding:3px 10px;border-radius:100px;text-transform:uppercase;letter-spacing:.5px;"><i class="fa-solid fa-crown"></i> Super Administrator</span>' +
-                    '<span style="font-size:12px;color:#CBD1DA;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-server" style="color:#22C55E;"></i> Live Cloud Firestore Sync (asia-south1)</span>' +
+                    '<span style="font-size:12px;color:#CBD1DA;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-globe" style="color:#22C55E;"></i> Global Enterprise Scope (All Sites) &bull; Live Firestore (asia-south1)</span>' +
                     '</div>' +
                     '<h2 style="margin:0;font-size:20px;font-weight:800;letter-spacing:-0.2px;">Auro Realty EHS Enterprise Statutory Governance</h2>' +
                     '<p style="margin:4px 0 0;font-size:12.5px;color:#94A3B8;">Delegated Statutory Authority: Site Administrator Provisioning &bull; Projects &amp; Sites Master &bull; Statutory DPDP Act 2023 Compliance</p>' +
@@ -15561,21 +15594,25 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '</div>' +
                     '</div>';
 
-                // 10 Real KPI Cards (Responsive Grid)
+                // Primary Live KPI Strip (Project Sites, Site Administrators, Contractors, Total System Permits)
                 html += '<div style="margin-bottom:20px;">' +
-                    '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-chart-column" style="color:var(--orange);"></i> Executive Statutory Performance Indicators (10 Real-Data Metrics)</div>' +
-                    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px;">' +
-                    kpiCard('k-orange', 'fa-building', 'Total Projects', totalProjects + ' Sites', 'The Pearl, The Regent, Sansa', "goTo('projects')") +
-                    kpiCard('k-green', 'fa-map-location-dot', 'Active Projects', activeProjects + ' Configured', (totalProjects - activeProjects) + ' pending geotag', "goTo('projects')") +
-                    kpiCard('k-blue', 'fa-users', 'Total Users', totalUsers + ' Accounts', 'Super Admin, Admins, Staff', "goTo('users')") +
-                    kpiCard('k-teal', 'fa-user-check', 'Active Users', activeUsers + ' Empaneled', 'Operational personnel', "goTo('users')") +
-                    kpiCard('k-purple', 'fa-user-shield', 'Project Admins', projectAdminsCount + ' Empaneled', 'Delegated Site Governors', "goTo('project-admins')") +
-                    kpiCard('k-blue', 'fa-file-shield', 'Total Permits', totalPermits + ' Raised', 'Across all construction sites', "goTo('register')") +
-                    kpiCard('k-amber', 'fa-clock', 'Pending Approvals', pendingApprovals + ' In Flow', 'Under multi-stage review', "goTo('register')") +
-                    kpiCard('k-green', 'fa-circle-check', 'Approved Permits', approvedPermits + ' Active/Closed', 'Safety endorsed & cleared', "goTo('register')") +
-                    kpiCard('k-red', 'fa-ban', 'Rejected Permits', rejectedPermits + ' Terminated', 'Safety violation / rework', "goTo('register')") +
-                    kpiCard('k-grey', 'fa-hourglass-end', 'Expired Permits', expiredPermits + ' Expired', 'Lapsed shift validity', "goTo('register')") +
+                    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;">' +
+                    kpiCard('k-orange', 'fa-building', 'PROJECT SITES', totalProjects + ' Sites', activeProjects + ' Active Geofences · ' + pendingProjects + ' Pending Configuration', "goTo('projects')") +
+                    kpiCard('k-purple', 'fa-user-shield', 'SITE ADMINISTRATORS', projectAdminsCount + ' Empaneled', 'Delegated Site Governors in /users', "goTo('project-admins')") +
+                    kpiCard('k-teal', 'fa-helmet-safety', 'CONTRACTORS', contractorsCount + ' Agencies', 'Empaneled worksite agencies', "goTo('system-settings')") +
+                    kpiCard('k-blue', 'fa-file-shield', 'TOTAL SYSTEM PERMITS', String(totalPermits), activePermitsNow + ' currently active on sites', "goTo('register')") +
                     '</div>' +
+                    '</div>';
+
+                // Permit Status Overview — Pan-India Sites
+                const statusEntries = Object.entries(byStatus);
+                const statusOverviewBody = statusEntries.length > 0
+                    ? ('<div style="display:flex;flex-wrap:wrap;gap:10px;">' + statusEntries.map(([st, cnt]) => '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:10px;">' + statusBadge(st) + '<b style="font-size:15px;color:var(--navy);">' + cnt + '</b></div>').join('') + '</div>')
+                    : '<div style="padding:18px;text-align:center;color:var(--text-muted);background:var(--bg);border:1px dashed var(--border);border-radius:8px;font-size:13px;"><i class="fa-regular fa-folder-open" style="margin-right:6px;color:var(--orange);"></i>No permits raised yet across Pan-India sites.</div>';
+
+                html += '<div class="card card-pad" style="margin-bottom:20px;">' +
+                    '<div style="font-size:12.5px;font-weight:800;color:var(--navy);text-transform:uppercase;letter-spacing:0.4px;margin-bottom:12px;display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-chart-Simple" style="color:var(--orange);"></i> PERMIT STATUS OVERVIEW — PAN-INDIA SITES</div>' +
+                    statusOverviewBody +
                     '</div>';
 
                 // Quick Enterprise Navigation Action Bar
@@ -24717,7 +24754,8 @@ ptypeOf(p) === 'general' ?
         window.AUDIT_LOGS = window.AUDIT_LOGS || [];
 
         function recordAuditLog(action, details, targetId) {
-            const user = window.currentUser || { email: 'system', key: 'system', name: 'System', projectId: 'PRJ-MASTER' };
+            const user = window.currentUser || { email: 'system', key: 'system', name: 'System', projectId: null };
+            const isSuper = user.key === 'super-admin' || user.rawRole === 'super-admin';
             const logEntry = {
                 id: 'aud-' + uid(),
                 timestamp: new Date().toISOString(),
@@ -24725,7 +24763,7 @@ ptypeOf(p) === 'general' ?
                 actorEmail: user.email || 'anonymous',
                 actorRole: user.rawRole || user.key || 'unknown',
                 actorName: user.name || 'Anonymous',
-                projectId: user.projectId || 'PRJ-MASTER',
+                projectId: isSuper ? null : (user.projectId || null),
                 targetId: targetId || null,
                 details: details || '',
                 status: 'VERIFIED'
@@ -24749,15 +24787,32 @@ ptypeOf(p) === 'general' ?
         async function initFirestoreDataSync() {
             if (typeof firebase === 'undefined' || !firebase.firestore) return;
             const db = firebase.firestore();
+            const DEMO_SYNTHETIC_NAMES = ['A. K. Sharma', 'Vikram Verma', 'Rajesh K. Gupta', 'R. M. Patel', 'Suresh Babu', 'K. Srinivas', 'M. Venkat', 'P. Ramesh', 'Anil Kumar', 'D. Rao'];
 
             try {
-                // 1. Projects Sync (strip any legacy 'A. K. Sharma' pre-configured demo state)
+                // 1. Projects Sync (strip any legacy 'A. K. Sharma' / 'Vikram Verma' pre-configured demo state)
                 const prjSnap = await db.collection('projects').get();
                 if (!prjSnap.empty) {
                     const remoteProjects = [];
                     prjSnap.forEach(doc => {
                         const pData = doc.data();
-                        const wasDemo = pData.configuredBy === 'A. K. Sharma';
+                        const wasDemo = DEMO_SYNTHETIC_NAMES.includes(pData.configuredBy) || DEMO_SYNTHETIC_NAMES.includes(pData.adminName);
+                        if (wasDemo) {
+                            pData.configured = false;
+                            pData.configuredBy = null;
+                            pData.configuredAt = null;
+                            pData.adminName = null;
+                            pData.adminEmail = null;
+                            pData.employeeId = null;
+                            if (pData.site) { pData.site.lat = null; pData.site.lng = null; }
+                        }
+                        if (Array.isArray(pData.contractors)) {
+                            pData.contractors = pData.contractors.filter(c => ![
+                                'Shapoorji Pallonji Engg.', 'L&T GeoStructure', 'KEC International MEP',
+                                'In-House Auro Engineering Corps', 'Tata Projects Civil', 'Blue Star MEP Services',
+                                'NCC Limited Infra', 'Sterling & Wilson Electricals'
+                            ].includes(c));
+                        }
                         ensureProjectLocations(pData);
                         remoteProjects.push(pData);
                         if (wasDemo) {
@@ -24778,35 +24833,88 @@ ptypeOf(p) === 'general' ?
                     console.log('[Firestore Sync] Seeded clean project structures to Cloud Firestore.');
                 }
 
-                // 2. Project Admins Sync (filter out any legacy demo adm-01..adm-03)
+                // 2. Project Admins & Site Personnel Sync from /project_admins, /site_personnel, and /users
+                const admsMap = new Map();
+                const stfMap = new Map();
                 try {
                     const admSnap = await db.collection('project_admins').get();
                     if (!admSnap.empty) {
-                        const adms = [];
                         admSnap.forEach(doc => {
                             const d = doc.data();
-                            if (d && !['adm-01', 'adm-02', 'adm-03'].includes(d.id)) {
-                                adms.push(d);
+                            if (d && !['adm-01', 'adm-02', 'adm-03'].includes(d.id) && !DEMO_SYNTHETIC_NAMES.includes(d.name)) {
+                                admsMap.set((d.email || d.id).toLowerCase(), d);
                             }
                         });
-                        PROJECT_ADMINS = adms;
                     }
                 } catch (e) {}
 
-                // 3. Site Personnel Sync (filter out any legacy demo stf-01..stf-06)
                 try {
                     const stfSnap = await db.collection('site_personnel').get();
                     if (!stfSnap.empty) {
-                        const stf = [];
                         stfSnap.forEach(doc => {
                             const d = doc.data();
-                            if (d && !['stf-01', 'stf-02', 'stf-03', 'stf-04', 'stf-05', 'stf-06'].includes(d.id)) {
-                                stf.push(d);
+                            if (d && !['stf-01', 'stf-02', 'stf-03', 'stf-04', 'stf-05', 'stf-06'].includes(d.id) && !DEMO_SYNTHETIC_NAMES.includes(d.name)) {
+                                stfMap.set((d.email || d.id).toLowerCase(), d);
                             }
                         });
-                        SITE_PERSONNEL_ACCOUNTS = stf;
                     }
                 } catch (e) {}
+
+                try {
+                    const usrSnap = await db.collection('users').get();
+                    if (!usrSnap.empty) {
+                        usrSnap.forEach(doc => {
+                            const u = doc.data();
+                            if (!u || DEMO_SYNTHETIC_NAMES.includes(u.name) || DEMO_SYNTHETIC_NAMES.includes(u.displayName)) return;
+                            const r = String(u.role || u.uiRole || '').toLowerCase();
+                            const key = (u.email || doc.id).toLowerCase();
+                            if (r === 'super-admin' || key === 'ehs.superadmin@aurorealty.com') return;
+                            if (r === 'project-admin' || r === 'site-admin' || r === 'admin') {
+                                if (!admsMap.has(key)) {
+                                    admsMap.set(key, {
+                                        id: u.uid || doc.id,
+                                        uid: u.uid || doc.id,
+                                        name: u.name || u.displayName || u.email,
+                                        email: u.email,
+                                        role: 'project-admin',
+                                        uiRole: 'admin',
+                                        projectId: u.projectId,
+                                        projectName: u.projectName || u.projectId,
+                                        empId: u.employeeId || u.empId || 'N/A',
+                                        employeeId: u.employeeId || u.empId || 'N/A',
+                                        phone: u.phone || '',
+                                        status: u.status || 'Active'
+                                    });
+                                }
+                            } else if (r) {
+                                if (!stfMap.has(key)) {
+                                    stfMap.set(key, {
+                                        id: u.uid || doc.id,
+                                        uid: u.uid || doc.id,
+                                        name: u.name || u.displayName || u.email,
+                                        email: u.email,
+                                        role: r,
+                                        uiRole: u.uiRole || r,
+                                        roleLabel: u.roleLabel || r,
+                                        projectId: u.projectId,
+                                        projectName: u.projectName || u.projectId,
+                                        location: u.location || u.locationName || 'Full Worksite',
+                                        locationName: u.locationName || null,
+                                        locationId: u.locationId || null,
+                                        campusWide: !!u.campusWide,
+                                        empId: u.employeeId || u.empId || 'N/A',
+                                        employeeId: u.employeeId || u.empId || 'N/A',
+                                        phone: u.phone || '',
+                                        status: u.status || 'Active'
+                                    });
+                                }
+                            }
+                        });
+                    }
+                } catch (e) {}
+
+                PROJECT_ADMINS = Array.from(admsMap.values());
+                SITE_PERSONNEL_ACCOUNTS = Array.from(stfMap.values());
 
                 // 4. Custom Roles Sync
                 try {
@@ -24832,6 +24940,9 @@ ptypeOf(p) === 'general' ?
                 }
 
                 saveState();
+                if (typeof currentView !== 'undefined' && currentView === 'dashboard' && typeof buildDashboard === 'function') {
+                    buildDashboard();
+                }
             } catch (err) {
                 console.warn('[Firestore Sync] Non-blocking sync notice:', err);
             }
@@ -24945,7 +25056,7 @@ ptypeOf(p) === 'general' ?
                 basements: ['Basement 1 (B1)', 'Ground Floor (GF)', 'Podium Level 1'],
                 floors: ['Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Terrace Level'],
                 zones: ['Zone 1 (Core)', 'Zone 2 (Perimeter)'],
-                contractors: ['In-House Auro Engineering Corps'],
+                contractors: [],
                 site: { lat: null, lng: null, address: addrEl ? addrEl.value.trim() : 'Hyderabad, Telangana' },
                 radius: 200,
                 configured: false,
@@ -25123,14 +25234,21 @@ ptypeOf(p) === 'general' ?
                 name: name,
                 email: email,
                 role: 'project-admin',
+                uiRole: 'admin',
                 ptwRole: 'project-admin',
                 projectId: targetPrj.id,
                 projectName: targetPrj.name,
                 empId: empId,
+                employeeId: empId,
                 phone: phone,
                 status: 'Active',
+                createdBy: (currentUser && currentUser.email) || 'ehs.superadmin@aurorealty.com',
                 createdAt: nowTime()
             };
+
+            targetPrj.adminName = name;
+            targetPrj.adminEmail = email;
+            targetPrj.employeeId = empId;
 
             PROJECT_ADMINS = PROJECT_ADMINS.filter(a => a.email.toLowerCase() !== email);
             PROJECT_ADMINS.unshift(newAdm);
@@ -25141,6 +25259,13 @@ ptypeOf(p) === 'general' ?
                 if (typeof firebase !== 'undefined' && firebase.firestore) {
                     await firebase.firestore().collection('users').doc(createdUid).set(newAdm, { merge: true });
                     await firebase.firestore().collection('project_admins').doc(createdUid).set(newAdm, { merge: true });
+                    await firebase.firestore().collection('projects').doc(targetPrj.id).set({
+                        adminUid: createdUid,
+                        adminName: name,
+                        adminEmail: email,
+                        employeeId: empId,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
                 }
             } catch (e) {
                 console.warn('Firestore write warning:', e);

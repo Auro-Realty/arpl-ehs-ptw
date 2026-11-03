@@ -67,7 +67,19 @@ service cloud.firestore {
     // Users Collection: User directory and role/location/workflow binding
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated() && (request.auth.uid == userId || isSuperAdmin() || isAnyProjectAdmin());
+      allow create: if isSuperAdmin() || isAnyProjectAdmin() || (
+        isAuthenticated() && request.auth.uid == userId && (
+          request.auth.token.email == 'ehs.superadmin@aurorealty.com' ||
+          !('role' in request.resource.data) ||
+          request.resource.data.role == 'site-supervisor'
+        )
+      );
+      allow update: if isSuperAdmin() || isAnyProjectAdmin() || (
+        isAuthenticated() && request.auth.uid == userId &&
+        request.resource.data.get('role', null) == resource.data.get('role', null) &&
+        request.resource.data.get('uiRole', null) == resource.data.get('uiRole', null) &&
+        request.resource.data.get('projectId', null) == resource.data.get('projectId', null)
+      );
       allow delete: if isSuperAdmin() || isAnyProjectAdmin();
     }
 
@@ -97,8 +109,22 @@ service cloud.firestore {
 
     // Permits Collection
     match /permits/{permitId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        !('projectId' in resource.data) ||
+        hasProjectAccess(resource.data.projectId)
+      );
+      allow create: if isAuthenticated() && (
+        !('projectId' in request.resource.data) ||
+        hasProjectAccess(request.resource.data.projectId)
+      );
+      allow update: if isAuthenticated() && (
+        !('projectId' in resource.data) ||
+        hasProjectAccess(resource.data.projectId)
+      ) && (
+        !(resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true) ||
+        request.resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true
+      );
       allow delete: if false; // Permits can never be deleted (DPDP Act audit requirement)
 
       // Subcollection: Immutable Activity Log (Append-only audit trail)
@@ -145,13 +171,18 @@ service cloud.firestore {
     // Multi-stage Approval Workflows Configuration
     match /approval_workflows/{workflowId} {
       allow read: if isAuthenticated();
-      allow write: if isSuperAdmin() || (isAuthenticated() && request.auth.token.role in ['project-admin', 'site-admin']);
+      allow write: if isSuperAdmin() || isAnyProjectAdmin();
     }
 
     // System Settings & Statutory Retention Policies
     match /system_settings/{settingId} {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
+    }
+
+    // Explicit Default-Deny Fallback
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
