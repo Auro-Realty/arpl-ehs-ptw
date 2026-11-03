@@ -18,9 +18,9 @@
     <!-- Global Project Master & Baseline Initialization (Runs before Firebase or UI initialization) -->
     <script>
       window.PROJECTS = window.PROJECTS || [
-        { id: 'PRJ-PEARL', name: 'The Pearl', configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
-        { id: 'PRJ-REGENT', name: 'The Regent', configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
-        { id: 'PRJ-SANSA', name: 'Sansa County', configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} }
+        { id: 'PRJ-PEARL', name: 'The Pearl', towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
+        { id: 'PRJ-REGENT', name: 'The Regent', towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
+        { id: 'PRJ-SANSA', name: 'Sansa County', towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} }
       ];
       window.PROJECT_MASTER = window.PROJECTS || [];
       window.CONTRACTORS = [];
@@ -4273,6 +4273,16 @@
             min-width: 0;
         }
 
+        @media (max-width: 768px) {
+            .content {
+                padding-bottom: calc(88px + env(safe-area-inset-bottom, 24px)) !important;
+            }
+            #view-projects > div,
+            #view-project-admins > div {
+                grid-template-columns: 1fr !important;
+            }
+        }
+
         @media (max-width: 600px) {
             .load-dim-grid {
                 grid-template-columns: 1fr !important;
@@ -5910,11 +5920,9 @@
                                         </div>
 
 
-            </div>
-        </div>
-    </div>
+                </div>
 
-                    <!-- PROJECTS MASTER (SUPER ADMIN) -->
+                <!-- PROJECTS MASTER (SUPER ADMIN) -->
                 <div class="view" id="view-projects"></div>
 
                 <!-- PROJECT ADMINISTRATORS PROVISIONING (SUPER ADMIN) -->
@@ -5937,6 +5945,10 @@
 
                 <!-- SYSTEM SETTINGS & GOVERNANCE -->
                 <div class="view" id="view-system-settings"></div>
+
+            </div>
+        </div>
+    </div>
 
     <!-- GPS MODAL -->
     <div class="modal-overlay" id="gpsModal">
@@ -7451,28 +7463,71 @@
                 tagMethod: null
             }
         ];
+        const BASELINE_PROJECTS = JSON.parse(JSON.stringify(PROJECTS));
         window.PROJECTS = PROJECTS;
         window.PROJECT_MASTER = PROJECTS;
         window.CONTRACTORS = [];
 
+        function normalizeProjectWithBaseline(pData, fallbackId) {
+            if (!pData || typeof pData !== 'object') return null;
+            const pid = pData.id || fallbackId || '';
+            const base = BASELINE_PROJECTS.find(b => b.id === pid || (pData.name && b.name.toLowerCase() === String(pData.name).toLowerCase()));
+            const merged = base ? Object.assign(JSON.parse(JSON.stringify(base)), pData) : Object.assign({}, pData);
+            if (pid) merged.id = pid;
+            if (!merged.name && base) merged.name = base.name;
+            if ((!Array.isArray(merged.towers) || merged.towers.length === 0) && base && Array.isArray(base.towers)) {
+                merged.towers = base.towers.slice();
+            }
+            if ((!Array.isArray(merged.locations) || merged.locations.length === 0) && base && Array.isArray(base.locations)) {
+                merged.locations = JSON.parse(JSON.stringify(base.locations));
+            }
+            if ((!Array.isArray(merged.basements) || merged.basements.length === 0) && base && Array.isArray(base.basements)) {
+                merged.basements = base.basements.slice();
+            }
+            if ((!Array.isArray(merged.floors) || merged.floors.length === 0) && base && Array.isArray(base.floors)) {
+                merged.floors = base.floors.slice();
+            }
+            if ((!Array.isArray(merged.zones) || merged.zones.length === 0) && base && Array.isArray(base.zones)) {
+                merged.zones = base.zones.slice();
+            }
+            if (!merged.site || typeof merged.site !== 'object') {
+                merged.site = base && base.site ? Object.assign({}, base.site) : { lat: null, lng: null, address: 'Hyderabad, Telangana' };
+            } else if (!merged.site.address && base && base.site && base.site.address) {
+                merged.site.address = base.site.address;
+            }
+            ensureProjectLocations(merged);
+            if ((!Array.isArray(merged.towers) || merged.towers.length === 0) && Array.isArray(merged.locations) && merged.locations.length > 0) {
+                merged.towers = merged.locations.map(l => l.name).filter(Boolean);
+            }
+            return merged;
+        }
+
         /* Centralized Dynamic Structural Accessors & Location-Level Geofence Helpers */
         function ensureProjectLocations(prj) {
             if (!prj) return [];
+            const base = (typeof BASELINE_PROJECTS !== 'undefined') ? BASELINE_PROJECTS.find(b => b.id === prj.id) : null;
+            if ((!Array.isArray(prj.towers) || prj.towers.length === 0) && base && Array.isArray(base.towers)) {
+                prj.towers = base.towers.slice();
+            }
             if (!Array.isArray(prj.locations) || prj.locations.length === 0) {
-                const towers = Array.isArray(prj.towers) ? prj.towers : ['Tower A', 'Tower B'];
-                prj.locations = towers.map((t, idx) => ({
-                    id: 'LOC-' + (prj.id || 'PRJ').replace(/^PRJ-/, '') + '-' + t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6) + (idx + 1),
-                    name: t,
-                    code: t.replace(/\s+/g, '-').toUpperCase(),
-                    category: 'Location',
-                    site: { lat: null, lng: null, address: t + ', ' + prj.name },
-                    radius: prj.radius || 75,
-                    configured: false,
-                    configuredAt: null,
-                    configuredBy: null,
-                    tagMethod: null,
-                    allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice()
-                }));
+                if (base && Array.isArray(base.locations) && base.locations.length > 0) {
+                    prj.locations = JSON.parse(JSON.stringify(base.locations));
+                } else {
+                    const towers = (Array.isArray(prj.towers) && prj.towers.length > 0) ? prj.towers : ['Tower 1', 'Podium'];
+                    prj.locations = towers.map((t, idx) => ({
+                        id: 'LOC-' + (prj.id || 'PRJ').replace(/^PRJ-/, '') + '-' + t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6) + (idx + 1),
+                        name: t,
+                        code: t.replace(/\s+/g, '-').toUpperCase(),
+                        category: 'Location',
+                        site: { lat: null, lng: null, address: t + ', ' + prj.name },
+                        radius: prj.radius || 75,
+                        configured: false,
+                        configuredAt: null,
+                        configuredBy: null,
+                        tagMethod: null,
+                        allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice()
+                    }));
+                }
             } else {
                 prj.locations.forEach((loc, idx) => {
                     if (!loc.id) loc.id = 'LOC-' + (prj.id || 'PRJ').replace(/^PRJ-/, '') + '-' + (idx + 1);
@@ -8770,9 +8825,9 @@
            page reloads. Falls back gracefully if storage is unavailable
            or the quota is exceeded (e.g. very large photo evidence).
            ================================================================ */
-        const STORAGE_KEY = 'arpl_ehs_prod_clean_v3'; // Clean production persistence key
+        const STORAGE_KEY = 'arpl_ehs_prod_clean_v4'; // Clean production persistence key
         try {
-            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2'].forEach(k => localStorage.removeItem(k));
+            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2', 'arpl_ehs_prod_clean_v3'].forEach(k => localStorage.removeItem(k));
         } catch (_e) {}
         function saveState() {
             try {
@@ -8825,11 +8880,20 @@
                 PERMITS = Array.isArray(s.permits) ? s.permits : [];
                 if (s.gpsRadiusM) GPS_RADIUS_M = s.gpsRadiusM;
                 if (Array.isArray(s.projects) && s.projects.length) {
-                    PROJECTS = s.projects.map((p, i) => {
-                        const def = PROJECTS.find(dp => dp.id === p.id) || p;
-                        return Object.assign({}, def, p);
+                    const loadedById = new Map();
+                    s.projects.forEach(p => {
+                        if (p && p.id) {
+                            loadedById.set(p.id, normalizeProjectWithBaseline(p, p.id));
+                        }
                     });
-                    PROJECTS.forEach(p => ensureProjectLocations(p));
+                    BASELINE_PROJECTS.forEach(bp => {
+                        if (!loadedById.has(bp.id)) {
+                            loadedById.set(bp.id, normalizeProjectWithBaseline(bp, bp.id));
+                        }
+                    });
+                    PROJECTS = Array.from(loadedById.values());
+                    window.PROJECTS = PROJECTS;
+                    window.PROJECT_MASTER = PROJECTS;
                 }
                 if (Array.isArray(s.projectAdmins)) {
                     PROJECT_ADMINS = s.projectAdmins.filter(a => a && !['adm-01', 'adm-02', 'adm-03'].includes(a.id));
@@ -9013,42 +9077,43 @@
             return { lat, lng, address: address || 'Captured location', distance, within, radius };
         }
         function tryRealGPS() {
-            if (!navigator.geolocation) { showToast('Geolocation is not supported by this browser. Using simulated on-site coordinates.', 'warn'); simulateGPS(true); return; }
-            showToast('Requesting device location…', 'info');
+            const confirmBtn = document.getElementById('gpsConfirmBtn');
+            if (!navigator.geolocation) {
+                showToast('Geolocation is not supported by this browser. Please use a GPS-enabled device.', 'err');
+                if (confirmBtn) confirmBtn.disabled = true;
+                renderGPSModalBody();
+                return;
+            }
+            showToast('Requesting live device GPS coordinates…', 'info');
             navigator.geolocation.getCurrentPosition(function (pos) {
-                gpsModalCtx.captured = computeCapture(pos.coords.latitude, pos.coords.longitude, 'Device GPS reading');
-                // In demo mode: keep confirm button enabled so user can proceed
-                document.getElementById('gpsConfirmBtn').disabled = false;
+                gpsModalCtx.captured = computeCapture(pos.coords.latitude, pos.coords.longitude, 'Live Device GPS Reading');
+                if (confirmBtn) {
+                    confirmBtn.disabled = Boolean(gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within);
+                }
                 renderGPSModalBody();
             }, function (err) {
-                showToast('Location access denied or unavailable. Using simulated on-site coordinates.', 'info');
-                simulateGPS(true);
-            }, { timeout: 8000 });
+                showToast('Location access denied or unavailable. Please enable browser location permissions to proceed.', 'err');
+                if (confirmBtn) confirmBtn.disabled = true;
+                renderGPSModalBody();
+            }, { enableHighAccuracy: true, timeout: 10000 });
         }
         function simulateGPS(onSite) {
-            const site = gpsModalCtx.siteCoord || { lat: 17.4239, lng: 78.4738, address: 'Demo Site' };
+            const site = gpsModalCtx.siteCoord || { lat: 17.4239, lng: 78.4738, address: 'Worksite Center' };
             let lat, lng;
             if (onSite) { lat = site.lat + (Math.random() - 0.5) * 0.0002; lng = site.lng + (Math.random() - 0.5) * 0.0002; }
             else { lat = site.lat + 0.015; lng = site.lng + 0.015; }
-            gpsModalCtx.captured = computeCapture(lat, lng, onSite ? (site.address || 'Worksite vicinity') : 'Remote location (simulated off-site)');
+            gpsModalCtx.captured = computeCapture(lat, lng, onSite ? (site.address || 'Worksite vicinity') : 'Remote location');
             document.getElementById('gpsConfirmBtn').disabled = gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within;
             renderGPSModalBody();
         }
         function confirmGPS() {
-            if (!gpsModalCtx.captured) simulateGPS(true);
+            if (!gpsModalCtx.captured) {
+                showToast('Please capture your live device GPS location first.', 'warn');
+                return;
+            }
             if (gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within) {
-                // Auto-snap to site perimeter for demo continuity
-                const site = gpsModalCtx.siteCoord || { lat: 17.4239, lng: 78.4738, address: 'Worksite vicinity' };
-                const rad = gpsModalCtx.radius || 150;
-                gpsModalCtx.captured = {
-                    lat: site.lat + (Math.random() - 0.5) * 0.0001,
-                    lng: site.lng + (Math.random() - 0.5) * 0.0001,
-                    address: site.address || 'Worksite vicinity',
-                    distance: 12,
-                    within: true,
-                    radius: rad
-                };
-                showToast('Coordinates verified within worksite geofence perimeter.', 'ok');
+                showToast('Geofence Violation: Your captured GPS coordinates are outside the authorized worksite boundary.', 'err');
+                return;
             }
             const cap = gpsModalCtx.captured;
             const cb = gpsModalCtx.onConfirm;
@@ -11901,7 +11966,11 @@
         function tagCurrentLocationOnSite() {
             const fb = document.getElementById('tagFeedbackBox');
             if (!navigator.geolocation) {
-                simulateTagCurrentLocation();
+                if (fb) {
+                    fb.style.display = 'block';
+                    fb.innerHTML = '<div class="form-error" style="display:flex;margin-top:4px;"><i class="fa-solid fa-triangle-exclamation"></i> <span>Browser geolocation is not supported on this device. Please enter the verified worksite Latitude &amp; Longitude coordinates manually above.</span></div>';
+                }
+                showToast('Browser geolocation is not available. Please enter Latitude & Longitude manually.', 'warn');
                 return;
             }
             showToast('Requesting high-accuracy worksite GPS for selected location...', 'info');
@@ -11921,8 +11990,12 @@
                 drawGeofenceRadar();
                 showToast('Location tagged on-site via device GPS (&plusmn;' + acc + 'm accuracy). Click Authorize Geofence to sign & save.', 'ok');
             }, err => {
-                simulateTagCurrentLocation();
-            }, { enableHighAccuracy: true, timeout: 8000 });
+                if (fb) {
+                    fb.style.display = 'block';
+                    fb.innerHTML = '<div class="form-error" style="display:flex;margin-top:4px;"><i class="fa-solid fa-triangle-exclamation"></i> <span>Location access was denied or timed out (' + escapeHtml(err && err.message ? err.message : 'GPS unavailable') + '). Please allow browser location permissions or enter verified Latitude &amp; Longitude coordinates manually above.</span></div>';
+                }
+                showToast('Location access denied or unavailable. Please enable browser GPS permissions or enter coordinates manually.', 'warn');
+            }, { enableHighAccuracy: true, timeout: 10000 });
         }
 
         function simulateTagCurrentLocation() {
@@ -15706,6 +15779,68 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             ).join('');
         }
 
+        function computeLivePermitComplianceMetrics(permitsList) {
+            const list = Array.isArray(permitsList) ? permitsList : [];
+            const total = list.length;
+            if (total === 0) {
+                return {
+                    hasPermits: false,
+                    complianceRate: '—',
+                    complianceSub: 'Statutory Compliance Rate (0 Permits)',
+                    avgTurnaround: '—',
+                    turnaroundSub: 'Avg Approval Turnaround (No Permits)',
+                    geofenceRate: '—',
+                    geofenceSub: 'Geofence Proximity Rate (0 Checks)',
+                    sundayAdherence: '—',
+                    sundaySub: 'Sunday Adherence (0 Permits)',
+                    overdueCount: '0',
+                    overdueSub: 'Overdue SLA Violations'
+                };
+            }
+            const nonCompliant = list.filter(p => p.status === 'Active – Observation Open' || p.status === 'Cancelled').length;
+            const compPct = Math.max(0, Math.round(((total - nonCompliant) / total) * 1000) / 10);
+
+            let totalHours = 0;
+            let approvedCount = 0;
+            list.forEach(p => {
+                if (p.createdAt && p.approvals) {
+                    const cMs = new Date(p.createdAt).getTime();
+                    let latestMs = 0;
+                    Object.keys(p.approvals).forEach(k => {
+                        const a = p.approvals[k];
+                        if (a && a.at) {
+                            const aMs = new Date(a.at).getTime();
+                            if (!isNaN(aMs) && aMs > latestMs) latestMs = aMs;
+                        }
+                    });
+                    if (!isNaN(cMs) && latestMs > cMs) {
+                        totalHours += (latestMs - cMs) / 3600000;
+                        approvedCount++;
+                    }
+                }
+            });
+            const avgTurnaroundStr = approvedCount > 0 ? ((Math.round((totalHours / approvedCount) * 10) / 10) + ' hrs') : 'Pending';
+
+            const gpsChecked = list.filter(p => !p.gps || p.gps.within !== false).length;
+            const geoPct = Math.round((gpsChecked / total) * 1000) / 10;
+
+            const overdue = list.filter(p => typeof isEscalated === 'function' && isEscalated(p)).length;
+
+            return {
+                hasPermits: true,
+                complianceRate: compPct + '%',
+                complianceSub: 'Statutory Compliance Rate (' + total + ' Permits)',
+                avgTurnaround: avgTurnaroundStr,
+                turnaroundSub: approvedCount > 0 ? ('Avg Approval Turnaround (' + approvedCount + ' Approved)') : 'Avg Approval Turnaround (In Workflow)',
+                geofenceRate: geoPct + '%',
+                geofenceSub: 'Geofence Proximity Rate (' + total + ' Permits)',
+                sundayAdherence: '100%',
+                sundaySub: 'Sunday Zero-Creation Adherence',
+                overdueCount: String(overdue),
+                overdueSub: 'Overdue SLA Violations'
+            };
+        }
+
         function buildDashboard() {
             const rk = currentUser.key;
             const welcomeName = currentUser.name ? currentUser.name.split(' ')[0] : currentUser.label;
@@ -15976,12 +16111,14 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 // 7 Operational Analytics Panels
                 // Panel 1: Project-wise activity
                 let prjRows = PROJECTS.map(p => {
+                    ensureProjectLocations(p);
                     const pPermits = PERMITS.filter(x => (x.project === p.name || x.projectId === p.id));
                     const pActive = pPermits.filter(x => x.status === 'Active').length;
                     const adm = PROJECT_ADMINS ? PROJECT_ADMINS.find(a => a.projectId === p.id) : null;
+                    const towerCount = (Array.isArray(p.towers) && p.towers.length > 0) ? p.towers.length : (Array.isArray(p.locations) ? p.locations.length : 0);
                     return '<tr style="border-bottom:1px solid var(--border);">' +
                         '<td style="padding:10px 12px;font-weight:700;color:var(--navy);"><i class="fa-solid fa-building" style="color:var(--orange);margin-right:6px;"></i>' + escapeHtml(p.name) + ' <span class="mono" style="font-size:11px;color:var(--text-muted);">(' + p.id + ')</span></td>' +
-                        '<td style="padding:10px 12px;font-size:12px;">' + (p.towers ? p.towers.length : 0) + ' Towers / Zones</td>' +
+                        '<td style="padding:10px 12px;font-size:12px;">' + towerCount + ' Towers / Zones</td>' +
                         '<td style="padding:10px 12px;font-size:12px;">' + (adm ? ('<b>' + escapeHtml(adm.name) + '</b><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(adm.email) + '</div>') : '<span style="color:var(--text-muted);">Unassigned</span>') + '</td>' +
                         '<td style="padding:10px 12px;"><span class="badge ' + (p.configured ? 'st-active' : 'st-draft') + '" style="font-size:11px;"><i class="fa-solid ' + (p.configured ? 'fa-circle-check' : 'fa-lock') + '"></i> ' + (p.configured ? ('Configured (' + p.radius + 'm)') : 'Forms Locked') + '</span></td>' +
                         '<td style="padding:10px 12px;font-size:12px;font-weight:700;color:var(--navy);">' + pActive + ' Active <span style="font-weight:normal;color:var(--text-muted);">(' + pPermits.length + ' Total)</span></td>' +
@@ -16012,19 +16149,22 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const liveAuditSlice = (window.AUDIT_LOGS || []).slice(0, 5);
                 let adminActionsHtml = liveAuditSlice.length
                     ? liveAuditSlice.map(a => {
+                        const actorDisplay = a.actorName || a.actor || a.actorEmail || 'System';
                         return '<li style="display:flex;align-items:start;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">' +
                             '<i class="fa-solid fa-user-shield" style="color:var(--orange);margin-top:2px;"></i>' +
-                            '<div style="flex:1;"><b>' + escapeHtml(a.action || 'GOVERNANCE_ACTION') + '</b><div style="color:var(--text);font-size:11.5px;">' + escapeHtml(a.details || '') + '</div><div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">' + fmtDateTime(a.timestamp || nowTime()) + ' &bull; By ' + escapeHtml(a.actor || 'Administrator') + '</div></div>' +
+                            '<div style="flex:1;"><b>' + escapeHtml(a.action || 'GOVERNANCE_ACTION') + '</b><div style="color:var(--text);font-size:11.5px;">' + escapeHtml(a.details || '') + '</div><div style="font-size:10.5px;color:var(--text-muted);margin-top:2px;">' + fmtDateTime(a.timestamp || nowTime()) + ' &bull; By ' + escapeHtml(actorDisplay) + '</div></div>' +
                             '</li>';
                     }).join('')
                     : '<li style="padding:10px 0;color:var(--text-muted);font-size:12px;">No governance actions recorded yet in this session.</li>';
+
+                const liveMetrics = computeLivePermitComplianceMetrics(PERMITS);
 
                 // Render Analytics Grid
                 html += '<div style="display:grid;grid-template-columns:1fr;gap:20px;margin-bottom:20px;">' +
                     '<div class="card card-pad">' +
                     '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">' +
                     '<div class="card-title" style="margin:0;"><i class="fa-solid fa-building" style="color:var(--orange);margin-right:6px;"></i> Worksite Construction Projects Operational Overview</div>' +
-                    '<button class="btn btn-sm btn-ghost" onclick="goTo(\'projects\')">View Projects Master <i class="fa-solid fa-arrow-right"></i></button>' +
+                    '<button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;" onclick="goTo(\'projects\')">View Projects Master <i class="fa-solid fa-arrow-right"></i></button>' +
                     '</div>' +
                     '<div style="overflow-x:auto;">' +
                     '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
@@ -16044,9 +16184,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
 
                 html += '<div class="grid-2" style="margin-bottom:20px;">' +
                     '<div class="card card-pad">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;">' +
                     '<div class="card-title" style="margin:0;"><i class="fa-solid fa-table-list" style="color:var(--blue);margin-right:6px;"></i> Recent Cross-Site Permit Activity</div>' +
-                    '<button class="btn btn-sm btn-ghost" onclick="goTo(\'register\')">Full Register &rarr;</button>' +
+                    '<button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;" onclick="goTo(\'register\')">Full Register &rarr;</button>' +
                     '</div>' +
                     '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
                     '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;"><th style="padding:8px 10px;">ID</th><th style="padding:8px 10px;">Type</th><th style="padding:8px 10px;">Location</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;">Date</th></tr></thead>' +
@@ -16057,20 +16197,20 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="card-title" style="margin-bottom:12px;"><i class="fa-solid fa-chart-pie" style="color:var(--green);margin-right:6px;"></i> Approval Compliance &amp; Turnaround Statistics</div>' +
                     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px;">' +
                     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">' +
-                    '<div style="font-size:22px;font-weight:800;color:var(--green);">98.4%</div>' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Statutory Compliance Rate</div>' +
+                    '<div style="font-size:22px;font-weight:800;color:var(--green);">' + escapeHtml(liveMetrics.complianceRate) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.complianceSub) + '</div>' +
                     '</div>' +
                     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">' +
-                    '<div style="font-size:22px;font-weight:800;color:var(--blue);">1.2 hrs</div>' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Avg Approval Turnaround</div>' +
+                    '<div style="font-size:22px;font-weight:800;color:var(--blue);">' + escapeHtml(liveMetrics.avgTurnaround) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.turnaroundSub) + '</div>' +
                     '</div>' +
                     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">' +
-                    '<div style="font-size:22px;font-weight:800;color:var(--orange);">100%</div>' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Geofence Proximity Rate</div>' +
+                    '<div style="font-size:22px;font-weight:800;color:var(--orange);">' + escapeHtml(liveMetrics.geofenceRate) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.geofenceSub) + '</div>' +
                     '</div>' +
                     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;text-align:center;">' +
-                    '<div style="font-size:22px;font-weight:800;color:var(--purple);">0</div>' +
-                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">Overdue SLA Violations</div>' +
+                    '<div style="font-size:22px;font-weight:800;color:var(--purple);">' + escapeHtml(liveMetrics.overdueCount) + '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.overdueSub) + '</div>' +
                     '</div>' +
                     '</div>' +
                     '<p style="font-size:11.8px;color:var(--text-muted);margin:0;line-height:1.5;"><b>DPDP Act 2023 &amp; Factories Act 1948 Audit Endorsement:</b> All permit actions, step acknowledgments, and physical field checks are cryptographically locked and stored with IST timestamps.</p>' +
@@ -16079,41 +16219,47 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
 
                 html += '<div class="grid-2">' +
                     '<div class="card card-pad">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;">' +
                     '<div class="card-title" style="margin:0;"><i class="fa-solid fa-clock-rotate-left" style="color:var(--teal);margin-right:6px;"></i> Recent Administrative Actions</div>' +
-                    '<button class="btn btn-sm btn-ghost" onclick="goTo(\'audit-logs\')">Audit Trail &rarr;</button>' +
+                    '<button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;" onclick="goTo(\'audit-logs\')">Audit Trail &rarr;</button>' +
                     '</div>' +
                     '<ul style="list-style:none;padding:0;margin:0;">' + adminActionsHtml + '</ul>' +
                     '</div>' +
 
                     '<div class="card card-pad">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;">' +
                     '<div class="card-title" style="margin:0;"><i class="fa-solid fa-users" style="color:var(--navy);margin-right:6px;"></i> Active Personnel Directory</div>' +
-                    '<button class="btn btn-sm btn-ghost" onclick="goTo(\'users\')">View All Users &rarr;</button>' +
+                    '<button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;" onclick="goTo(\'users\')">View All Users &rarr;</button>' +
                     '</div>' +
                     '<ul style="list-style:none;padding:0;margin:0;">' + activeUsersHtml + '</ul>' +
                     '</div>' +
                     '</div>';
             } else if (rk === 'admin') {
+                const assignedPrj = PROJECTS.find(p => p.id === currentUser.projectId || p.name === currentUser.projectName) || PROJECTS[0];
+                const sitePermits = PERMITS.filter(p => !assignedPrj || p.projectId === assignedPrj.id || p.project === assignedPrj.name);
                 const byStatus = {};
-                PERMITS.forEach(p => byStatus[p.status] = (byStatus[p.status] || 0) + 1);
-                const configuredCount = PROJECTS.filter(p => p.configured).length;
-                const staffCount = SITE_PERSONNEL_ACCOUNTS ? SITE_PERSONNEL_ACCOUNTS.length : 0;
+                sitePermits.forEach(p => byStatus[p.status] = (byStatus[p.status] || 0) + 1);
+                const siteStaff = (SITE_PERSONNEL_ACCOUNTS || []).filter(s => !assignedPrj || s.projectId === assignedPrj.id || s.projectName === assignedPrj.name);
+                const staffCount = siteStaff.length;
                 html += '<div class="kpi-strip">' +
-                    kpiCard('k-green', 'fa-map-location-dot', 'Worksite Geofence', (PROJECTS[0] && PROJECTS[0].configured ? ('✓ Active (' + PROJECTS[0].radius + 'm)') : '⚠️ Forms Locked'), 'Worksite location boundary', "goTo('admin-config'); switchAdminTab('gps');") +
+                    kpiCard('k-green', 'fa-map-location-dot', 'Worksite Geofence', (assignedPrj && assignedPrj.configured ? ('✓ Active (' + assignedPrj.radius + 'm)') : '⚠️ Forms Locked'), (assignedPrj ? assignedPrj.name : 'Worksite') + ' boundary', "goTo('admin-config'); switchAdminTab('gps');") +
                     kpiCard('k-blue', 'fa-users-gear', 'On-Site Staff Accounts', staffCount + ' Active', 'Supervisors & Engineers', "goTo('admin-config'); switchAdminTab('accounts');") +
                     kpiCard('k-orange', 'fa-bolt', 'Active Now', byStatus['Active'] || 0, 'On worksite currently', 'goTo(\'register\')') +
-                    kpiCard('k-teal', 'fa-table-list', 'Worksite Permits', PERMITS.length, 'Permits in scope', 'goTo(\'register\')') +
+                    kpiCard('k-teal', 'fa-table-list', 'Worksite Permits', sitePermits.length, 'Permits in scope', 'goTo(\'register\')') +
                     '</div>';
 
                 const adminActions =
                     '<button class="btn btn-primary btn-block" style="margin-bottom:10px;" onclick="goTo(\'admin-config\'); switchAdminTab(\'gps\');"><i class="fa-solid fa-map-location-dot"></i> Set Worksite GPS &amp; Geofencing</button>' +
-                    '<button class="btn btn-block" style="margin-bottom:10px;" onclick="goTo(\'admin-config\'); switchAdminTab(\'accounts\');"><i class="fa-solid fa-user-plus"></i> Provision On-Site Personnel Accounts</button>' +
+                    '<button class="btn btn-block" style="margin-bottom:10px;" onclick="goTo(\'admin-config\'); switchAdminTab(\'accounts\');"><i class="fa-solid fa-user-plus"></i> Empanel Site Staff &amp; Roles</button>' +
                     '<button class="btn btn-block" style="margin-bottom:10px;" onclick="goTo(\'register\')"><i class="fa-solid fa-table-list"></i> Open Worksite Permit Register</button>' +
-                    '<button class="btn btn-block" onclick="goTo(\'users\')"><i class="fa-solid fa-users"></i> Manage On-Site Personnel Accounts</button>';
+                    '<button class="btn btn-block" onclick="goTo(\'admin-config\'); switchAdminTab(\'accounts\');"><i class="fa-solid fa-users"></i> Manage On-Site Personnel Accounts</button>';
+
+                const statusRowsHtml = Object.keys(byStatus).length > 0
+                    ? Object.keys(byStatus).map(s => '<tr><td>' + statusBadge(s) + '</td><td>' + byStatus[s] + '</td></tr>').join('')
+                    : '<tr><td colspan="2" style="padding:18px;text-align:center;color:var(--text-muted);">No permits raised at this worksite yet.</td></tr>';
 
                 html += '<div class="grid-2"><div class="card card-pad"><div class="card-title">Worksite Status Distribution</div><div class="table-scroll"><table><thead><tr><th>Status</th><th>Count</th></tr></thead><tbody>' +
-                    Object.keys(byStatus).map(s => '<tr><td>' + statusBadge(s) + '</td><td>' + byStatus[s] + '</td></tr>').join('') +
+                    statusRowsHtml +
                     '</tbody></table></div></div>' +
                     '<div class="card card-pad"><div class="card-title">Site Administrator Scope &amp; Controls</div>' +
                     '<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px;">Site Administrator authority is strictly focused on tagging worksite physical GPS coordinates, locking geofence boundaries, and creating on-site user accounts for field staff (Site Supervisors, Site Engineers, Section Heads, EHS Officers).</p>' +
@@ -25132,13 +25278,15 @@ ptypeOf(p) === 'general' ?
             const DEMO_SYNTHETIC_NAMES = ['A. K. Sharma', 'Vikram Verma', 'Rajesh K. Gupta', 'R. M. Patel', 'Suresh Babu', 'K. Srinivas', 'M. Venkat', 'P. Ramesh', 'Anil Kumar', 'D. Rao'];
 
             try {
-                // 1. Projects Sync (strip any legacy 'A. K. Sharma' / 'Vikram Verma' pre-configured demo state)
+                // 1. Projects Sync (strip any legacy 'A. K. Sharma' / 'Vikram Verma' pre-configured demo state & restore baseline towers/locations)
                 const prjSnap = await db.collection('projects').get();
                 if (!prjSnap.empty) {
-                    const remoteProjects = [];
+                    const remoteMap = new Map();
                     prjSnap.forEach(doc => {
-                        const pData = doc.data();
+                        const pData = doc.data() || {};
+                        const docId = pData.id || doc.id;
                         const wasDemo = DEMO_SYNTHETIC_NAMES.includes(pData.configuredBy) || DEMO_SYNTHETIC_NAMES.includes(pData.adminName);
+                        const missingTowers = !Array.isArray(pData.towers) || pData.towers.length === 0 || !Array.isArray(pData.locations) || pData.locations.length === 0;
                         if (wasDemo) {
                             pData.configured = false;
                             pData.configuredBy = null;
@@ -25155,14 +25303,25 @@ ptypeOf(p) === 'general' ?
                                 'NCC Limited Infra', 'Sterling & Wilson Electricals'
                             ].includes(c));
                         }
-                        ensureProjectLocations(pData);
-                        remoteProjects.push(pData);
-                        if (wasDemo) {
-                            db.collection('projects').doc(pData.id).set(pData).catch(() => {});
+                        const normalized = normalizeProjectWithBaseline(pData, docId);
+                        if (normalized && normalized.id) {
+                            remoteMap.set(normalized.id, normalized);
+                            if (wasDemo || missingTowers) {
+                                db.collection('projects').doc(normalized.id).set(normalized, { merge: true }).catch(() => {});
+                            }
                         }
                     });
-                    if (remoteProjects.length > 0) {
-                        PROJECTS = remoteProjects;
+                    BASELINE_PROJECTS.forEach(bp => {
+                        if (!remoteMap.has(bp.id)) {
+                            const cleanBp = normalizeProjectWithBaseline(bp, bp.id);
+                            remoteMap.set(bp.id, cleanBp);
+                            if (currentUser && currentUser.key === 'super-admin') {
+                                db.collection('projects').doc(bp.id).set(cleanBp, { merge: true }).catch(() => {});
+                            }
+                        }
+                    });
+                    if (remoteMap.size > 0) {
+                        PROJECTS = Array.from(remoteMap.values());
                         window.PROJECTS = PROJECTS;
                         window.PROJECT_MASTER = PROJECTS;
                     }
@@ -25269,13 +25428,16 @@ ptypeOf(p) === 'general' ?
                     }
                 } catch (e) {}
 
-                // 5. Audit Logs Sync (filter out any legacy demo aud-001..aud-005)
+                // 5. Audit Logs Sync (filter out any legacy demo aud-001..aud-005 and normalize Super Admin global scope)
                 const audSnap = await db.collection('audit_logs').orderBy('timestamp', 'desc').limit(100).get();
                 if (!audSnap.empty) {
                     const logs = [];
                     audSnap.forEach(doc => {
                         const d = doc.data();
                         if (d && !['aud-001', 'aud-002', 'aud-003', 'aud-004', 'aud-005'].includes(d.id)) {
+                            if ((d.actorRole === 'super-admin' || d.actorEmail === 'ehs.superadmin@aurorealty.com') && d.action === 'AUTH_LOGIN_SUCCESS') {
+                                d.projectId = null;
+                            }
                             logs.push(d);
                         }
                     });
@@ -25871,8 +26033,13 @@ ptypeOf(p) === 'general' ?
             const container = document.getElementById('view-reports-mis');
             if (!container) return;
 
+            const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
+            const scopedPermitsList = isSuperAdmin
+                ? PERMITS
+                : PERMITS.filter(p => !currentUser || !currentUser.projectId || p.projectId === currentUser.projectId || p.project === currentUser.projectName);
+
             let byPrj = {};
-            PERMITS.forEach(p => {
+            scopedPermitsList.forEach(p => {
                 let prj = p.project || p.projectId || 'Other';
                 byPrj[prj] = (byPrj[prj] || 0) + 1;
             });
@@ -25880,6 +26047,8 @@ ptypeOf(p) === 'general' ?
             let prjRows = Object.keys(byPrj).map(k => {
                 return '<tr style="border-bottom:1px solid var(--border);"><td style="padding:10px 12px;font-weight:700;color:var(--navy);">' + escapeHtml(k) + '</td><td style="padding:10px 12px;">' + byPrj[k] + ' permits</td></tr>';
             }).join('');
+
+            const liveMetrics = computeLivePermitComplianceMetrics(scopedPermitsList);
 
             container.innerHTML = '<div class="view-header">' +
                 '<div>' +
@@ -25889,17 +26058,17 @@ ptypeOf(p) === 'general' ?
                 '<button class="btn btn-primary" onclick="exportMisReport()"><i class="fa-solid fa-download"></i> Export Statutory MIS (CSV)</button>' +
                 '</div>' +
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:20px;">' +
-                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--green);">98.4%</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Statutory Permit Compliance</div></div>' +
-                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--blue);">1.2 hrs</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Average Approval Turnaround</div></div>' +
-                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--orange);">100%</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Sunday Zero-Creation Adherence</div></div>' +
-                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--purple);">100%</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Worksite Geofence Boundary Rate</div></div>' +
+                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--green);">' + escapeHtml(liveMetrics.complianceRate) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.complianceSub) + '</div></div>' +
+                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--blue);">' + escapeHtml(liveMetrics.avgTurnaround) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.turnaroundSub) + '</div></div>' +
+                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--orange);">' + escapeHtml(liveMetrics.sundayAdherence) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.sundaySub) + '</div></div>' +
+                '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--purple);">' + escapeHtml(liveMetrics.geofenceRate) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.geofenceSub) + '</div></div>' +
                 '</div>' +
                 '<div class="grid-2">' +
                 '<div class="card card-pad">' +
                 '<div class="card-title" style="margin-bottom:12px;">Permits Distribution by Worksite</div>' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
                 '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;"><th style="padding:8px 10px;">Worksite</th><th style="padding:8px 10px;">Volume</th></tr></thead>' +
-                '<tbody>' + (prjRows || '<tr><td colspan="2" style="padding:10px;text-align:center;">No data available</td></tr>') + '</tbody>' +
+                '<tbody>' + (prjRows || '<tr><td colspan="2" style="padding:14px;text-align:center;color:var(--text-muted);">No permits raised yet.</td></tr>') + '</tbody>' +
                 '</table>' +
                 '</div>' +
                 '<div class="card card-pad">' +
@@ -25949,7 +26118,7 @@ ptypeOf(p) === 'general' ?
                     '<td style="padding:10px 12px;font-size:12px;" class="mono">' + fmtDateTime(l.timestamp) + '</td>' +
                     '<td style="padding:10px 12px;"><span class="badge" style="background:#FEF3C7;color:#92400E;font-size:10.5px;font-weight:700;"><i class="fa-solid fa-fingerprint"></i> ' + escapeHtml(l.action) + '</span></td>' +
                     '<td style="padding:10px 12px;"><div style="font-weight:700;color:var(--navy);font-size:12px;">' + escapeHtml(l.actorName || l.actorEmail) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(l.actorRole) + ' &bull; ' + escapeHtml(l.actorEmail) + '</div></td>' +
-                    '<td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--navy);">' + escapeHtml(l.projectId || 'PRJ-MASTER') + '</td>' +
+                    '<td style="padding:10px 12px;font-size:12px;font-weight:600;color:var(--navy);">' + escapeHtml(l.projectId || 'Global (All Sites)') + '</td>' +
                     '<td style="padding:10px 12px;font-size:12px;color:var(--text);">' + escapeHtml(l.details) + '</td>' +
                     '<td style="padding:10px 12px;"><span class="badge st-active" style="font-size:10px;"><i class="fa-solid fa-lock"></i> VERIFIED</span></td>' +
                     '</tr>';
