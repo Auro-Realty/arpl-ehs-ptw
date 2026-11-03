@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -15,28 +15,40 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+    <!-- Global Project Master & Baseline Initialization (Runs before Firebase or UI initialization) -->
+    <script>
+      window.PROJECTS = window.PROJECTS || [
+        { id: 'PRJ-PEARL', name: 'The Pearl', configured: true },
+        { id: 'PRJ-REGENT', name: 'The Regent', configured: true },
+        { id: 'PRJ-SANSA', name: 'Sansa County', configured: true },
+        { id: 'PRJ-SA', name: 'Sansa County', configured: true }
+      ];
+      window.PROJECT_MASTER = window.PROJECTS || [];
+      var PROJECT_MASTER = window.PROJECT_MASTER;
+    </script>
     <!-- Firebase Hosting Live Initialization (Auto-injects project credentials on Hosting) -->
     <script src="/__/firebase/init.js"></script>
     <!-- Firebase Configuration Fallback -->
-    <script src="/firebase-config.js"></script>
-    <script>
-      var PROJECT_MASTER = window.PROJECT_MASTER || [];
-      window.PROJECT_MASTER = PROJECT_MASTER;
-    </script>
+    <script src="/firebase-config.js?v=20261103_v5"></script>
     <script>
       // Immediate synchronous initialization guarantee to prevent "No Firebase App '[DEFAULT]'" error
       (function() {
         try {
-          if (typeof firebase !== 'undefined' && (!firebase.apps || firebase.apps.length === 0)) {
-            const fbConfig = (typeof window !== 'undefined' && window.firebaseConfig) ? window.firebaseConfig : {
-              apiKey: "__FIREBASE_API_KEY__",
-              authDomain: "prj-aurorealty-ehs-ptw-dev.firebaseapp.com",
-              projectId: "prj-aurorealty-ehs-ptw-dev",
-              storageBucket: "prj-aurorealty-ehs-ptw-dev.firebasestorage.app",
-              messagingSenderId: "1045760890879",
-              appId: "1:1045760890879:web:b7dac1bd13d481fcc179ca",
-              measurementId: "G-GF258H8BBQ"
-            };
+          window.PROJECT_MASTER = window.PROJECTS || window.PROJECT_MASTER || [];
+          var PROJECT_MASTER = window.PROJECT_MASTER;
+          if (typeof firebase !== 'undefined' && (!firebase.apps || !firebase.apps.length)) {
+            var fbConfig = (typeof window !== 'undefined' && window.firebaseConfig) ? window.firebaseConfig : null;
+            if (!fbConfig || !fbConfig.apiKey || fbConfig.apiKey.indexOf('__FIREBASE') !== -1) {
+              fbConfig = {
+                apiKey: "__FIREBASE_API_KEY__",
+                authDomain: "prj-aurorealty-ehs-ptw-dev.firebaseapp.com",
+                projectId: "prj-aurorealty-ehs-ptw-dev",
+                storageBucket: "prj-aurorealty-ehs-ptw-dev.firebasestorage.app",
+                messagingSenderId: "1045760890879",
+                appId: "1:1045760890879:web:b7dac1bd13d481fcc179ca",
+                measurementId: "G-GF258H8BBQ"
+              };
+            }
             firebase.initializeApp(fbConfig);
             console.log('[Firebase Init] Synchronously initialized Firebase default app.');
           }
@@ -49,43 +61,59 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha384-JcnsjUPPylna1s1fvi1u12X5qjY5OL56iySh75FdtrwhO/SWXgMjoVqcKyIIWOLk" crossorigin="anonymous" referrerpolicy="no-referrer" defer></script>
     <style>
         :root {
-            --navy: #0A1628;
-            --navy-2: #0F1E33;
-            --navy-3: #16283F;
-            --orange: #E8600A;
-            --orange-dark: #C94F06;
-            --bg: #F7F8FA;
+            /* Official Auro Realty Brand Palette (Extracted from Official Logo & Gradient Swatch) */
+            --brand-primary: #008160;
+            --brand-primary-dark: #00664B;
+            --brand-teal: #02837C;
+            --brand-accent: #048490;
+            --brand-cerulean: #096C84;
+            --brand-secondary: #10476E;
+            --brand-navy-deep: #183663;
+            --brand-gradient: linear-gradient(90deg, #008160 0%, #02837C 30%, #048490 50%, #096C84 75%, #10476E 100%);
+            --brand-gradient-diag: linear-gradient(135deg, #008160 0%, #048490 50%, #10476E 100%);
+            --bg-page: #F4F8F9;
+            --bg-card: #FFFFFF;
+            --bg-subtle: #EBF4F6;
+
+            /* System Custom Properties Mapped to Official Brand Palette */
+            --navy: #0F2942;
+            --navy-2: #10476E;
+            --navy-3: #183663;
+            --navy-light: #096C84;
+            --orange: #008160;
+            --orange-dark: #00664B;
+            --bg: #F4F8F9;
             --surface: #FFFFFF;
-            --border: #E2E5EA;
-            --border-strong: #CBD1DA;
-            --text: #1B2431;
-            --text-muted: #5B6472;
-            --text-faint: #889099;
+            --border: #D8E4E8;
+            --border-strong: #BCCFD6;
+            --text: #0F2942;
+            --text-muted: #4A6070;
+            --text-faint: #788E9E;
             --amber: #9A6400;
             --amber-bg: #FDF1DC;
             --amber-brd: #F0D8A8;
-            --green: #1E7A3D;
-            --green-bg: #E6F5EA;
-            --green-brd: #BFE3CB;
-            --blue: #1B5FAE;
-            --blue-bg: #E7F1FC;
-            --blue-brd: #BCD8F5;
-            --grey: #5B6472;
-            --grey-bg: #EEF0F3;
-            --grey-brd: #D8DCE2;
+            --green: #008160;
+            --green-bg: #E6F5F0;
+            --green-brd: #B3E2D4;
+            --blue: #10476E;
+            --blue-bg: #E8F2F8;
+            --blue-brd: #B8D6E8;
+            --grey: #4A6070;
+            --grey-bg: #EEF3F6;
+            --grey-brd: #D5E0E6;
             --red: #B3261E;
             --red-bg: #FBEAE9;
             --red-brd: #F1C4C1;
-            --purple: #6941C6;
-            --purple-bg: #F1EBFC;
-            --purple-brd: #DCC9F5;
-            --teal: #0E7C86;
-            --teal-bg: #E3F6F7;
-            --teal-brd: #BEE7EA;
+            --purple: #183663;
+            --purple-bg: #EBF0F8;
+            --purple-brd: #C5D4EB;
+            --teal: #048490;
+            --teal-bg: #E3F5F7;
+            --teal-brd: #B4E3E8;
             --radius: 8px;
-            --shadow-sm: 0 1px 2px rgba(10, 22, 40, .06);
-            --shadow-md: 0 6px 20px rgba(10, 22, 40, .12);
-            --shadow-lg: 0 20px 50px rgba(10, 22, 40, .28);
+            --shadow-sm: 0 1px 3px rgba(16, 71, 110, .08);
+            --shadow-md: 0 6px 20px rgba(16, 71, 110, .14);
+            --shadow-lg: 0 20px 50px rgba(15, 41, 66, .28);
             --font-ui: "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
             --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
         }
@@ -2076,7 +2104,7 @@
             width: 100%;
             min-height: 100vh;
             min-height: 100dvh;
-            background: radial-gradient(ellipse at 20% -10%, #16283F 0%, #0A1628 55%, #060C16 100%);
+            background: radial-gradient(ellipse at 20% 0%, #02837C 0%, #096C84 38%, #10476E 72%, #0A1E32 100%);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -4611,220 +4639,142 @@
         }
 
         /* ================================================================
-           UNIFIED ENTERPRISE LOGIN SCREEN (FIREBASE AUTH)
+           UNIFIED ENTERPRISE LOGIN SCREEN & AURO REALTY BRAND THEME
            ================================================================ */
-                .login-container-card {
-            background: #FFFFFF;
-            border: 1px solid #CBD1DA;
-            border-radius: 12px;
-            max-width: 440px;
-            width: 100%;
-            padding: 32px;
-            box-shadow: 0 12px 36px rgba(10, 22, 40, 0.16);
-            margin: 24px auto;
-            text-align: left;
-            position: relative;
-            z-index: 5;
-            box-sizing: border-box;
+        .sidebar {
+            background: linear-gradient(180deg, #0F2942 0%, #10476E 58%, #0A1E32 100%) !important;
         }
-        .login-input {
-            width: 100% !important;
-            padding: 12px 14px !important;
-            font-size: 14px !important;
-            border: 1.5px solid #CBD1DA !important;
-            border-radius: 8px !important;
-            margin-bottom: 14px !important;
-            background: #FFFFFF !important;
-            color: #1B2431 !important;
-            box-sizing: border-box !important;
-        }
-        .login-input:focus {
-            border-color: #E8600A !important;
-            box-shadow: 0 0 0 3px rgba(232, 96, 10, 0.15) !important;
-        }
-        .login-btn-submit {
-            background: #E8600A !important;
-            border: none !important;
+        .nav-link.active {
+            background: linear-gradient(90deg, #008160 0%, #048490 100%) !important;
             color: #FFFFFF !important;
-            font-weight: 700 !important;
-            font-size: 14px !important;
-            padding: 12px 20px !important;
-            border-radius: 8px !important;
+            box-shadow: 0 4px 12px rgba(0, 129, 96, 0.32) !important;
+        }
+        .btn-primary {
+            background: linear-gradient(90deg, #008160 0%, #048490 55%, #10476E 100%) !important;
+            border-color: #008160 !important;
+            color: #FFFFFF !important;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: linear-gradient(90deg, #00664B 0%, #02837C 55%, #0D3858 100%) !important;
+        }
+        .login-container-card, .unified-login-card {
+            background: linear-gradient(180deg, #FFFFFF 0%, #F4F8F9 100%) !important;
+            border: 1.5px solid #D8E4E8 !important;
+            border-top: 5px solid #008160 !important;
+            border-radius: 16px !important;
+            max-width: 460px !important;
             width: 100% !important;
-            cursor: pointer !important;
-            display: flex !important;
-            align-items: center !important;
-            justify-content: center !important;
-            gap: 8px !important;
-            transition: background 0.2s ease !important;
-        }
-        .login-btn-submit:hover {
-            background: #C94F06 !important;
-        }
-        .login-btn-submit:disabled {
-            background: #CBD1DA !important;
-            cursor: not-allowed !important;
-        }
-        .unified-login-card {
-            width: 100%;
-            max-width: 480px;
-            margin: 24px auto 32px;
-            background: #FFFFFF;
-            border: 1px solid rgba(226, 232, 240, 0.95);
-            border-radius: 14px;
-            padding: 34px 32px 24px;
-            box-shadow: 0 20px 45px -12px rgba(10, 22, 40, 0.22), 0 0 0 1px rgba(0, 0, 0, 0.04);
+            padding: 34px 32px 26px !important;
+            box-shadow: 0 24px 52px rgba(10, 30, 50, 0.32), 0 0 0 1px rgba(4, 132, 144, 0.12) !important;
+            margin: 24px auto 32px !important;
+            text-align: left;
             position: relative;
             z-index: 10;
             box-sizing: border-box;
         }
-        .ulc-header {
-            text-align: center;
-            margin-bottom: 24px;
+        .login-input, .ulc-input {
+            width: 100% !important;
+            padding: 12px 14px !important;
+            font-size: 14px !important;
+            font-family: inherit;
+            border: 1.5px solid #BCCFD6 !important;
+            border-radius: 9px !important;
+            background: #FFFFFF !important;
+            color: #0F2942 !important;
+            transition: all 0.18s ease !important;
+            outline: none !important;
+            box-sizing: border-box !important;
         }
-        .ulc-icon {
-            width: 54px;
-            height: 54px;
-            margin: 0 auto 12px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, rgba(232, 96, 10, 0.12), rgba(232, 96, 10, 0.04));
-            border: 1px solid rgba(232, 96, 10, 0.25);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 22px;
-            color: var(--orange);
-        }
-        .ulc-title {
-            font-size: 20px;
-            font-weight: 800;
-            color: var(--navy);
-            letter-spacing: -0.3px;
-            margin-bottom: 5px;
-        }
-        .ulc-sub {
-            font-size: 13px;
-            color: var(--text-muted);
-            line-height: 1.4;
-        }
-        .ulc-error-banner {
-            background: #FEF2F2;
-            border: 1px solid #FCA5A5;
-            border-left: 4px solid #EF4444;
-            color: #991B1B;
-            padding: 12px 14px;
-            border-radius: 8px;
-            font-size: 13px;
-            line-height: 1.45;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: flex-start;
-            gap: 10px;
-        }
-        .ulc-field {
-            margin-bottom: 18px;
-            text-align: left;
-        }
-        .ulc-field label {
-            display: block;
-            font-size: 12px;
-            font-weight: 700;
-            color: var(--navy);
-            margin-bottom: 6px;
-            text-transform: uppercase;
-            letter-spacing: 0.4px;
-        }
-        .ulc-field label i {
-            color: var(--orange);
-            margin-right: 4px;
+        .login-input:focus, .ulc-input:focus {
+            background: #FFFFFF !important;
+            border-color: #008160 !important;
+            box-shadow: 0 0 0 3.5px rgba(0, 129, 96, 0.18) !important;
         }
         .ulc-input-wrapper {
-            position: relative;
-            display: flex;
-            align-items: center;
+            position: relative !important;
+            display: flex !important;
+            align-items: center !important;
+            width: 100% !important;
         }
-        .ulc-input {
-            width: 100%;
-            padding: 11px 14px;
-            font-size: 14px;
-            font-family: inherit;
-            border: 1.5px solid #CBD5E1;
+        #togglePasswordBtn, .ulc-toggle-pwd {
+            position: absolute !important;
+            right: 12px !important;
+            background: none !important;
+            border: none !important;
+            cursor: pointer !important;
+            color: #4A6070 !important;
+            padding: 6px !important;
+            font-size: 14.5px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            transition: color 0.15s ease !important;
+        }
+        #togglePasswordBtn:hover, .ulc-toggle-pwd:hover {
+            color: #008160 !important;
+        }
+        .login-btn-submit, .ulc-submit-btn {
+            width: 100% !important;
+            padding: 13px 20px !important;
+            background: linear-gradient(90deg, #008160 0%, #02837C 35%, #048490 65%, #10476E 100%) !important;
+            color: #FFFFFF !important;
+            font-size: 14.5px !important;
+            font-weight: 700 !important;
+            font-family: inherit !important;
+            border: none !important;
+            border-radius: 9px !important;
+            cursor: pointer !important;
+            box-shadow: 0 6px 18px rgba(0, 129, 96, 0.32) !important;
+            transition: all 0.18s ease !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            gap: 8px !important;
+            margin-top: 8px !important;
+        }
+        .login-btn-submit:hover:not(:disabled), .ulc-submit-btn:hover:not(:disabled) {
+            background: linear-gradient(90deg, #00664B 0%, #01826D 40%, #096C84 75%, #0D3858 100%) !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 8px 22px rgba(4, 132, 144, 0.42) !important;
+        }
+        .login-btn-submit:disabled, .ulc-submit-btn:disabled {
+            background: #BCCFD6 !important;
+            cursor: not-allowed !important;
+            transform: none !important;
+            box-shadow: none !important;
+            opacity: 0.75 !important;
+        }
+        .ulc-error-banner {
+            background: #FBEAE9;
+            border: 1px solid #F1C4C1;
+            border-left: 4px solid #B3261E;
+            color: #B3261E;
+            padding: 11px 13px;
             border-radius: 8px;
-            background: #F8FAFC;
-            color: var(--navy);
-            transition: all 0.15s ease;
-            outline: none;
-            box-sizing: border-box;
-        }
-        .ulc-input:focus {
-            background: #FFFFFF;
-            border-color: var(--orange);
-            box-shadow: 0 0 0 3px rgba(232, 96, 10, 0.15);
-        }
-        .ulc-toggle-pwd {
-            position: absolute;
-            right: 12px;
-            background: none;
-            border: none;
-            cursor: pointer;
-            color: #94A3B8;
-            padding: 4px;
-            font-size: 14px;
-        }
-        .ulc-toggle-pwd:hover {
-            color: var(--navy);
-        }
-        .ulc-link-btn {
-            background: none;
-            border: none;
-            padding: 0;
-            font-size: 11.5px;
+            font-size: 12.5px;
+            line-height: 1.45;
+            margin-bottom: 14px;
             font-weight: 600;
-            color: var(--orange);
-            cursor: pointer;
-            font-family: inherit;
-            text-decoration: underline;
+            display: none;
+            align-items: flex-start;
+            gap: 9px;
         }
-        .ulc-link-btn:hover {
-            color: var(--orange-dark);
-        }
-        .ulc-submit-btn {
-            width: 100%;
-            padding: 13px 20px;
-            background: linear-gradient(135deg, #E8600A 0%, #C94F06 100%);
-            color: #FFFFFF;
-            font-size: 14.5px;
-            font-weight: 700;
-            font-family: inherit;
-            border: none;
+        .ulc-success-banner {
+            background: #E6F5F0;
+            border: 1px solid #B3E2D4;
+            border-left: 4px solid #008160;
+            color: #087F5C;
+            padding: 11px 13px;
             border-radius: 8px;
-            cursor: pointer;
-            box-shadow: 0 4px 14px rgba(232, 96, 10, 0.35);
-            transition: all 0.15s ease;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            margin-top: 8px;
+            font-size: 12.5px;
+            line-height: 1.45;
+            margin-bottom: 14px;
+            font-weight: 600;
+            display: none;
+            align-items: flex-start;
+            gap: 9px;
         }
-        .ulc-submit-btn:hover:not(:disabled) {
-            transform: translateY(-1px);
-            box-shadow: 0 6px 18px rgba(232, 96, 10, 0.45);
-        }
-        .ulc-submit-btn:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-        .ulc-compliance-footer {
-            margin-top: 24px;
-            padding-top: 16px;
-            border-top: 1px solid #E2E8F0;
-            font-size: 11px;
-            color: #64748B;
-            text-align: center;
-            line-height: 1.5;
-        }
-        #landingRoleSection, #roleCardsGrid, #roleFilterTabs, .role-grid {
+        #landingRoleSection, #roleCardsGrid, #roleFilterTabs, .role-grid, #quickPersonaDropdown, .persona-switcher {
             display: none !important;
         }
     </style>
@@ -4846,9 +4796,11 @@
         <i class="fa-solid fa-clipboard-check landing-decor d6"></i>
 
         <div class="landing-brand">
-            <div class="landing-mark"><i class="fa-solid fa-shield-halved"></i></div>
+            <div style="background:#FFFFFF; padding:10px 24px; border-radius:14px; box-shadow:0 8px 26px rgba(10,30,50,0.28); margin-bottom:14px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(4,132,144,0.22);">
+                <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢ Official Logo" style="height:46px; width:auto; object-fit:contain; display:block;">
+            </div>
             <h1 class="landing-title">
-                <i class="fa-solid fa-shield-heart" style="color:var(--orange);font-size:24px;"></i>
+                <i class="fa-solid fa-shield-heart" style="color:#4ADE80;font-size:24px;"></i>
                 ARPL Digital Permit-to-Work Portal
             </h1>
             <p class="landing-sub">
@@ -4916,28 +4868,31 @@
                 <!-- UNIFIED SIGN-IN CONTAINER -->
         <div class="login-container-card unified-login-card" id="unifiedLoginCard">
             <div style="text-align: center; margin-bottom: 20px;">
-                <div class="ulc-icon" style="margin-bottom:12px;"><i class="fa-solid fa-shield-halved"></i></div>
-                <h2 style="font-size: 19px; font-weight: 800; color: #0A1628; margin: 0 0 4px;">ARPL EHS Enterprise Sign-In</h2>
-                <p style="font-size: 12px; color: #5B6472; margin: 0;">Auro Realty Digital Safety &amp; Statutory Governance Portal</p>
+                <div style="display:flex; justify-content:center; align-items:center; margin-bottom:12px; padding:8px 16px; background:#FFFFFF; border-radius:12px; border:1px solid #EBF4F6; box-shadow:0 2px 10px rgba(16,71,110,0.06);">
+                    <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢ Official Logo" style="height: 48px; width: auto; object-fit: contain; display: block;">
+                </div>
+                <h2 style="font-size: 19px; font-weight: 800; color: var(--brand-secondary, #10476E); margin: 0 0 4px;">ARPL EHS Enterprise Sign-In</h2>
+                <p style="font-size: 12px; color: var(--text-muted, #4A6070); margin: 0;">Auro Realty Digital Safety &amp; Statutory Governance Portal</p>
             </div>
             
-            <div id="loginErrorBanner" class="ulc-error-banner" style="display:none; background:#FBEAE9; border:1px solid #F1C4C1; color:#B3261E; padding:10px 12px; border-radius:8px; font-size:12.5px; margin-bottom:14px; font-weight:600;"></div>
+            <div id="loginErrorBanner" class="ulc-error-banner" role="alert" style="display:none;"></div>
+            <div id="loginSuccessBanner" class="ulc-success-banner" role="status" style="display:none;"></div>
             <div id="unifiedLoginError" style="display:none;"></div>
 
-            <form id="unifiedLoginForm" onsubmit="submitUnifiedLogin(event); return false;">
-                <div style="margin-bottom: 12px;">
-                    <label style="display:block; font-size:11.5px; font-weight:700; color:#0A1628; margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px;"><i class="fa-solid fa-envelope" style="color:var(--orange);margin-right:4px;"></i> Official Email ID *</label>
-                    <input class="login-input ulc-input" id="loginEmail" type="email" placeholder="e.g. name@aurorealty.com" required autocomplete="username">
+            <form id="unifiedLoginForm" onsubmit="submitUnifiedLogin(event); return false;" novalidate>
+                <div style="margin-bottom: 14px;">
+                    <label for="loginEmail" style="display:block; font-size:11.5px; font-weight:700; color:var(--navy, #0F2942); margin-bottom:6px; text-transform:uppercase; letter-spacing:0.3px;"><i class="fa-solid fa-envelope" style="color:var(--brand-primary, #008160);margin-right:4px;"></i> Official Email ID *</label>
+                    <input class="login-input ulc-input" id="loginEmail" type="email" placeholder="e.g. name@aurorealty.com" required autocomplete="username" style="margin-bottom:0 !important;" oninput="this.style.borderColor=''; this.style.boxShadow='';" onkeydown="if(event.key==='Enter'){ event.preventDefault(); submitUnifiedLogin(event); }">
                 </div>
                 
-                <div style="margin-bottom: 16px;">
+                <div style="margin-bottom: 18px;">
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                        <label style="font-size:11.5px; font-weight:700; color:#0A1628; text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0;"><i class="fa-solid fa-lock" style="color:var(--orange);margin-right:4px;"></i> Password *</label>
-                        <a href="#" id="unifiedForgotPassBtn" onclick="handleForgotPassword(event)" style="font-size:11px; color:#E8600A; font-weight:700; text-decoration:underline;">Forgot Password?</a>
+                        <label for="loginPassword" style="font-size:11.5px; font-weight:700; color:var(--navy, #0F2942); text-transform:uppercase; letter-spacing:0.3px; margin-bottom:0;"><i class="fa-solid fa-lock" style="color:var(--brand-primary, #008160);margin-right:4px;"></i> Password *</label>
+                        <a href="#" id="forgotPasswordLink" onclick="handleForgotPassword(event); return false;" style="font-size:11.5px; color:var(--brand-primary, #008160); font-weight:700; text-decoration:underline; cursor:pointer;">Forgot Password?</a>
                     </div>
-                    <div class="ulc-input-wrapper">
-                        <input class="login-input ulc-input" id="loginPassword" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required autocomplete="current-password" onkeydown="if(event.key==='Enter') submitUnifiedLogin(event)">
-                        <button type="button" class="ulc-toggle-pwd" onclick="togglePasswordVisibility('loginPassword', this)" title="Show/Hide Password">
+                    <div class="ulc-input-wrapper" style="position: relative; display: flex; align-items: center;">
+                        <input class="login-input ulc-input" id="loginPassword" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required autocomplete="current-password" style="margin-bottom:0 !important; padding-right:42px !important;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); submitUnifiedLogin(event); }">
+                        <button type="button" id="togglePasswordBtn" class="ulc-toggle-pwd" aria-label="Toggle password visibility" onclick="togglePasswordVisibility('loginPassword', this)" title="Show/Hide Password" style="position: absolute; right: 12px; background: none; border: none; cursor: pointer;">
                             <i class="fa-solid fa-eye"></i>
                         </button>
                     </div>
@@ -4949,8 +4904,8 @@
                 </button>
             </form>
 
-            <div style="border-top: 1px solid #CBD1DA; margin: 20px 0 10px; padding-top: 12px; text-align: center; font-size: 11px; color: #5B6472; line-height: 1.5;">
-                <i class="fa-solid fa-shield-check" style="color:var(--green);"></i> Protected by Firebase Authentication &bull; Data Residency: <strong>asia-south1 (Mumbai)</strong> &bull; DPDP Act 2023 Compliant
+            <div style="border-top: 1px solid #D8E4E8; margin: 20px 0 6px; padding-top: 12px; text-align: center; font-size: 11px; color: #4A6070; line-height: 1.5;">
+                <i class="fa-solid fa-shield-check" style="color:var(--brand-primary, #008160);"></i> Protected by Firebase Authentication &bull; Data Residency: <strong>asia-south1 (Mumbai)</strong> &bull; DPDP Act 2023 Compliant
             </div>
         </div>
 
@@ -5028,6 +4983,9 @@
             <div class="topbar">
                 <button class="icon-btn no-print" id="mobileNavBtn" style="display:none;" onclick="toggleMobileNav()"
                     title="Menu"><i class="fa-solid fa-bars"></i></button>
+                <div class="no-print" style="display:inline-flex;align-items:center;padding:3px 10px;background:#FFFFFF;border:1px solid #D8E4E8;border-radius:8px;margin-right:6px;flex-shrink:0;">
+                    <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢" style="height:26px;width:auto;object-fit:contain;display:block;">
+                </div>
                 <div style="flex-shrink:0;min-width:140px;">
                     <div class="topbar-title" id="topbarTitle">Dashboard</div>
                     <div class="topbar-sub" id="topbarSub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">Overview</div>
@@ -13645,14 +13603,16 @@
             'hw-section-head': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
             'mep': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
             'pm': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
+            'it': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
             'quality-engineer': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
             'project-manager': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'notifications'],
 
-            'ehs-officer': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'statutory-pdf', 'audit-log', 'analytics', 'notifications'],
-            'ehs-manager': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'statutory-pdf', 'audit-log', 'analytics', 'notifications'],
+            'ehs-officer': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'statutory-pdf', 'notifications'],
+            'ehs-manager': ['dashboard', 'register', 'permits', 'detail', 'permit-detail', 'approvals', 'statutory-pdf', 'notifications'],
 
             'admin': ['dashboard', 'admin-config', 'geofence', 'users', 'role-empanelment', 'register', 'permits', 'detail', 'permit-detail', 'reports-mis', 'notifications'],
-            'super-admin': ['dashboard', 'projects', 'project-admins', 'users', 'roles-permissions', 'approval-workflows', 'register', 'permits', 'reports-mis', 'audit-logs', 'system-settings', 'notifications', 'detail', 'permit-detail', 'admin-config']
+            'project-admin': ['dashboard', 'admin-config', 'geofence', 'users', 'role-empanelment', 'register', 'permits', 'detail', 'permit-detail', 'reports-mis', 'notifications'],
+            'super-admin': ['dashboard', 'super-admin', 'projects', 'project-admins', 'users', 'roles-permissions', 'approval-workflows', 'register', 'permits', 'reports-mis', 'audit-logs', 'system-settings', 'notifications', 'detail', 'permit-detail', 'admin-config']
         };
 
         function normalizeViewName(view) {
@@ -13668,7 +13628,8 @@
 
         function isRouteAllowedForRole(roleKey, view) {
             if (!roleKey) return false;
-            const allowed = ROLE_PERMITTED_ROUTES[roleKey];
+            const normRole = (roleKey === 'project-admin' || roleKey === 'site-admin') ? 'admin' : roleKey;
+            const allowed = ROLE_PERMITTED_ROUTES[normRole];
             if (!allowed) return false;
             if (allowed.includes(view)) return true;
             const norm = normalizeViewName(view);
@@ -13677,15 +13638,17 @@
             return false;
         }
 
-        window.PROJECT_MASTER = window.PROJECT_MASTER || {
-            'PRJ-PEARL': { id: 'PRJ-PEARL', name: 'The Pearl' },
-            'PRJ-REGENT': { id: 'PRJ-REGENT', name: 'The Regent' },
-            'PRJ-SA': { id: 'PRJ-SA', name: 'Sky Villas' },
-            'PRJ-KUBERA': { id: 'PRJ-KUBERA', name: 'Kubera Towers' }
-        };
+        window.PROJECT_MASTER = window.PROJECT_MASTER || window.PROJECTS || [
+            { id: 'PRJ-PEARL', name: 'The Pearl' },
+            { id: 'PRJ-REGENT', name: 'The Regent' },
+            { id: 'PRJ-SANSA', name: 'Sansa County' },
+            { id: 'PRJ-SA', name: 'Sansa County' }
+        ];
 
         function resolveProjectName(projId) {
             if (!projId) return 'The Pearl';
+            if (projId === 'PRJ-MASTER') return 'All Projects (Enterprise Master)';
+            if (projId === 'PRJ-SANSA' || projId === 'PRJ-SA') return 'Sansa County';
             try {
                 if (typeof getProject === 'function') {
                     const p = getProject(projId);
@@ -13695,8 +13658,13 @@
                     const p = PROJECTS.find(x => x.id === projId || x.name === projId);
                     if (p && p.name) return p.name;
                 }
-                if (window.PROJECT_MASTER && window.PROJECT_MASTER[projId]) {
-                    return window.PROJECT_MASTER[projId].name || window.PROJECT_MASTER[projId];
+                if (window.PROJECT_MASTER) {
+                    if (Array.isArray(window.PROJECT_MASTER)) {
+                        const pm = window.PROJECT_MASTER.find(x => x && (x.id === projId || x.name === projId));
+                        if (pm && pm.name) return pm.name;
+                    } else if (window.PROJECT_MASTER[projId]) {
+                        return window.PROJECT_MASTER[projId].name || window.PROJECT_MASTER[projId];
+                    }
                 }
             } catch (e) {
                 console.warn('Error resolving project name for', projId, e);
@@ -13705,9 +13673,8 @@
         }
 
         function buildRoleCards() {
-            // Enterprise mode: Demo role cards are permanently disabled.
-            const grid = document.getElementById('roleCardsGrid');
-            if (grid) grid.innerHTML = '';
+            // Enterprise RBAC: Demo role cards are permanently removed.
+            document.querySelectorAll('#roleCardsGrid, #landingRoleSection, #roleFilterTabs, .role-grid, #quickPersonaDropdown, .persona-switcher').forEach(el => el.remove());
         }
 
         function setLoginButtonLoading(isLoading) {
@@ -13720,25 +13687,68 @@
             if (spn) spn.style.display = isLoading ? 'inline-flex' : 'none';
         }
 
-                function showLoginError(msg) {
+        function showLoginError(msg) {
+            const succBanner = document.getElementById('loginSuccessBanner');
+            if (succBanner) { succBanner.style.display = 'none'; succBanner.innerHTML = ''; }
             const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
             if (!errBanner) return;
-            if (msg && msg.indexOf('PROJECT_MASTER') !== -1) {
-                msg = 'Enterprise security initialized. Please click Sign In to continue.';
+            let safeMsg = String(msg || 'Authentication failed. Please check your credentials.');
+            if (safeMsg.indexOf('PROJECT_MASTER') !== -1 || safeMsg.indexOf("Can't find variable") !== -1 || safeMsg.indexOf('{') !== -1) {
+                safeMsg = 'Unable to sign in with the provided credentials. Please verify your email and password.';
             }
-            errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size:15px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(msg) + '</div>';
+            errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size:15px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(safeMsg) + '</div>';
             errBanner.style.display = 'flex';
         }
 
+        function showLoginSuccess(msg) {
+            const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
+            if (errBanner) { errBanner.style.display = 'none'; errBanner.innerHTML = ''; }
+            const succBanner = document.getElementById('loginSuccessBanner');
+            if (!succBanner) return;
+            succBanner.innerHTML = '<i class="fa-solid fa-circle-check" style="font-size:15px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(msg) + '</div>';
+            succBanner.style.display = 'flex';
+        }
+
         function togglePasswordVisibility(inputId, btn) {
-            const input = document.getElementById(inputId);
+            const input = document.getElementById(inputId || 'loginPassword');
+            const button = btn || document.getElementById('togglePasswordBtn');
             if (!input) return;
             const isPassword = input.type === 'password';
             input.type = isPassword ? 'text' : 'password';
-            const icon = btn.querySelector('i');
-            if (icon) {
-                icon.className = isPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+            if (button) {
+                const icon = button.querySelector('i');
+                if (icon) {
+                    icon.className = isPassword ? 'fa-solid fa-eye-slash' : 'fa-solid fa-eye';
+                } else {
+                    button.innerHTML = isPassword ? '<i class="fa-solid fa-eye-slash"></i>' : '<i class="fa-solid fa-eye"></i>';
+                }
             }
+        }
+        window.togglePasswordVisibility = togglePasswordVisibility;
+
+        function mapFirebaseAuthErrorMessage(err) {
+            if (!err) return 'Authentication failed. Please verify your email and password.';
+            const code = err.code || '';
+            const rawMsg = String(err.message || '');
+            if (code === 'auth/invalid-credential' || code === 'auth/wrong-password' || code === 'auth/user-not-found' || rawMsg.indexOf('INVALID_LOGIN_CREDENTIALS') !== -1) {
+                return 'Invalid official email ID or password. Please check your credentials and try again.';
+            }
+            if (code === 'auth/invalid-email') {
+                return 'Please enter a valid official email address (e.g., name@aurorealty.com).';
+            }
+            if (code === 'auth/too-many-requests') {
+                return 'Account temporarily locked due to multiple failed sign-in attempts. Please use "Forgot Password?" or wait a few minutes.';
+            }
+            if (code === 'auth/network-request-failed') {
+                return 'Network connection error. Please check your internet or corporate network connection and try again.';
+            }
+            if (code === 'auth/user-disabled') {
+                return 'This EHS account has been disabled by your administrator. Please contact IT/EHS Governance.';
+            }
+            if (rawMsg.indexOf('Access Denied:') === 0) {
+                return rawMsg;
+            }
+            return 'Sign-in could not be completed. Please verify your credentials and try again.';
         }
 
         async function handleUnifiedLogin(e) {
@@ -13746,10 +13756,10 @@
             const emailInput = document.getElementById('loginEmail') || document.getElementById('unifiedLoginEmail');
             const passInput = document.getElementById('loginPassword') || document.getElementById('unifiedLoginPassword');
             const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
-            if (errBanner) {
-                errBanner.style.display = 'none';
-                errBanner.innerHTML = '';
-            }
+            const succBanner = document.getElementById('loginSuccessBanner');
+            if (errBanner) { errBanner.style.display = 'none'; errBanner.innerHTML = ''; }
+            if (succBanner) { succBanner.style.display = 'none'; succBanner.innerHTML = ''; }
+
             const email = (emailInput ? emailInput.value : '').trim();
             const password = passInput ? passInput.value : '';
 
@@ -13762,22 +13772,31 @@
 
             try {
                 if (typeof firebase === 'undefined' || !firebase.auth) {
-                    throw new Error('Firebase Authentication SDK is not initialized.');
+                    throw new Error('Firebase Authentication service is initializing.');
                 }
 
-                // 1. Authenticate against Firebase Auth
-                const cred = await firebase.auth().signInWithEmailAndPassword(email, password);
+                // 1. Authenticate against Firebase Auth (with automatic trim fallback for mobile paste)
+                let cred;
+                try {
+                    cred = await firebase.auth().signInWithEmailAndPassword(email, password);
+                } catch (firstErr) {
+                    if (password !== password.trim() && (firstErr.code === 'auth/invalid-credential' || firstErr.code === 'auth/wrong-password')) {
+                        cred = await firebase.auth().signInWithEmailAndPassword(email, password.trim());
+                    } else {
+                        throw firstErr;
+                    }
+                }
                 const user = cred.user;
 
-                // 2. Force token refresh to get up-to-date claims
-                const tokenResult = await user.getIdTokenResult(true);
-                const claims = tokenResult.claims || {};
+                // 2. Force token refresh to extract authoritative Custom Claims
+                const tokenRes = await user.getIdTokenResult(true);
+                const claims = tokenRes.claims || {};
 
                 // 3. Resolve role & project scope
                 let resolvedRole = claims.role || claims.ptwRole || null;
                 let resolvedProjectId = claims.projectId || null;
 
-                // Secondary source: Firestore /users/{uid} fallback
+                // Fallback to Firestore users/{user.uid} if claims are not yet propagated
                 if (!resolvedRole || !resolvedProjectId) {
                     if (firebase.firestore) {
                         try {
@@ -13788,12 +13807,12 @@
                                 if (!resolvedProjectId && d.projectId) resolvedProjectId = d.projectId;
                             }
                         } catch (fsErr) {
-                            console.warn('Firestore fallback user query failed:', fsErr);
+                            console.warn('Firestore fallback user query notice:', fsErr);
                         }
                     }
                 }
 
-                // Emergency Super Admin bootstrap check
+                // Authoritative Super Admin safeguard
                 if (user.email && user.email.toLowerCase() === 'ehs.superadmin@aurorealty.com') {
                     resolvedRole = 'super-admin';
                     resolvedProjectId = resolvedProjectId || 'PRJ-MASTER';
@@ -13805,7 +13824,7 @@
                     throw new Error('Access Denied: Your account has not been assigned an EHS role by your Project Administrator.');
                 }
 
-                // Role Key Normalization: map project-admin or site-admin to frontend admin
+                // Normalize 'project-admin' or 'site-admin' -> 'admin' for UI rendering
                 let uiRoleKey = resolvedRole;
                 if (resolvedRole === 'project-admin' || resolvedRole === 'site-admin') {
                     uiRoleKey = 'admin';
@@ -13827,39 +13846,67 @@
             } catch (err) {
                 console.error('Unified login error:', err);
                 setLoginButtonLoading(false);
-                let msg = err.message || 'Authentication failed. Please check your credentials.';
-                if (err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password' || err.code === 'auth/user-not-found') {
-                    msg = 'Invalid email or password. Please verify your credentials.';
-                } else if (err.code === 'auth/too-many-requests') {
-                    msg = 'Account temporarily locked due to consecutive failed attempts. Please reset password or try again later.';
-                } else if (err.code === 'auth/network-request-failed') {
-                    msg = 'Network connection error. Please ensure you are connected to the corporate network.';
-                }
-                showLoginError(msg);
+                showLoginError(mapFirebaseAuthErrorMessage(err));
             }
         }
 
-        async function handleUnifiedForgotPassword() {
-            const emailInput = document.getElementById('unifiedLoginEmail');
-            let email = emailInput ? emailInput.value.trim() : '';
-            if (!email) {
-                email = prompt('Enter your official ARPL email address to receive a secure password reset link:');
-                if (!email) return;
-                email = email.trim();
+        async function handleUnifiedForgotPassword(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            const emailInput = document.getElementById('loginEmail') || document.getElementById('unifiedLoginEmail');
+            const forgotLink = document.getElementById('forgotPasswordLink') || document.getElementById('unifiedForgotPassBtn');
+            const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
+            const succBanner = document.getElementById('loginSuccessBanner');
+            if (errBanner) { errBanner.style.display = 'none'; errBanner.innerHTML = ''; }
+            if (succBanner) { succBanner.style.display = 'none'; succBanner.innerHTML = ''; }
+
+            const email = emailInput ? emailInput.value.trim() : '';
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+            if (!email || !emailRegex.test(email)) {
+                if (emailInput) {
+                    emailInput.style.borderColor = '#B3261E';
+                    emailInput.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.18)';
+                    emailInput.focus();
+                }
+                showLoginError("Please enter your registered official email address above first, then click 'Forgot Password?' to receive a reset link.");
+                return false;
             }
+
+            if (emailInput) {
+                emailInput.style.borderColor = '';
+                emailInput.style.boxShadow = '';
+            }
+
+            if (forgotLink) {
+                forgotLink.style.pointerEvents = 'none';
+                forgotLink.style.opacity = '0.55';
+            }
+
             try {
                 if (typeof firebase === 'undefined' || !firebase.auth) {
                     throw new Error('Firebase Authentication is not ready.');
                 }
                 await firebase.auth().sendPasswordResetEmail(email);
-                showToast('Password reset link has been dispatched to ' + email + '. Check your inbox.', 'ok');
+                showLoginSuccess('Password reset link sent to ' + email + '. Please check your inbox and spam folder.');
+                if (typeof showToast === 'function') {
+                    showToast('Password reset link sent to ' + email, 'ok');
+                }
+                return true;
             } catch (err) {
                 console.error('Password reset error:', err);
-                showToast('Password reset failed: ' + (err.message || 'Unknown error'), 'err');
+                showLoginError(mapFirebaseAuthErrorMessage(err));
+                return false;
+            } finally {
+                if (forgotLink) {
+                    setTimeout(() => {
+                        forgotLink.style.pointerEvents = 'auto';
+                        forgotLink.style.opacity = '1';
+                    }, 1200);
+                }
             }
         }
 
-                function submitUnifiedLogin(e) {
+        function submitUnifiedLogin(e) {
             if (e && e.preventDefault) e.preventDefault();
             return handleUnifiedLogin(e);
         }
@@ -13867,15 +13914,13 @@
 
         function handleForgotPassword(e) {
             if (e && e.preventDefault) e.preventDefault();
-            return handleUnifiedForgotPassword();
+            return handleUnifiedForgotPassword(e);
         }
         window.handleForgotPassword = handleForgotPassword;
 
         function completeAuthenticatedLogin(safeUser) {
-            // 1. Remove Persona Switcher UI permanently
-            const personaDropdown = document.getElementById('quickPersonaDropdown');
-            if (personaDropdown) personaDropdown.remove();
-            document.querySelectorAll('.persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid').forEach(el => el.remove());
+            // 1. Remove Persona Switcher & Demo Role UI permanently
+            document.querySelectorAll('#quickPersonaDropdown, .persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid, #landingRoleSection').forEach(el => el.remove());
 
             // 2. Set Active Session badge in top navigation
             const rb = document.getElementById('roleBadgeValue');
@@ -13888,24 +13933,22 @@
             const rLabel = document.querySelector('.role-badge-label');
             if (rLabel) rLabel.textContent = 'Active Session';
 
-            // 3. Set global currentUser
-            currentUser = Object.assign({}, safeUser);
-            window.currentUser = currentUser;
+            // 3. Set and freeze global currentUser (Immutable RBAC Session)
+            const frozenUser = Object.freeze(Object.assign({}, safeUser));
+            currentUser = frozenUser;
+            window.currentUser = frozenUser;
 
-            // 4. Disable legacy role switching and manual in-memory logins
-            window.switchRole = function () {
-                console.warn('Blocked: Role switching is disabled in production enterprise environment.');
-                if (typeof showToast === 'function') {
-                    showToast('Unauthorized: Persona switching is disabled. You must log out to switch accounts.', 'warn');
-                }
+            // 4. Permanently disable role switching and manual in-memory logins
+            window.switchRole = () => {
+                console.warn('RBAC: Role switching is permanently disabled.');
                 return false;
             };
-            window.doLogin = function () {
-                console.warn('Blocked: Direct in-memory login disabled.');
+            window.doLogin = () => {
+                console.warn('RBAC: Direct in-memory login is permanently disabled.');
                 return false;
             };
 
-            // 5. Worksite Project Scope Isolation
+            // 5. Worksite Project Scope Isolation (PRJ-PEARL, PRJ-REGENT, PRJ-SANSA)
             if (safeUser.key !== 'super-admin') {
                 const regProj = document.getElementById('regProjectFilter');
                 if (regProj) {
@@ -13985,6 +14028,7 @@
                 console.warn('Sign out warning:', e);
             }
             currentUser = null;
+            window.currentUser = null;
             currentDetailId = null;
 
             closeModal('actionModal');
@@ -13996,12 +14040,20 @@
             document.getElementById('appRoot').style.display = 'none';
             document.getElementById('landingScreen').style.display = 'flex';
 
-            const pInput = document.getElementById('unifiedLoginPassword');
-            if (pInput) pInput.value = '';
-            const errBanner = document.getElementById('unifiedLoginError');
+            const pInput = document.getElementById('loginPassword') || document.getElementById('unifiedLoginPassword');
+            if (pInput) {
+                pInput.value = '';
+                pInput.type = 'password';
+            }
+            const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
             if (errBanner) {
                 errBanner.style.display = 'none';
                 errBanner.innerHTML = '';
+            }
+            const succBanner = document.getElementById('loginSuccessBanner');
+            if (succBanner) {
+                succBanner.style.display = 'none';
+                succBanner.innerHTML = '';
             }
             setLoginButtonLoading(false);
 
@@ -14011,21 +14063,23 @@
         }
 
         function switchRole(roleKey) {
-            console.warn('Blocked: Role switching is disabled in production.');
-            showToast('Unauthorized: Persona switching is disabled. You must log out to switch accounts.', 'warn');
+            console.warn('RBAC: Role switching is permanently disabled.');
             return false;
         }
+        window.switchRole = switchRole;
 
         function doLogin(roleKey) {
-            console.warn('Blocked: Direct in-memory login disabled.');
+            console.warn('RBAC: Direct in-memory login is permanently disabled.');
             return false;
         }
+        window.doLogin = doLogin;
 
         /* ================================================================
            NAVIGATION
            ================================================================ */
         function navItemsFor(roleKey) {
-            if (roleKey === 'super-admin') {
+            const normKey = (roleKey === 'project-admin' || roleKey === 'site-admin') ? 'admin' : roleKey;
+            if (normKey === 'super-admin') {
                 return [
                     { id: 'dashboard', label: 'Executive Dashboard', icon: 'fa-gauge-high' },
                     { id: 'projects', label: 'Projects Master', icon: 'fa-building' },
@@ -14040,7 +14094,7 @@
                     { id: 'notifications', label: 'Notifications', icon: 'fa-bell', badge: true }
                 ];
             }
-            if (roleKey === 'admin') {
+            if (normKey === 'admin') {
                 return [
                     { id: 'dashboard', label: 'Site Dashboard', icon: 'fa-gauge-high' },
                     { id: 'admin-config', label: 'Worksite GPS & Geofence', icon: 'fa-map-location-dot' },
@@ -14051,7 +14105,7 @@
                 ];
             }
             const items = [{ id: 'dashboard', label: 'Dashboard', icon: 'fa-gauge-high' }];
-            if (['site-supervisor', 'electrician', 'blasting-incharge', 'lift-supervisor', 'night-supervisor'].includes(roleKey)) {
+            if (['site-supervisor', 'electrician', 'blasting-incharge', 'lift-supervisor', 'night-supervisor'].includes(normKey)) {
                 if (isSunday()) {
                     items.push({ id: 'ptype-locked', label: 'Create (Locked)', icon: 'fa-lock', isLocked: true });
                 } else {
@@ -14061,11 +14115,11 @@
                     }
                 }
             }
-            items.push({ id: 'register', label: (['site-supervisor', 'electrician', 'blasting-incharge', 'lift-supervisor', 'night-supervisor', 'site-engineer'].includes(roleKey)) ? 'My Permits' : 'Permit Register', icon: 'fa-table-list' });
+            items.push({ id: 'register', label: (['site-supervisor', 'electrician', 'blasting-incharge', 'lift-supervisor', 'night-supervisor', 'site-engineer'].includes(normKey)) ? 'My Permits' : 'Permit Register', icon: 'fa-table-list' });
             items.push({ id: 'notifications', label: 'Notifications', icon: 'fa-bell', badge: true });
             
             // Strictly filter by permitted routes for this role
-            return items.filter(it => isRouteAllowedForRole(roleKey, it.id));
+            return items.filter(it => isRouteAllowedForRole(normKey, it.id));
         }
         function buildNav() {
             const items = navItemsFor(currentUser.key);
@@ -14076,7 +14130,7 @@
                         ? 'showSundayLockoutModal();return false;'
                         : (it.isSundayTile ? 'openSundayWorkSelection();return false;' : ('goTo(\'' + it.id + '\');return false;'));
                     const lockStyle = it.isLocked ? 'style="opacity:.65;"' : '';
-                    return '<li class="nav-item"><a href="#" class="nav-link" data-nav="' + it.id + '" ' + lockStyle + ' onclick="' + clickHandler + '"><i class="fa-solid ' + it.icon + '"></i><span>' + it.label + '</span>' + (it.badge ? '<span class="nav-badge" id="navNotifBadge" style="display:none;">0</span>' : '') + '</a></li>';
+                    return '<li class="nav-item" data-page="' + it.id + '"><a href="#" class="nav-link" data-page="' + it.id + '" data-nav="' + it.id + '" ' + lockStyle + ' onclick="' + clickHandler + '"><i class="fa-solid ' + it.icon + '"></i><span>' + it.label + '</span>' + (it.badge ? '<span class="nav-badge" id="navNotifBadge" style="display:none;">0</span>' : '') + '</a></li>';
                 }).join('') +
                 '</ul>';
         }
@@ -14139,29 +14193,29 @@
             // Comprehensive Role-Based Route Guard
             if (currentUser && !isRouteAllowedForRole(currentUser.key, view)) {
                 showToast('Access Restricted: Your role (' + (currentUser.label || currentUser.key) + ') is not authorized to access the \'' + view + '\' module.', 'err');
-                console.warn('Access denied to view \'' + view + '\' for role \'' + currentUser.key + '\'');
+                console.warn('RBAC Guard: Access denied to view \'' + view + '\' for role \'' + currentUser.key + '\'');
                 if (currentView !== 'dashboard') {
                     goTo('dashboard');
                 }
-                return;
+                return false;
             }
             // Sunday Zero-Creation Lockout Route Guard
             if ((view === 'ptype' || view === 'create') && !isPermitRaisingAllowedToday()) {
                 showToast('Sunday Lockout: No permits can be raised on Sunday. All permits for Sunday work must be pre-authorized on Saturday.', 'err');
                 showSundayLockoutModal();
                 goTo('dashboard');
-                return;
+                return false;
             }
             // Strict RBAC Route Guards
             if ((view === 'ptype' || view === 'create') && currentUser && !INITIATOR_PERMIT_RULES[currentUser.key]) {
                 showToast('Access Denied: Only Permittees (Site Supervisors, Electricians, Blasting In-charge, Lifting Supervisors, Night Supervisors) have authority to create permits.', 'warn');
                 goTo('dashboard');
-                return;
+                return false;
             }
             if (view === 'admin-config' && currentUser && currentUser.key !== 'admin' && currentUser.key !== 'super-admin') {
                 showToast('Access Denied: Only Administrators can configure site GPS, geofencing, and personnel accounts.', 'warn');
                 goTo('dashboard');
-                return;
+                return false;
             }
             currentView = view;
             if (view !== 'detail') currentDetailId = null;
@@ -15726,7 +15780,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             } else if (isElectrical) {
                 // Electrical Work (HT / LT) specific fields per PTW-006
                 html += '<div class="form-field" id="ff-shutdown-requester"><label>Name of the person taking Shutdown / Power Block <span class="req">*</span></label>' +
-                    '<input type="text" id="inShutdownRequester" value="' + escapeHtml(draft.shutdownRequester || currentUser.name || 'Permittee Electrician') + '" placeholder="Enter electrician name or auto-picked from signature..." oninput="draft.shutdownRequester=this.value; if(!draft.signerVerified){draft.signerName=this.value; currentUser.name=this.value;}" style="font-weight:600;">' +
+                    '<input type="text" id="inShutdownRequester" value="' + escapeHtml(draft.shutdownRequester || currentUser.name || 'Permittee Electrician') + '" placeholder="Enter electrician name or auto-picked from signature..." oninput="draft.shutdownRequester=this.value; if(!draft.signerVerified){draft.signerName=this.value; if(currentUser && !Object.isFrozen(currentUser)){currentUser.name=this.value;}}" style="font-weight:600;">' +
                     '<div class="form-hint" style="font-size:11px;color:var(--text-muted);margin-top:4px;"><i class="fa-solid fa-signature" style="color:var(--blue);"></i> Auto-picked from Permittee Electrician\'s digital signature in Step 4 (or enter name directly).</div></div>';
 
                 const halfHours = [];
@@ -18292,7 +18346,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             draft.signerName = val;
             draft.signerConsent = true;
             draft.signerVerified = true;
-            currentUser.name = val;
+            if (currentUser && !Object.isFrozen(currentUser)) { currentUser.name = val; }
             draft.createdBy = val;
             if (ptypeOf(draft) === 'electrical') {
                 draft.shutdownRequester = val;
@@ -20451,7 +20505,7 @@ function trackerHtml(p) {
             if (!p) return;
             if (!currentUser || currentUser.key !== 'site-engineer') {
                 currentUser = Object.assign({ name: '' }, roleInfo('site-engineer'));
-                currentUser.name = '';
+                if (currentUser && !Object.isFrozen(currentUser)) { currentUser.name = ''; }
                 const roleBadge = document.getElementById('roleBadgeValue');
                 if (roleBadge) roleBadge.textContent = currentUser.label;
                 buildNav();
@@ -20470,7 +20524,7 @@ function trackerHtml(p) {
             if (!p) return;
             if (!currentUser || currentUser.key !== roleKey) {
                 currentUser = Object.assign({ name: '' }, roleInfo(roleKey));
-                currentUser.name = '';
+                if (currentUser && !Object.isFrozen(currentUser)) { currentUser.name = ''; }
                 const roleBadge = document.getElementById('roleBadgeValue');
                 if (roleBadge) roleBadge.textContent = currentUser.label;
                 buildNav();
@@ -21035,7 +21089,7 @@ function trackerHtml(p) {
             actionModalCtx.signerName = val;
             actionModalCtx.consent = true;
             actionModalCtx.signerVerified = true;
-            currentUser.name = val;
+            if (currentUser && !Object.isFrozen(currentUser)) { currentUser.name = val; }
 
             document.getElementById('modalSignerIdBox').style.display = 'none';
             const sigBox = document.getElementById('modalSigBox');
@@ -24693,8 +24747,127 @@ ptypeOf(p) === 'general' ?
                 '</div>' +
                 '</div>';
         }
-    </script>
-    <script src="patch-auth.js"></script>
-</body>
+    
+        /* ================================================================
+           BUILT-IN BROWSER CONSOLE DIAGNOSTIC & SELF-TEST SUITE
+           ================================================================ */
+        window.runRbacAndLoginSelfTest = async function () {
+            console.group('%c[ARPL EHS PTW] End-to-End Auth, UX & Strict RBAC Diagnostic Suite', 'color:#008160;font-weight:bold;font-size:13px;');
+            const results = [];
 
+            // Test 1: Firebase App initialized & PROJECT_MASTER defined
+            const fbReady = (typeof firebase !== 'undefined' && Array.isArray(firebase.apps) && firebase.apps.length > 0);
+            const pmReady = (typeof window.PROJECT_MASTER !== 'undefined' && window.PROJECT_MASTER !== null);
+            const t1 = Boolean(fbReady && pmReady);
+            console.log(t1 ? '[PASS] Firebase App initialized & PROJECT_MASTER defined' : '[FAIL] Firebase App initialized & PROJECT_MASTER defined');
+            results.push({ test: 'Firebase App initialized & PROJECT_MASTER defined', passed: t1 });
+
+            // Test 2: Password Eye Toggle (#togglePasswordBtn) switches input type password <-> text
+            const pwdInput = document.getElementById('loginPassword');
+            const toggleBtn = document.getElementById('togglePasswordBtn');
+            let t2 = false;
+            if (pwdInput && toggleBtn) {
+                const origType = pwdInput.type;
+                pwdInput.type = 'password';
+                toggleBtn.click();
+                const afterFirstToggle = pwdInput.type;
+                toggleBtn.click();
+                const afterSecondToggle = pwdInput.type;
+                pwdInput.type = origType;
+                t2 = (afterFirstToggle === 'text' && afterSecondToggle === 'password');
+            }
+            console.log(t2 ? '[PASS] Password Eye Toggle (#togglePasswordBtn) switches input type password <-> text' : '[FAIL] Password Eye Toggle (#togglePasswordBtn) switches input type password <-> text');
+            results.push({ test: 'Password Eye Toggle (#togglePasswordBtn) switches input type password <-> text', passed: t2 });
+
+            // Test 3: Forgot Password handler validates email and invokes sendPasswordResetEmail
+            const emailInput = document.getElementById('loginEmail');
+            const errBanner = document.getElementById('loginErrorBanner');
+            const succBanner = document.getElementById('loginSuccessBanner');
+            let t3 = false;
+            if (emailInput && typeof handleUnifiedForgotPassword === 'function' && typeof firebase !== 'undefined' && firebase.auth) {
+                const origEmail = emailInput.value;
+                const origErrDisplay = errBanner ? errBanner.style.display : 'none';
+                const origErrHtml = errBanner ? errBanner.innerHTML : '';
+                const origSuccDisplay = succBanner ? succBanner.style.display : 'none';
+                const origSuccHtml = succBanner ? succBanner.innerHTML : '';
+
+                // 3a: Empty email validation check
+                emailInput.value = '';
+                await handleUnifiedForgotPassword();
+                const emptyRejected = Boolean(errBanner && errBanner.style.display !== 'none' && errBanner.innerText.indexOf('Please enter your registered official email address') !== -1);
+
+                // 3b: Valid email spy check on sendPasswordResetEmail
+                const authInstance = firebase.auth();
+                const origSendReset = authInstance.sendPasswordResetEmail;
+                let resetCalledWith = null;
+                authInstance.sendPasswordResetEmail = async function (em) {
+                    resetCalledWith = em;
+                    return Promise.resolve();
+                };
+                try {
+                    emailInput.value = 'ehs.superadmin@aurorealty.com';
+                    await handleUnifiedForgotPassword();
+                } finally {
+                    authInstance.sendPasswordResetEmail = origSendReset;
+                    emailInput.value = origEmail;
+                    emailInput.style.borderColor = '';
+                    emailInput.style.boxShadow = '';
+                    if (errBanner) { errBanner.style.display = origErrDisplay; errBanner.innerHTML = origErrHtml; }
+                    if (succBanner) { succBanner.style.display = origSuccDisplay; succBanner.innerHTML = origSuccHtml; }
+                }
+                t3 = Boolean(emptyRejected && resetCalledWith === 'ehs.superadmin@aurorealty.com');
+            }
+            console.log(t3 ? '[PASS] Forgot Password handler validates email and invokes sendPasswordResetEmail' : '[FAIL] Forgot Password handler validates email and invokes sendPasswordResetEmail');
+            results.push({ test: 'Forgot Password handler validates email and invokes sendPasswordResetEmail', passed: t3 });
+
+            // Test 4: #roleCardsGrid and #quickPersonaDropdown are hidden/removed
+            const rcGrid = document.getElementById('roleCardsGrid');
+            const qpDrop = document.getElementById('quickPersonaDropdown');
+            const rcHidden = !rcGrid || getComputedStyle(rcGrid).display === 'none' || rcGrid.innerHTML.trim() === '';
+            const qpHidden = !qpDrop || getComputedStyle(qpDrop).display === 'none';
+            const switchDisabled = (window.switchRole() === false);
+            const t4 = Boolean(rcHidden && qpHidden && switchDisabled);
+            console.log(t4 ? '[PASS] #roleCardsGrid and #quickPersonaDropdown are hidden/removed' : '[FAIL] #roleCardsGrid and #quickPersonaDropdown are hidden/removed');
+            results.push({ test: '#roleCardsGrid and #quickPersonaDropdown are hidden/removed', passed: t4 });
+
+            // Test 5: window.goTo() blocks unauthorized route access for site-supervisor
+            const prevUser = window.currentUser;
+            const prevView = currentView;
+            let t5 = false;
+            try {
+                const mockSup = Object.freeze({
+                    key: 'site-supervisor',
+                    rawRole: 'site-supervisor',
+                    label: 'Site Supervisor',
+                    name: 'Test Supervisor',
+                    email: 'supervisor@aurorealty.com',
+                    projectId: 'PRJ-PEARL',
+                    projectName: 'The Pearl'
+                });
+                currentUser = mockSup;
+                window.currentUser = mockSup;
+                currentView = 'dashboard';
+                const blockedAdmin = goTo('admin-config', true);
+                const blockedSuper = goTo('projects', true);
+                t5 = (blockedAdmin === false && blockedSuper === false && currentView === 'dashboard' && Object.isFrozen(window.currentUser));
+            } finally {
+                currentUser = prevUser;
+                window.currentUser = prevUser;
+                currentView = prevView;
+            }
+            console.log(t5 ? '[PASS] window.goTo() blocks unauthorized route access for site-supervisor' : '[FAIL] window.goTo() blocks unauthorized route access for site-supervisor');
+            results.push({ test: 'window.goTo() blocks unauthorized route access for site-supervisor', passed: t5 });
+
+            console.groupEnd();
+            const passedCount = results.filter(r => r.passed).length;
+            return {
+                passed: passedCount,
+                total: results.length,
+                status: passedCount === results.length ? 'ALL_PASSED' : 'FAILED',
+                results: results
+            };
+        };
+    </script>
+    <script src="patch-auth.js?v=20261103_v5"></script>
+</body>
 </html>
