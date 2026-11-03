@@ -14879,7 +14879,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<button class="btn btn-primary btn-block" style="margin-bottom:10px;" onclick="goTo(\'admin-config\'); switchAdminTab(\'gps\');"><i class="fa-solid fa-map-location-dot"></i> Set Worksite GPS &amp; Geofencing</button>' +
                     '<button class="btn btn-block" style="margin-bottom:10px;" onclick="goTo(\'admin-config\'); switchAdminTab(\'accounts\');"><i class="fa-solid fa-user-plus"></i> Provision On-Site Personnel Accounts</button>' +
                     '<button class="btn btn-block" style="margin-bottom:10px;" onclick="goTo(\'register\')"><i class="fa-solid fa-table-list"></i> Open Worksite Permit Register</button>' +
-                    '<button class="btn btn-block" onclick="goTo(''users'')"><i class="fa-solid fa-users"></i> Manage On-Site Personnel Accounts</button>';
+                    '<button class="btn btn-block" onclick="goTo(\'users\')"><i class="fa-solid fa-users"></i> Manage On-Site Personnel Accounts</button>';
 
                 html += '<div class="grid-2"><div class="card card-pad"><div class="card-title">Worksite Status Distribution</div><div class="table-scroll"><table><thead><tr><th>Status</th><th>Count</th></tr></thead><tbody>' +
                     Object.keys(byStatus).map(s => '<tr><td>' + statusBadge(s) + '</td><td>' + byStatus[s] + '</td></tr>').join('') +
