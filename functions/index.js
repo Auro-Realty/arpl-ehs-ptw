@@ -303,81 +303,157 @@ exports.compileStatutoryPdf = onCall(
 // 4. SUPER ADMIN: CREATE PROJECT ADMIN
 // ============================================================================
 exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => {
-  if (!request.auth || request.auth.token.superAdmin !== true) {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Authentication required.");
+  }
+
+  const callerEmail = (request.auth.token.email || "").toLowerCase();
+  let isCallerSuperAdmin =
+    request.auth.token.superAdmin === true ||
+    request.auth.token.role === "super-admin" ||
+    callerEmail === "ehs.superadmin@aurorealty.com";
+
+  if (!isCallerSuperAdmin) {
+    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+    if (callerDoc.exists && callerDoc.data().role === "super-admin") {
+      isCallerSuperAdmin = true;
+    }
+  }
+
+  if (!isCallerSuperAdmin) {
     throw new HttpsError("permission-denied", "Only Super Admin can provision Project Admins.");
   }
 
-  const { email, password, displayName, projectId } = request.data;
+  const { email, password, displayName, name, projectId, projectName, empId, phone } = request.data;
   if (!email || !projectId) {
     throw new HttpsError("invalid-argument", "email and projectId are mandatory.");
   }
 
-  const userRecord = await auth.createUser({
-    email,
-    password: password || "Auro@EHS2026!",
-    displayName: displayName || `Admin - ${projectId}`
-  });
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = (displayName || name || `Admin - ${projectId}`).trim();
+  const cleanPassword = password && password.length >= 6 ? password : "AuroAdmin@2026!";
+
+  let userRecord;
+  try {
+    userRecord = await auth.getUserByEmail(cleanEmail);
+    userRecord = await auth.updateUser(userRecord.uid, {
+      password: cleanPassword,
+      displayName: cleanName,
+      disabled: false
+    });
+  } catch (_e) {
+    userRecord = await auth.createUser({
+      email: cleanEmail,
+      password: cleanPassword,
+      displayName: cleanName
+    });
+  }
 
   // Assign Firebase Auth Custom Claims
   await auth.setCustomUserClaims(userRecord.uid, {
     role: "project-admin",
-    projectId: projectId
-  });
-
-  // Save to Firestore Users collection
-  await db.collection("users").doc(userRecord.uid).set({
-    uid: userRecord.uid,
-    email: email,
-    displayName: displayName || `Admin - ${projectId}`,
-    role: "project-admin",
+    uiRole: "admin",
+    ptwRole: "project-admin",
     projectId: projectId,
-    createdAt: admin.firestore.FieldValue.serverTimestamp(),
-    createdBy: request.auth.uid
+    name: cleanName,
+    campusWide: true
   });
 
-  return { success: true, uid: userRecord.uid, email, role: "project-admin", projectId };
+  const adminDoc = {
+    id: userRecord.uid,
+    uid: userRecord.uid,
+    email: cleanEmail,
+    name: cleanName,
+    displayName: cleanName,
+    role: "project-admin",
+    uiRole: "admin",
+    ptwRole: "project-admin",
+    roleLabel: "Site Administrator",
+    projectId: projectId,
+    projectName: projectName || projectId,
+    empId: empId || "ARPL-ADM",
+    phone: phone || "",
+    campusWide: true,
+    status: "Active",
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: callerEmail || request.auth.uid
+  };
+
+  // Save to Firestore Users & Project Admins collections + update Project doc
+  await db.collection("users").doc(userRecord.uid).set(adminDoc, { merge: true });
+  await db.collection("project_admins").doc(userRecord.uid).set(adminDoc, { merge: true });
+  await db.collection("projects").doc(projectId).set(
+    {
+      adminUid: userRecord.uid,
+      adminEmail: cleanEmail,
+      adminName: cleanName
+    },
+    { merge: true }
+  );
+
+  return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role: "project-admin", projectId };
 });
 
 // ============================================================================
-// 5. PROJECT ADMIN: CONFIGURE GEOLOCATION FOR PROJECT
+// 5. PROJECT ADMIN: CONFIGURE GEOLOCATION FOR PROJECT / LOCATION
 // ============================================================================
 exports.adminConfigureGeolocation = onCall({ region: REGION }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
-  const { projectId, lat, lng, radius, address } = request.data;
+  const { projectId, lat, lng, radius, address, locations } = request.data;
   if (!projectId || lat == null || lng == null) {
     throw new HttpsError("invalid-argument", "projectId, lat, and lng are required.");
   }
 
-  const isProjAdmin =
-    (request.auth.token.role === "project-admin" ||
+  const callerEmail = (request.auth.token.email || "").toLowerCase();
+  let isAuthorized =
+    request.auth.token.superAdmin === true ||
+    request.auth.token.role === "super-admin" ||
+    callerEmail === "ehs.superadmin@aurorealty.com" ||
+    ((request.auth.token.role === "project-admin" ||
       request.auth.token.role === "site-admin" ||
+      request.auth.token.role === "admin" ||
       request.auth.token.admin === true) &&
-    request.auth.token.projectId === projectId;
+      request.auth.token.projectId === projectId);
 
-  if (!isProjAdmin) {
+  if (!isAuthorized) {
+    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+    if (callerDoc.exists) {
+      const cd = callerDoc.data();
+      if (
+        cd.role === "super-admin" ||
+        ((cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin") && cd.projectId === projectId)
+      ) {
+        isAuthorized = true;
+      }
+    }
+  }
+
+  if (!isAuthorized) {
     throw new HttpsError(
       "permission-denied",
       "Unauthorized: Only the assigned Site Administrator can configure worksite geolocation and geofencing."
     );
   }
 
-  await db.collection("projects").doc(projectId).set(
-    {
-      configured: true,
-      site: {
-        lat: Number(lat),
-        lng: Number(lng),
-        address: address || "Worksite Location"
-      },
-      radius: Number(radius) || 200,
-      configuredAt: admin.firestore.FieldValue.serverTimestamp(),
-      configuredBy: request.auth.uid
+  const updatePayload = {
+    configured: true,
+    site: {
+      lat: Number(lat),
+      lng: Number(lng),
+      address: address || "Worksite Location"
     },
-    { merge: true }
-  );
+    radius: Number(radius) || 200,
+    configuredAt: admin.firestore.FieldValue.serverTimestamp(),
+    configuredBy: callerEmail || request.auth.uid
+  };
+  if (Array.isArray(locations)) {
+    updatePayload.locations = locations;
+  }
+
+  await db.collection("projects").doc(projectId).set(updatePayload, { merge: true });
 
   return { success: true, projectId, configured: true };
 });
@@ -390,16 +466,52 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
-  const { action, email, password, newPassword, displayName, role, projectId, uid } = request.data;
+  const {
+    action,
+    email,
+    password,
+    newPassword,
+    displayName,
+    name,
+    role,
+    roleLabel,
+    projectId,
+    projectName,
+    locationId,
+    locationName,
+    campusWide,
+    allowedWorkflows,
+    empId,
+    phone,
+    uid
+  } = request.data;
   if (!projectId) {
     throw new HttpsError("invalid-argument", "projectId is required.");
   }
 
-  const isProjAdmin =
-    (request.auth.token.role === "project-admin" ||
+  const callerEmail = (request.auth.token.email || "").toLowerCase();
+  let isProjAdmin =
+    request.auth.token.superAdmin === true ||
+    request.auth.token.role === "super-admin" ||
+    callerEmail === "ehs.superadmin@aurorealty.com" ||
+    ((request.auth.token.role === "project-admin" ||
       request.auth.token.role === "site-admin" ||
+      request.auth.token.role === "admin" ||
       request.auth.token.admin === true) &&
-    request.auth.token.projectId === projectId;
+      request.auth.token.projectId === projectId);
+
+  if (!isProjAdmin) {
+    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+    if (callerDoc.exists) {
+      const cd = callerDoc.data();
+      if (
+        cd.role === "super-admin" ||
+        ((cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin") && cd.projectId === projectId)
+      ) {
+        isProjAdmin = true;
+      }
+    }
+  }
 
   if (!isProjAdmin) {
     throw new HttpsError(
@@ -431,8 +543,11 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     if (!uid) {
       throw new HttpsError("invalid-argument", "uid is required for deletion.");
     }
-    await auth.deleteUser(uid);
+    try {
+      await auth.deleteUser(uid);
+    } catch (_e) {}
     await db.collection("users").doc(uid).delete();
+    await db.collection("site_personnel").doc(uid).delete();
     return { success: true, uid };
   }
 
@@ -443,14 +558,16 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     }
     const user = await auth.getUser(uid);
     const updated = await auth.updateUser(uid, { disabled: !user.disabled });
+    const statusStr = updated.disabled ? "Deactivated" : "Active";
     await db.collection("users").doc(uid).set(
       {
         disabled: updated.disabled,
-        status: updated.disabled ? "Deactivated" : "Active",
+        status: statusStr,
         updatedAt: admin.firestore.FieldValue.serverTimestamp()
       },
       { merge: true }
     );
+    await db.collection("site_personnel").doc(uid).set({ status: statusStr }, { merge: true });
     return { success: true, uid, disabled: updated.disabled };
   }
 
@@ -459,57 +576,67 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("invalid-argument", "email and role are required to provision an account.");
   }
 
-  // Allowed Approval Flow Roles
-  const validRoles = [
-    "site-supervisor",
-    "site-engineer",
-    "excavation-head",
-    "hw-section-head",
-    "mep",
-    "pm",
-    "it",
-    "quality-engineer",
-    "ehs-officer",
-    "ehs-manager",
-    "project-manager"
-  ];
-
-  if (!validRoles.includes(role)) {
-    throw new HttpsError("invalid-argument", "Invalid role: " + role + ". Must be an approved PTW role.");
-  }
+  const cleanEmail = email.trim().toLowerCase();
+  const cleanName = (displayName || name || cleanEmail.split("@")[0]).trim();
+  const cleanPassword = password && password.length >= 6 ? password : "AuroStaff@2026!";
 
   let userRecord;
   try {
-    userRecord = await auth.getUserByEmail(email);
-  } catch (err) {
+    userRecord = await auth.getUserByEmail(cleanEmail);
+    userRecord = await auth.updateUser(userRecord.uid, {
+      password: cleanPassword,
+      displayName: cleanName,
+      disabled: false
+    });
+  } catch (_err) {
     userRecord = await auth.createUser({
-      email,
-      password: password || "Auro@EHSStaff2026!",
-      displayName: displayName || email
+      email: cleanEmail,
+      password: cleanPassword,
+      displayName: cleanName
     });
   }
 
-  // Set Custom Claims for Auth RBAC
+  // Set Custom Claims for Auth RBAC & Location/Workflow Scope
   await auth.setCustomUserClaims(userRecord.uid, {
     role: role,
-    projectId: projectId
+    uiRole: role,
+    ptwRole: role,
+    projectId: projectId,
+    locationId: locationId || "CAMPUS-WIDE",
+    locationName: locationName || "Full Worksite",
+    campusWide: campusWide !== undefined ? !!campusWide : !locationId || locationId === "CAMPUS-WIDE",
+    name: cleanName
   });
 
-  // Store in Firestore
-  await db.collection("users").doc(userRecord.uid).set(
-    {
-      uid: userRecord.uid,
-      email: email,
-      displayName: displayName || email,
-      role: role,
-      projectId: projectId,
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      assignedBy: request.auth.uid
-    },
-    { merge: true }
-  );
+  const staffDoc = {
+    id: userRecord.uid,
+    uid: userRecord.uid,
+    email: cleanEmail,
+    name: cleanName,
+    displayName: cleanName,
+    role: role,
+    uiRole: role,
+    ptwRole: role,
+    roleLabel: roleLabel || role,
+    projectId: projectId,
+    projectName: projectName || projectId,
+    locationId: locationId || "CAMPUS-WIDE",
+    locationName: locationName || "Full Worksite",
+    location: locationName || "Full Worksite",
+    campusWide: campusWide !== undefined ? !!campusWide : !locationId || locationId === "CAMPUS-WIDE",
+    allowedWorkflows: Array.isArray(allowedWorkflows) ? allowedWorkflows : null,
+    empId: empId || "ARPL-STF",
+    phone: phone || "",
+    status: "Active",
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    assignedBy: callerEmail || request.auth.uid
+  };
 
-  return { success: true, uid: userRecord.uid, email, role, projectId };
+  // Store in Firestore users & site_personnel
+  await db.collection("users").doc(userRecord.uid).set(staffDoc, { merge: true });
+  await db.collection("site_personnel").doc(userRecord.uid).set(staffDoc, { merge: true });
+
+  return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role, projectId, locationId };
 });
 
 // 7. ATOMIC PERMIT STATE TRANSITION & GEOFENCE ENFORCEMENT
