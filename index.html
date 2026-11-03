@@ -20,6 +20,10 @@
     <!-- Firebase Configuration Fallback -->
     <script src="/firebase-config.js"></script>
     <script>
+      var PROJECT_MASTER = window.PROJECT_MASTER || [];
+      window.PROJECT_MASTER = PROJECT_MASTER;
+    </script>
+    <script>
       // Immediate synchronous initialization guarantee to prevent "No Firebase App '[DEFAULT]'" error
       (function() {
         try {
@@ -5298,10 +5302,19 @@
                             <!-- Per-Project Configuration Status Banner -->
                             <div id="adminProjectStatusBanner" style="margin-bottom: 16px;"></div>
 
-                            <div class="form-field" style="margin-bottom: 16px;">
-                                <label for="adminProjectSelect">Select Project Site to Configure <span
-                                        class="req">*</span></label>
+                                                        <div class="form-field" style="margin-bottom: 16px;">
+                                <label for="adminProjectSelect">Select Project Site to Configure <span class="req">*</span></label>
                                 <select id="adminProjectSelect" onchange="onAdminSelectProject()"></select>
+                            </div>
+
+                            <div class="form-field" style="margin-bottom: 16px;">
+                                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                                    <label for="adminLocationSelect" style="font-weight:700; color:var(--navy); font-size:12px; margin-bottom:0;">
+                                        <i class="fa-solid fa-building-flag" style="color:var(--orange);margin-right:4px;"></i> Select Tower / Specific Location to Geotag <span class="req">*</span>
+                                    </label>
+                                    <span id="adminLocationStatusBadge" class="dpdp-tag"></span>
+                                </div>
+                                <select id="adminLocationSelect" onchange="onAdminSelectLocation()"></select>
                             </div>
 
                             <!-- Dedicated On-Site Physical GPS Tagging Module -->
@@ -5416,6 +5429,31 @@
                                         class="mono">100m</span>)
                                 </div>
                             </div>
+                                                <div class="card" style="grid-column: 1 / -1; margin-top: 20px; padding: 22px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+                                <div>
+                                    <h3 style="font-size:15px; font-weight:700; margin:0; color:var(--navy); display:flex; align-items:center; gap:8px;">
+                                        <i class="fa-solid fa-map-pin" style="color:var(--orange);"></i> Project Location Geofencing Master (Towers &amp; Zones)
+                                    </h3>
+                                    <p style="font-size:12px; color:var(--text-muted); margin:4px 0 0;">All towers, zones, and facilities configured for this project. Permits can only be initiated for locations with active geofences.</p>
+                                </div>
+                                <div style="font-size:12px; font-weight:700; color:var(--navy);" id="locationGpsStats"></div>
+                            </div>
+                            <div style="overflow-x:auto;">
+                                <table style="width:100%; border-collapse:collapse; font-size:12.5px;">
+                                    <thead>
+                                        <tr style="background:var(--bg); border-bottom:2px solid var(--border); text-align:left;">
+                                            <th style="padding:10px 12px;">Location / Tower</th>
+                                            <th style="padding:10px 12px;">Category</th>
+                                            <th style="padding:10px 12px;">Tagged Coordinates</th>
+                                            <th style="padding:10px 12px;">Geofence Radius</th>
+                                            <th style="padding:10px 12px;">Geofence Status</th>
+                                            <th style="padding:10px 12px;">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="locationGpsSummaryTableBody"></tbody>
+                                </table>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -5492,9 +5530,16 @@
                                         <label>Work Email Address <span class="req">*</span></label>
                                         <input type="email" id="newStaffEmail" placeholder="e.g. patel.rm@aurorealty.com">
                                     </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
+                                                                        <div class="form-field" style="margin-bottom:12px;">
                                         <label>Assigned Tower / Location</label>
                                         <select id="newStaffTower"></select>
+                                    </div>
+                                    <div class="form-field" style="margin-bottom:12px;">
+                                        <label class="dpdp-consent-pill" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:6px;cursor:pointer;">
+                                            <input type="checkbox" id="newStaffCampusWide" onchange="toggleStaffLocationScope(this.checked)" style="width:16px;height:16px;accent-color:var(--orange);">
+                                            <span style="font-size:12px;font-weight:600;color:var(--navy);">Campus-Wide / Multi-Location Scope</span>
+                                        </label>
+                                        <p style="font-size:11px;color:var(--text-muted);margin:4px 0 0;">Check for roles (e.g. EHS Safety Officers, EHS Managers, P&amp;M) authorized across all towers.</p>
                                     </div>
                                     <div class="form-grid" style="margin-bottom:14px;">
                                         <div class="form-field">
@@ -7137,12 +7182,28 @@
             return (rec.equipment || []).map(e => (e === 'Others' && rec.equipmentOther) ? 'Others — ' + rec.equipmentOther : e).join(', ');
         }
 
-        window.PROJECT_MASTER = window.PROJECTS || [];
+                var PROJECT_MASTER = window.PROJECT_MASTER || window.PROJECTS || [];
+        window.PROJECT_MASTER = PROJECT_MASTER;
+
         let PROJECTS = [
             {
                 id: 'PRJ-PEARL',
                 name: 'The Pearl',
                 towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'],
+                locations: [
+                    { id: 'LOC-PEARL-P1', name: 'P1', code: 'P1', category: 'Tower', site: { lat: 17.4125, lng: 78.3984, address: 'Tower P1, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:00:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-P2', name: 'P2', code: 'P2', category: 'Tower', site: { lat: 17.4128, lng: 78.3986, address: 'Tower P2, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:05:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-P3', name: 'P3', code: 'P3', category: 'Tower', site: { lat: 17.4131, lng: 78.3988, address: 'Tower P3, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:10:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-P4', name: 'P4', code: 'P4', category: 'Tower', site: { lat: 17.4134, lng: 78.3990, address: 'Tower P4, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:15:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-P5', name: 'P5', code: 'P5', category: 'Tower', site: { lat: 17.4137, lng: 78.3992, address: 'Tower P5, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:20:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-P6', name: 'P6', code: 'P6', category: 'Tower', site: { lat: 17.4140, lng: 78.3994, address: 'Tower P6, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:25:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-P7', name: 'P7', code: 'P7', category: 'Tower', site: { lat: 17.4143, lng: 78.3996, address: 'Tower P7, The Pearl, Hitec City' }, radius: 75, configured: true, configuredAt: '2026-09-01T10:30:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-CH', name: 'Clubhouse', code: 'CH', category: 'Amenity', site: { lat: 17.4120, lng: 78.3980, address: 'Central Clubhouse, The Pearl' }, radius: 80, configured: true, configuredAt: '2026-09-01T10:35:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-POD', name: 'Podium', code: 'POD', category: 'Podium', site: { lat: 17.4126, lng: 78.3985, address: 'Integrated Podium Deck, The Pearl' }, radius: 100, configured: true, configuredAt: '2026-09-01T10:40:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-PEARL-NTA1', name: 'NTA_PHASE-1', code: 'NTA1', category: 'Non-Tower Area', site: { lat: 17.4118, lng: 78.3978, address: 'NTA Phase 1 Infrastructure, The Pearl' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-PEARL-NTA2', name: 'NTA_PHASE-2', code: 'NTA2', category: 'Non-Tower Area', site: { lat: 17.4115, lng: 78.3975, address: 'NTA Phase 2 Infrastructure, The Pearl' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-PEARL-NTA3', name: 'NTA_PHASE-3', code: 'NTA3', category: 'Non-Tower Area', site: { lat: 17.4112, lng: 78.3972, address: 'NTA Phase 3 Infrastructure, The Pearl' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null }
+                ],
                 basements: ['Basement 3 (B3)', 'Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Podium Level 1 (P1)', 'Podium Level 2 (P2)'],
                 floors: ['Basement 3 (B3)', 'Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Floor 11', 'Floor 12', 'Floor 13', 'Floor 14', 'Floor 15', 'Floor 16', 'Floor 17', 'Floor 18', 'Floor 19', 'Floor 20', 'Floor 21', 'Floor 22', 'Floor 23', 'Floor 24', 'Floor 25', 'Floor 26', 'Floor 27', 'Floor 28', 'Floor 29', 'Floor 30', 'Floor 31', 'Floor 32', 'Floor 33', 'Floor 34', 'Floor 35', 'Terrace / Roof Level'],
                 zones: ['Zone 1 (Excavation & Shoring)', 'Zone 2 (Tower Footprint)', 'Zone 3 (Central Podium)', 'Zone 4 (Perimeter Boundary)'],
@@ -7158,6 +7219,15 @@
                 id: 'PRJ-REGENT',
                 name: 'The Regent',
                 towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'],
+                locations: [
+                    { id: 'LOC-REGENT-T4', name: 'Tower 4', code: 'T4', category: 'Tower', site: { lat: 17.4371, lng: 78.3612, address: 'Tower 4, The Regent, Financial District' }, radius: 75, configured: true, configuredAt: '2026-09-01T11:30:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-REGENT-T5', name: 'Tower 5', code: 'T5', category: 'Tower', site: { lat: 17.4375, lng: 78.3616, address: 'Tower 5, The Regent, Financial District' }, radius: 75, configured: true, configuredAt: '2026-09-01T11:35:00Z', configuredBy: 'Site Administrator (A. K. Sharma)', tagMethod: 'On-Site Tagged (Device GPS)' },
+                    { id: 'LOC-REGENT-NTA', name: 'NTA', code: 'NTA', category: 'Non-Tower Area', site: { lat: 17.4368, lng: 78.3608, address: 'NTA Common Utilities, The Regent' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-REGENT-STR', name: 'Stores', code: 'STR', category: 'Support Facility', site: { lat: 17.4365, lng: 78.3604, address: 'Central Material Stores, The Regent' }, radius: 60, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-REGENT-FW', name: 'FormWork', code: 'FW', category: 'Fabrication Yard', site: { lat: 17.4362, lng: 78.3600, address: 'FormWork Yard & Storage, The Regent' }, radius: 60, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-REGENT-PC', name: 'Precast', code: 'PC', category: 'Fabrication Yard', site: { lat: 17.4359, lng: 78.3596, address: 'Precast Casting Yard, The Regent' }, radius: 80, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-REGENT-P1', name: 'Phase-1', code: 'P1', category: 'Infrastructure', site: { lat: 17.4356, lng: 78.3592, address: 'Phase 1 Works, The Regent' }, radius: 100, configured: false, configuredAt: null, configuredBy: null, tagMethod: null }
+                ],
                 basements: ['Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Podium Level 1'],
                 floors: ['Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Floor 11', 'Floor 12', 'Floor 14', 'Floor 15', 'Terrace Level'],
                 zones: ['Zone A (Office Core)', 'Zone B (Retail Atrium)', 'Zone C (Basement Utilities)'],
@@ -7173,6 +7243,11 @@
                 id: 'PRJ-SANSA',
                 name: 'Sansa County',
                 towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04'],
+                locations: [
+                    { id: 'LOC-SANSA-Z12', name: 'Sector 1 - Zone 1 & 2', code: 'Z1-2', category: 'Sector Zone', site: { lat: 17.4892, lng: 78.3144, address: 'Sector 1 - Zone 1 & 2, Sansa County' }, radius: 100, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-SANSA-Z03', name: 'Sector 1 - Zone 03', code: 'Z03', category: 'Sector Zone', site: { lat: 17.4896, lng: 78.3148, address: 'Sector 1 - Zone 03, Sansa County' }, radius: 100, configured: false, configuredAt: null, configuredBy: null, tagMethod: null },
+                    { id: 'LOC-SANSA-Z04', name: 'Sector 1 - Zone 04', code: 'Z04', category: 'Sector Zone', site: { lat: 17.4900, lng: 78.3152, address: 'Sector 1 - Zone 04, Sansa County' }, radius: 100, configured: false, configuredAt: null, configuredBy: null, tagMethod: null }
+                ],
                 basements: ['Basement 1 (B1)', 'Ground Level (GL)', 'Podium Deck'],
                 floors: ['Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Terrace Level'],
                 zones: ['Zone 1 (Sector 1)', 'Zone 2 (Sector 2)', 'Zone 3 (Central Infrastructure)'],
@@ -7187,6 +7262,73 @@
         ];
         window.PROJECTS = PROJECTS;
         window.PROJECT_MASTER = PROJECTS;
+
+        /* Centralized Dynamic Structural Accessors & Location-Level Geofence Helpers */
+        function ensureProjectLocations(prj) {
+            if (!prj) return [];
+            if (!Array.isArray(prj.locations) || prj.locations.length === 0) {
+                const towers = Array.isArray(prj.towers) ? prj.towers : ['Tower A', 'Tower B'];
+                prj.locations = towers.map((t, idx) => ({
+                    id: (prj.id || 'PRJ') + '-LOC-' + (idx + 1),
+                    name: t,
+                    code: t.replace(/\s+/g, '-').toUpperCase(),
+                    category: 'Location',
+                    site: Object.assign({}, prj.site || { lat: 17.4239, lng: 78.4738, address: prj.name }),
+                    radius: prj.radius || 75,
+                    configured: !!prj.configured,
+                    configuredAt: prj.configuredAt || null,
+                    configuredBy: prj.configuredBy || null,
+                    tagMethod: prj.tagMethod || null
+                }));
+            }
+            return prj.locations;
+        }
+
+        function getProjectLocations(projIdOrName) {
+            const p = getProject(projIdOrName);
+            return p ? ensureProjectLocations(p) : [];
+        }
+
+        function getLocationGps(projIdOrName, locNameOrId) {
+            const p = getProject(projIdOrName);
+            if (!p) return { lat: 17.4239, lng: 78.4738, address: 'Worksite', radius: 75, configured: false };
+            const locs = ensureProjectLocations(p);
+            const found = locs.find(l => l.id === locNameOrId || l.name === locNameOrId || l.code === locNameOrId);
+            if (found && found.site && found.site.lat !== null && !isNaN(found.site.lat)) {
+                return {
+                    lat: found.site.lat,
+                    lng: found.site.lng,
+                    address: found.site.address || found.name,
+                    radius: found.radius || 75,
+                    configured: !!found.configured,
+                    configuredAt: found.configuredAt,
+                    configuredBy: found.configuredBy,
+                    tagMethod: found.tagMethod,
+                    name: found.name,
+                    id: found.id
+                };
+            }
+            return {
+                lat: (p.site && p.site.lat) ? p.site.lat : 17.4239,
+                lng: (p.site && p.site.lng) ? p.site.lng : 78.4738,
+                address: (p.site && p.site.address) ? p.site.address : p.name,
+                radius: p.radius || 75,
+                configured: !!p.configured,
+                configuredAt: p.configuredAt,
+                configuredBy: p.configuredBy,
+                name: locNameOrId || p.name,
+                id: null
+            };
+        }
+
+        function isLocationConfigured(projIdOrName, locNameOrId) {
+            const p = getProject(projIdOrName);
+            if (!p) return false;
+            const locs = ensureProjectLocations(p);
+            if (!locNameOrId) return !!p.configured;
+            const found = locs.find(l => l.id === locNameOrId || l.name === locNameOrId || l.code === locNameOrId);
+            return found ? !!found.configured : !!p.configured;
+        }
 
         /* Centralized Dynamic Structural Accessors */
         function getProject(projIdOrName) {
@@ -7371,8 +7513,15 @@
             }
             return ['site-supervisor', 'site-engineer', 'mep', 'pm', 'it', 'excavation-head', 'ehs-manager', 'ehs-officer'];
         }
-        function isPermitVisibleToRole(p, roleKey) {
+                function isPermitVisibleToRole(p, roleKey) {
             if (!roleKey || roleKey === 'admin' || roleKey === 'super-admin') return true;
+            // Location Scoping: If user is assigned to a specific tower/location and is not campus-wide
+            if (currentUser && currentUser.locationName && !currentUser.campusWide && roleKey !== 'super-admin' && roleKey !== 'admin') {
+                const pLoc = p.tower || p.locationName || p.location || '';
+                if (pLoc && currentUser.locationName && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'Campus-Wide (All Towers)') {
+                    return false;
+                }
+            }
             const stakeholders = stakeholdersFor(p);
             return stakeholders.includes(roleKey) || (roleKey === 'section-head' && stakeholders.includes('hw-section-head'));
         }
@@ -8062,8 +8211,16 @@
             if (!nameOrId) return null;
             return PROJECTS.find(p => p.name === nameOrId || p.id === nameOrId) || null;
         }
-        function getProjectSiteCoord(pOrProj) {
+                function getProjectSiteCoord(pOrProj) {
             if (!pOrProj) return { lat: 17.4239, lng: 78.4738, address: 'Hyderabad, Telangana' };
+            const locName = (typeof pOrProj === 'object' && pOrProj) ? (pOrProj.tower || pOrProj.locationName || pOrProj.location) : null;
+            const projName = typeof pOrProj === 'string' ? pOrProj : (pOrProj.project || pOrProj.name);
+            if (locName && projName) {
+                const locGps = getLocationGps(projName, locName);
+                if (locGps && locGps.lat !== null && !isNaN(locGps.lat)) {
+                    return locGps;
+                }
+            }
             const prj = typeof pOrProj === 'string' ? projectByName(pOrProj) : (projectByName(pOrProj.project) || projectByName(pOrProj.name) || pOrProj);
             if (prj && prj.site && prj.site.lat !== null && prj.site.lat !== undefined && !isNaN(prj.site.lat)) {
                 return prj.site;
@@ -8073,12 +8230,21 @@
             }
             return { lat: 17.4239, lng: 78.4738, address: 'Hyderabad, Telangana' };
         }
+
         function getProjectRadius(pOrName) {
-            if (!pOrName) return GPS_RADIUS_M || 150;
-            const name = typeof pOrName === 'string' ? pOrName : (pOrName.project || pOrName.name);
-            const prj = projectByName(name);
-            return (prj && prj.radius && !isNaN(prj.radius)) ? prj.radius : (GPS_RADIUS_M || 150);
+            if (!pOrName) return GPS_RADIUS_M || 75;
+            const locName = (typeof pOrName === 'object' && pOrName) ? (pOrName.tower || pOrName.locationName || pOrName.location) : null;
+            const projName = typeof pOrName === 'string' ? pOrName : (pOrName.project || pOrName.name);
+            if (locName && projName) {
+                const locGps = getLocationGps(projName, locName);
+                if (locGps && locGps.radius && !isNaN(locGps.radius)) {
+                    return locGps.radius;
+                }
+            }
+            const prj = projectByName(projName);
+            return (prj && prj.radius && !isNaN(prj.radius)) ? prj.radius : (GPS_RADIUS_M || 75);
         }
+
         function isProjectConfigured(name) {
             const prj = projectByName(name);
             return !!(prj && prj.configured);
@@ -11028,9 +11194,10 @@
         /* ================================================================
            ADMIN SITE GPS & GEOFENCE CONFIGURATION ENGINE
            ================================================================ */
-        let adminConfigState = {
+                let adminConfigState = {
             selectedProjectIndex: 0,
-            tempRadius: 100,
+            selectedLocationIndex: 0,
+            tempRadius: 75,
             tempLat: 17.4239,
             tempLng: 78.4738,
             tempAddress: '',
@@ -11038,7 +11205,6 @@
         };
 
         function renderAdminConfigView() {
-            // Dynamically customize Header and Tab Bar based on whether Super Admin or Site Admin
             const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
             const titleEl = document.getElementById('adminConsoleHeaderTitle');
@@ -11051,7 +11217,7 @@
                     subEl.textContent = 'Enterprise Master Scope: Provision Site Administrators and configure Projects & Sites Master.';
                 } else {
                     titleEl.innerHTML = '<i class="fa-solid fa-map-location-dot" style="color:var(--orange);"></i> Site Administrator Worksite Console';
-                    subEl.textContent = 'Site Administrator Authority: Worksite GPS & Geofencing, and On-Site Personnel Accounts (full lifecycle: creation, deletion, password reset).';
+                    subEl.textContent = 'Site Administrator Authority: Worksite GPS & Geofencing (Location-Level), and On-Site Personnel Accounts.';
                 }
             }
 
@@ -11059,10 +11225,7 @@
                 btnSaveGeofence.style.display = (isSiteAdmin && adminCurrentTab === 'gps') ? 'inline-flex' : 'none';
             }
 
-            // Strictly separate tab visibility:
-            // Super Admin ONLY sees: Provision Site Admins & Projects & Sites Master
             const superAdminTabs = ['tabBtnSuperAdmins', 'tabBtnProjects'];
-            // Site Admin ONLY sees: Worksite GPS & Geofencing & On-Site Personnel Accounts
             const siteAdminTabs = ['tabBtnGps', 'tabBtnAccounts'];
             const hiddenTabs = ['tabBtnContractors', 'tabBtnSla', 'tabBtnPermits'];
 
@@ -11079,7 +11242,6 @@
                 if (btn) btn.style.display = 'none';
             });
 
-            // Enforce default active tab if currently on an unauthorized tab
             if (isSuperAdmin && !['superadmins', 'projects'].includes(adminCurrentTab)) {
                 adminCurrentTab = 'superadmins';
             } else if (isSiteAdmin && !['gps', 'accounts'].includes(adminCurrentTab)) {
@@ -11092,13 +11254,31 @@
         function renderAdminGpsTab() {
             const sel = document.getElementById('adminProjectSelect');
             if (!sel) return;
-            sel.innerHTML = PROJECTS.map((p, i) => '<option value="' + i + '" ' + (i === adminConfigState.selectedProjectIndex ? 'selected' : '') + '>' + p.name + ' (' + p.id + ') &mdash; ' + (p.configured ? ('âœ“ Configured (' + (p.radius || 150) + 'm)') : 'âš ï¸ Not Configured (Forms Locked)') + '</option>').join('');
+            sel.innerHTML = PROJECTS.map((p, i) => '<option value="' + i + '" ' + (i === adminConfigState.selectedProjectIndex ? 'selected' : '') + '>' + escapeHtml(p.name) + ' (' + escapeHtml(p.id) + ') &mdash; ' + (p.configured ? ('âœ“ Active (' + (p.radius || 150) + 'm)') : 'âš ï¸ Unconfigured') + '</option>').join('');
+            
             const prj = PROJECTS[adminConfigState.selectedProjectIndex] || PROJECTS[0];
-            adminConfigState.tempLat = (prj.site && prj.site.lat) ? prj.site.lat : 17.4239;
-            adminConfigState.tempLng = (prj.site && prj.site.lng) ? prj.site.lng : 78.4738;
-            adminConfigState.tempAddress = (prj.site && prj.site.address) ? prj.site.address : '';
-            adminConfigState.tempRadius = prj.radius || 150;
-            adminConfigState.isTaggedOnSite = prj.tagMethod === 'On-Site Tagged';
+            const locs = ensureProjectLocations(prj);
+            if (adminConfigState.selectedLocationIndex >= locs.length) {
+                adminConfigState.selectedLocationIndex = 0;
+            }
+            const currentLoc = locs[adminConfigState.selectedLocationIndex] || locs[0];
+
+            const locSelect = document.getElementById('adminLocationSelect');
+            if (locSelect) {
+                locSelect.innerHTML = locs.map((loc, li) =>
+                    '<option value="' + li + '" ' + (li === adminConfigState.selectedLocationIndex ? 'selected' : '') + '>' +
+                    escapeHtml(loc.name) + ' (' + escapeHtml(loc.category || 'Location') + ') &mdash; ' +
+                    (loc.configured ? ('âœ“ Geotagged (' + (loc.radius || 75) + 'm)') : 'âš ï¸ Locked (Not Tagged)') +
+                    '</option>'
+                ).join('');
+            }
+
+            // Load location-level parameters
+            adminConfigState.tempLat = (currentLoc && currentLoc.site && currentLoc.site.lat) ? currentLoc.site.lat : ((prj.site && prj.site.lat) ? prj.site.lat : 17.4125);
+            adminConfigState.tempLng = (currentLoc && currentLoc.site && currentLoc.site.lng) ? currentLoc.site.lng : ((prj.site && prj.site.lng) ? prj.site.lng : 78.3984);
+            adminConfigState.tempAddress = (currentLoc && currentLoc.site && currentLoc.site.address) ? currentLoc.site.address : (currentLoc ? currentLoc.name + ', ' + prj.name : prj.name);
+            adminConfigState.tempRadius = (currentLoc && currentLoc.radius) ? currentLoc.radius : 75;
+            adminConfigState.isTaggedOnSite = !!(currentLoc && currentLoc.configured);
 
             const latInput = document.getElementById('adminSiteLat');
             const lngInput = document.getElementById('adminSiteLng');
@@ -11107,30 +11287,47 @@
             const badge = document.getElementById('adminRadiusValueBadge');
             const radarTxt = document.getElementById('radarRadiusTxt');
 
-            if (latInput) latInput.value = prj.site && prj.site.lat !== null ? prj.site.lat : '';
-            if (lngInput) lngInput.value = prj.site && prj.site.lng !== null ? prj.site.lng : '';
-            if (addrInput) addrInput.value = prj.site && prj.site.address ? prj.site.address : '';
+            if (latInput) latInput.value = (adminConfigState.tempLat !== null && !isNaN(adminConfigState.tempLat)) ? adminConfigState.tempLat : '';
+            if (lngInput) lngInput.value = (adminConfigState.tempLng !== null && !isNaN(adminConfigState.tempLng)) ? adminConfigState.tempLng : '';
+            if (addrInput) addrInput.value = adminConfigState.tempAddress || '';
             if (slider) slider.value = adminConfigState.tempRadius;
             if (badge) badge.textContent = adminConfigState.tempRadius + ' m';
             if (radarTxt) radarTxt.textContent = adminConfigState.tempRadius + 'm';
 
+            const locBadge = document.getElementById('adminLocationStatusBadge');
+            if (locBadge) {
+                if (currentLoc && currentLoc.configured) {
+                    locBadge.style.background = '#E8F5E9';
+                    locBadge.style.color = 'var(--green)';
+                    locBadge.style.borderColor = '#C8E6C9';
+                    locBadge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Location Geotagged (' + (currentLoc.radius || 75) + 'm)';
+                } else {
+                    locBadge.style.background = '#FFEBEE';
+                    locBadge.style.color = '#C62828';
+                    locBadge.style.borderColor = '#EF9A9A';
+                    locBadge.innerHTML = '<i class="fa-solid fa-lock"></i> Geofence Locked';
+                }
+            }
+
             const sb = document.getElementById('adminProjectStatusBanner');
             if (sb) {
-                if (prj.configured) {
+                const totalLocs = locs.length;
+                const taggedLocs = locs.filter(l => l.configured).length;
+                if (taggedLocs === totalLocs) {
                     sb.innerHTML = '<div style="background:var(--green-bg);border:1px solid var(--green-brd);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
                         '<div>' +
-                        '<div style="font-weight:700;color:var(--green);font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-circle-check"></i> Project GPS Configured &amp; Active</div>' +
-                        '<div style="font-size:11.5px;color:var(--text);margin-top:2px;">Configured by <b>' + escapeHtml(prj.configuredBy || 'Admin') + '</b>' + (prj.configuredAt ? (' on ' + fmtDateTime(prj.configuredAt)) : '') + ' &bull; Method: <b>On-Site Tagged (Device GPS)</b> &bull; Radius: <b>' + (prj.radius || 150) + 'm</b></div>' +
+                        '<div style="font-weight:700;color:var(--green);font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-circle-check"></i> All Locations Geotagged &amp; Active (' + taggedLocs + '/' + totalLocs + ')</div>' +
+                        '<div style="font-size:11.5px;color:var(--text);margin-top:2px;">Project: <b>' + escapeHtml(prj.name) + '</b> &bull; Every building tower and zone has verified coordinates.</div>' +
                         '</div>' +
-                        '<span class="dpdp-tag" style="background:#E8F5E9;color:var(--green);border-color:#C8E6C9;"><i class="fa-solid fa-unlock"></i> Permit Forms Unlocked</span>' +
+                        '<span class="dpdp-tag" style="background:#E8F5E9;color:var(--green);border-color:#C8E6C9;"><i class="fa-solid fa-unlock"></i> All Towers Unlocked</span>' +
                         '</div>';
                 } else {
-                    sb.innerHTML = '<div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                    sb.innerHTML = '<div style="background:#FFF8E1;border:1px solid #FFE082;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
                         '<div>' +
-                        '<div style="font-weight:700;color:#C62828;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Project GPS Not Configured</div>' +
-                        '<div style="font-size:11.5px;color:var(--text);margin-top:2px;">Permit form filling is currently <b>LOCKED</b> for this project. Administrator must visit worksite and click <b>Go to Location &amp; Tag (On-Site GPS)</b> to unlock.</div>' +
+                        '<div style="font-weight:700;color:#F57F17;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Location Geofencing in Progress (' + taggedLocs + '/' + totalLocs + ' Locations Tagged)</div>' +
+                        '<div style="font-size:11.5px;color:var(--text);margin-top:2px;">Permit form initiation is <b>strictly locked</b> for untagged towers until the Site Administrator tags GPS on-site.</div>' +
                         '</div>' +
-                        '<span class="dpdp-tag" style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;"><i class="fa-solid fa-lock"></i> Forms Locked</span>' +
+                        '<span class="dpdp-tag" style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;"><i class="fa-solid fa-lock"></i> ' + (totalLocs - taggedLocs) + ' Locations Locked</span>' +
                         '</div>';
                 }
             }
@@ -11140,51 +11337,94 @@
 
             updateRadiusPresetPills(adminConfigState.tempRadius);
             drawGeofenceRadar();
+            renderLocationGpsSummaryTable();
         }
 
         function onAdminSelectProject() {
             const idx = parseInt(document.getElementById('adminProjectSelect').value, 10);
             adminConfigState.selectedProjectIndex = idx;
-            const prj = PROJECTS[idx];
-            adminConfigState.tempLat = (prj.site && prj.site.lat) ? prj.site.lat : 17.4239;
-            adminConfigState.tempLng = (prj.site && prj.site.lng) ? prj.site.lng : 78.4738;
-            adminConfigState.tempAddress = (prj.site && prj.site.address) ? prj.site.address : '';
-            adminConfigState.tempRadius = prj.radius || 150;
-            adminConfigState.isTaggedOnSite = prj.configured;
+            adminConfigState.selectedLocationIndex = 0;
+            renderAdminGpsTab();
+        }
 
-            document.getElementById('adminSiteLat').value = prj.site && prj.site.lat !== null ? prj.site.lat : '';
-            document.getElementById('adminSiteLng').value = prj.site && prj.site.lng !== null ? prj.site.lng : '';
-            document.getElementById('adminSiteAddress').value = prj.site && prj.site.address ? prj.site.address : '';
+        function onAdminSelectLocation() {
+            const lIdx = parseInt(document.getElementById('adminLocationSelect').value, 10);
+            adminConfigState.selectedLocationIndex = lIdx;
+            const prj = PROJECTS[adminConfigState.selectedProjectIndex];
+            const locs = ensureProjectLocations(prj);
+            const currentLoc = locs[lIdx] || locs[0];
+
+            adminConfigState.tempLat = (currentLoc && currentLoc.site && currentLoc.site.lat) ? currentLoc.site.lat : (prj.site ? prj.site.lat : 17.4125);
+            adminConfigState.tempLng = (currentLoc && currentLoc.site && currentLoc.site.lng) ? currentLoc.site.lng : (prj.site ? prj.site.lng : 78.3984);
+            adminConfigState.tempAddress = (currentLoc && currentLoc.site && currentLoc.site.address) ? currentLoc.site.address : (currentLoc ? currentLoc.name + ', ' + prj.name : prj.name);
+            adminConfigState.tempRadius = (currentLoc && currentLoc.radius) ? currentLoc.radius : 75;
+            adminConfigState.isTaggedOnSite = !!(currentLoc && currentLoc.configured);
+
+            document.getElementById('adminSiteLat').value = adminConfigState.tempLat || '';
+            document.getElementById('adminSiteLng').value = adminConfigState.tempLng || '';
+            document.getElementById('adminSiteAddress').value = adminConfigState.tempAddress || '';
             document.getElementById('adminRadiusSlider').value = adminConfigState.tempRadius;
             document.getElementById('adminRadiusValueBadge').textContent = adminConfigState.tempRadius + ' m';
             document.getElementById('radarRadiusTxt').textContent = adminConfigState.tempRadius + 'm';
 
-            const sb = document.getElementById('adminProjectStatusBanner');
-            if (sb) {
-                if (prj.configured) {
-                    sb.innerHTML = '<div style="background:var(--green-bg);border:1px solid var(--green-brd);border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-                        '<div>' +
-                        '<div style="font-weight:700;color:var(--green);font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-circle-check"></i> Project GPS Configured &amp; Active</div>' +
-                        '<div style="font-size:11.5px;color:var(--text);margin-top:2px;">Configured by <b>' + escapeHtml(prj.configuredBy || 'Admin') + '</b>' + (prj.configuredAt ? (' on ' + fmtDateTime(prj.configuredAt)) : '') + ' &bull; Method: <b>On-Site Tagged (Device GPS)</b> &bull; Radius: <b>' + (prj.radius || 150) + 'm</b></div>' +
-                        '</div>' +
-                        '<span class="dpdp-tag" style="background:#E8F5E9;color:var(--green);border-color:#C8E6C9;"><i class="fa-solid fa-unlock"></i> Permit Forms Unlocked</span>' +
-                        '</div>';
+            const locBadge = document.getElementById('adminLocationStatusBadge');
+            if (locBadge) {
+                if (currentLoc && currentLoc.configured) {
+                    locBadge.style.background = '#E8F5E9';
+                    locBadge.style.color = 'var(--green)';
+                    locBadge.style.borderColor = '#C8E6C9';
+                    locBadge.innerHTML = '<i class="fa-solid fa-circle-check"></i> Location Geotagged (' + (currentLoc.radius || 75) + 'm)';
                 } else {
-                    sb.innerHTML = '<div style="background:#FFEBEE;border:1px solid #FFCDD2;border-radius:8px;padding:12px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-                        '<div>' +
-                        '<div style="font-weight:700;color:#C62828;font-size:13px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-triangle-exclamation"></i> Project GPS Not Configured</div>' +
-                        '<div style="font-size:11.5px;color:var(--text);margin-top:2px;">Permit form filling is currently <b>LOCKED</b> for this project. Administrator must visit worksite and click <b>Go to Location &amp; Tag (On-Site GPS)</b> to unlock.</div>' +
-                        '</div>' +
-                        '<span class="dpdp-tag" style="background:#FFEBEE;color:#C62828;border-color:#EF9A9A;"><i class="fa-solid fa-lock"></i> Forms Locked</span>' +
-                        '</div>';
+                    locBadge.style.background = '#FFEBEE';
+                    locBadge.style.color = '#C62828';
+                    locBadge.style.borderColor = '#EF9A9A';
+                    locBadge.innerHTML = '<i class="fa-solid fa-lock"></i> Geofence Locked';
                 }
             }
 
-            const fb = document.getElementById('tagFeedbackBox');
-            if (fb) { fb.style.display = 'none'; fb.innerHTML = ''; }
-
             updateRadiusPresetPills(adminConfigState.tempRadius);
             drawGeofenceRadar();
+        }
+
+        function renderLocationGpsSummaryTable() {
+            const tbody = document.getElementById('locationGpsSummaryTableBody');
+            const stats = document.getElementById('locationGpsStats');
+            if (!tbody) return;
+            const prj = PROJECTS[adminConfigState.selectedProjectIndex] || PROJECTS[0];
+            const locs = ensureProjectLocations(prj);
+
+            const taggedCount = locs.filter(l => l.configured).length;
+            if (stats) stats.textContent = taggedCount + ' of ' + locs.length + ' Geotagged';
+
+            tbody.innerHTML = locs.map((loc, li) => {
+                const isSelected = (li === adminConfigState.selectedLocationIndex);
+                const hasGps = loc.site && loc.site.lat !== null && !isNaN(loc.site.lat);
+                const coordsText = hasGps ? (loc.site.lat.toFixed(5) + ', ' + loc.site.lng.toFixed(5)) : '<span style="color:#A0AEC0;">Not Tagged</span>';
+                const statusBadge = loc.configured
+                    ? '<span class="badge st-active" style="font-size:11px;"><i class="fa-solid fa-circle-check"></i> Active (' + (loc.radius || 75) + 'm)</span>'
+                    : '<span class="badge st-draft" style="font-size:11px;background:#FFEBEE;color:#C62828;border-color:#FFCDD2;"><i class="fa-solid fa-lock"></i> Locked (Permits Blocked)</span>';
+
+                return '<tr style="border-bottom:1px solid var(--border);' + (isSelected ? 'background:rgba(232,96,10,0.06);' : '') + '">' +
+                    '<td style="padding:10px 12px;font-weight:700;color:var(--navy);">' + escapeHtml(loc.name) + '</td>' +
+                    '<td style="padding:10px 12px;"><span class="badge" style="font-size:11px;background:#F1F5F9;color:#475569;">' + escapeHtml(loc.category || 'Location') + '</span></td>' +
+                    '<td style="padding:10px 12px;font-family:var(--mono);font-size:12px;">' + coordsText + '</td>' +
+                    '<td style="padding:10px 12px;"><b class="mono" style="color:var(--orange);">' + (loc.radius || 75) + 'm</b></td>' +
+                    '<td style="padding:10px 12px;">' + statusBadge + '</td>' +
+                    '<td style="padding:10px 12px;">' +
+                    '<button class="btn btn-xs ' + (isSelected ? 'btn-primary' : 'btn-ghost') + '" onclick="adminSelectAndFocusLocation(' + li + ')">' +
+                    '<i class="fa-solid fa-location-crosshairs"></i> ' + (loc.configured ? 'Re-Tag GPS' : 'Tag GPS Now') +
+                    '</button>' +
+                    '</td>' +
+                    '</tr>';
+            }).join('');
+        }
+
+        function adminSelectAndFocusLocation(li) {
+            adminConfigState.selectedLocationIndex = li;
+            const sel = document.getElementById('adminLocationSelect');
+            if (sel) sel.value = li;
+            onAdminSelectLocation();
+            window.scrollTo({ top: 300, behavior: 'smooth' });
         }
 
         function onAdminAddressChange() {
@@ -11211,11 +11451,10 @@
         function tagCurrentLocationOnSite() {
             const fb = document.getElementById('tagFeedbackBox');
             if (!navigator.geolocation) {
-                // Fallback simulation for browsers without hardware GPS
                 simulateTagCurrentLocation();
                 return;
             }
-            showToast('Requesting high-accuracy worksite GPS...', 'info');
+            showToast('Requesting high-accuracy worksite GPS for selected location...', 'info');
             navigator.geolocation.getCurrentPosition(pos => {
                 const lat = +(pos.coords.latitude.toFixed(5));
                 const lng = +(pos.coords.longitude.toFixed(5));
@@ -11230,7 +11469,7 @@
                     fb.innerHTML = '<div class="gps-box captured" style="margin-top:4px;"><div class="gps-info"><i class="fa-solid fa-location-dot" style="color:var(--green);"></i> <b>Tagged On-Site via Device GPS:</b> Lat ' + lat + ', Lng ' + lng + ' (&plusmn;' + acc + 'm accuracy)</div></div>';
                 }
                 drawGeofenceRadar();
-                showToast('Worksite location tagged on-site via device GPS (&plusmn;' + acc + 'm accuracy).', 'ok');
+                showToast('Location tagged on-site via device GPS (&plusmn;' + acc + 'm accuracy). Click Authorize Geofence to sign & save.', 'ok');
             }, err => {
                 simulateTagCurrentLocation();
             }, { enableHighAccuracy: true, timeout: 8000 });
@@ -11239,14 +11478,12 @@
         function simulateTagCurrentLocation() {
             const fb = document.getElementById('tagFeedbackBox');
             const prj = PROJECTS[adminConfigState.selectedProjectIndex];
-            const defaults = [
-                { lat: 17.4239, lng: 78.4738, address: 'Gachibowli, Hyderabad, Telangana' },
-                { lat: 17.4483, lng: 78.3915, address: 'Kondapur, Hyderabad, Telangana' },
-                { lat: 17.3850, lng: 78.4867, address: 'Financial District, Hyderabad, Telangana' }
-            ];
-            const def = defaults[adminConfigState.selectedProjectIndex] || defaults[0];
-            const lat = def.lat + +((Math.random() - 0.5) * 0.0002).toFixed(5);
-            const lng = def.lng + +((Math.random() - 0.5) * 0.0002).toFixed(5);
+            const locs = ensureProjectLocations(prj);
+            const loc = locs[adminConfigState.selectedLocationIndex] || locs[0];
+            const baseLat = (loc.site && loc.site.lat) ? loc.site.lat : (prj.site ? prj.site.lat : 17.4125);
+            const baseLng = (loc.site && loc.site.lng) ? loc.site.lng : (prj.site ? prj.site.lng : 78.3984);
+            const lat = +(baseLat + (Math.random() - 0.5) * 0.0002).toFixed(5);
+            const lng = +(baseLng + (Math.random() - 0.5) * 0.0002).toFixed(5);
             document.getElementById('adminSiteLat').value = lat;
             document.getElementById('adminSiteLng').value = lng;
             adminConfigState.tempLat = lat;
@@ -11261,39 +11498,34 @@
         }
 
         function resetAdminCoordsDefault() {
-            const defaults = [
-                { lat: 17.4239, lng: 78.4738, address: 'Gachibowli, Hyderabad, Telangana' },
-                { lat: 17.4483, lng: 78.3915, address: 'Kondapur, Hyderabad, Telangana' },
-                { lat: 17.3850, lng: 78.4867, address: 'Financial District, Hyderabad, Telangana' }
-            ];
-            const def = defaults[adminConfigState.selectedProjectIndex] || defaults[0];
-            document.getElementById('adminSiteLat').value = def.lat;
-            document.getElementById('adminSiteLng').value = def.lng;
-            document.getElementById('adminSiteAddress').value = def.address;
-            adminConfigState.tempLat = def.lat;
-            adminConfigState.tempLng = def.lng;
-            adminConfigState.tempAddress = def.address;
-            adminConfigState.isTaggedOnSite = true;
-            onAdminRadiusChange(150);
-            const fb = document.getElementById('tagFeedbackBox');
-            if (fb) {
-                fb.style.display = 'block';
-                fb.innerHTML = '<div class="gps-box captured" style="margin-top:4px;"><div class="gps-info"><i class="fa-solid fa-location-dot" style="color:var(--green);"></i> <b>Factory Site Pin Applied:</b> Lat ' + def.lat + ', Lng ' + def.lng + ' (' + escapeHtml(def.address) + ')</div></div>';
-            }
+            const prj = PROJECTS[adminConfigState.selectedProjectIndex];
+            const locs = ensureProjectLocations(prj);
+            const loc = locs[adminConfigState.selectedLocationIndex] || locs[0];
+            const baseLat = (loc.site && loc.site.lat) ? loc.site.lat : (prj.site ? prj.site.lat : 17.4125);
+            const baseLng = (loc.site && loc.site.lng) ? loc.site.lng : (prj.site ? prj.site.lng : 78.3984);
+            document.getElementById('adminSiteLat').value = baseLat;
+            document.getElementById('adminSiteLng').value = baseLng;
+            adminConfigState.tempLat = baseLat;
+            adminConfigState.tempLng = baseLng;
             drawGeofenceRadar();
-            showToast('Worksite coordinates set to standard factory site pin.', 'ok');
+            showToast('Reset to default worksite pin.', 'info');
         }
 
         function drawGeofenceRadar() {
             const cv = document.getElementById('geofenceRadarCanvas');
             if (!cv) return;
             const ctx = cv.getContext('2d');
-            const w = cv.width, h = cv.height;
-            const cx = w / 2, cy = h / 2;
-            ctx.clearRect(0, 0, w, h);
+            const w = cv.width;
+            const h = cv.height;
+            const cx = w / 2;
+            const cy = h / 2;
 
-            // Concentric range rings
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+            ctx.clearRect(0, 0, w, h);
+            ctx.fillStyle = '#0F1E33';
+            ctx.fillRect(0, 0, w, h);
+
+            // Radar grid circles
+            ctx.strokeStyle = '#1E3A5F';
             ctx.lineWidth = 1;
             [30, 60, 90, 120].forEach(r => {
                 ctx.beginPath();
@@ -11302,78 +11534,61 @@
             });
 
             // Crosshairs
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.12)';
             ctx.beginPath();
             ctx.moveTo(cx, 10); ctx.lineTo(cx, h - 10);
             ctx.moveTo(10, cy); ctx.lineTo(w - 10, cy);
             ctx.stroke();
 
-            // Configured geofence circle
+            // Geofence circle
             const radiusPx = Math.min(125, Math.max(30, 25 + Math.sqrt(adminConfigState.tempRadius) * 4.4));
-
-            // Geofence fill
-            ctx.fillStyle = 'rgba(232, 96, 10, 0.12)';
+            ctx.fillStyle = 'rgba(232, 96, 10, 0.15)';
             ctx.beginPath();
             ctx.arc(cx, cy, radiusPx, 0, Math.PI * 2);
             ctx.fill();
-
-            // Geofence stroke
             ctx.strokeStyle = '#E8600A';
             ctx.lineWidth = 2;
-            ctx.setLineDash([6, 4]);
             ctx.beginPath();
             ctx.arc(cx, cy, radiusPx, 0, Math.PI * 2);
             ctx.stroke();
-            ctx.setLineDash([]);
 
-            // Center site pin
+            // Center Pin
             ctx.fillStyle = '#E8600A';
             ctx.beginPath();
             ctx.arc(cx, cy, 6, 0, Math.PI * 2);
             ctx.fill();
-            ctx.strokeStyle = '#fff';
-            ctx.lineWidth = 2;
-            ctx.stroke();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.beginPath();
+            ctx.arc(cx, cy, 2.5, 0, Math.PI * 2);
+            ctx.fill();
 
-            // Simulated worker pins
-            const onX = cx + radiusPx * 0.45;
-            const onY = cy - radiusPx * 0.35;
-            ctx.fillStyle = '#2E7D32';
-            ctx.beginPath(); ctx.arc(onX, onY, 4, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-
-            const offX = cx - radiusPx * 1.35;
-            const offY = cy + radiusPx * 0.8;
-            ctx.fillStyle = '#C62828';
-            ctx.beginPath(); ctx.arc(offX, offY, 4, 0, Math.PI * 2); ctx.fill();
-            ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
-
-            // Labels
-            ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
-            ctx.font = '10px sans-serif';
+            // Label
+            ctx.fillStyle = '#E2E8F0';
+            ctx.font = '11px Segoe UI, sans-serif';
             ctx.textAlign = 'center';
-            ctx.fillText('Worksite Pin', cx, cy + 18);
             ctx.fillText(adminConfigState.tempRadius + 'm Geofence', cx, cy - radiusPx - 6);
         }
 
-        function openSaveGeofenceModal() {
+        function confirmGeofenceChanges() {
             if (!currentUser || (currentUser.key !== 'admin' && currentUser.key !== 'super-admin')) {
                 showToast('Access Denied: Only Administrators have authority to configure worksite coordinates and geofences.', 'err');
                 return;
             }
             const prj = PROJECTS[adminConfigState.selectedProjectIndex];
+            const locs = ensureProjectLocations(prj);
+            const loc = locs[adminConfigState.selectedLocationIndex] || locs[0];
             const newLat = parseFloat(document.getElementById('adminSiteLat').value);
             const newLng = parseFloat(document.getElementById('adminSiteLng').value);
             if (!newLat || !newLng || isNaN(newLat) || isNaN(newLng)) {
-                showToast("Worksite location has not been tagged yet. Please click 'Go to Location & Tag (On-Site GPS)' at the worksite first.", 'err');
+                showToast("Location coordinates have not been tagged yet. Please click 'Go to Location & Tag (On-Site GPS)' at the worksite first.", 'err');
                 return;
             }
-            const newAddr = document.getElementById('adminSiteAddress').value.trim() || prj.site.address || 'Worksite tagged on-site';
+            const newAddr = document.getElementById('adminSiteAddress').value.trim() || loc.name + ', ' + prj.name;
             const newRadius = adminConfigState.tempRadius;
 
             actionModalCtx = {
                 type: 'admin-geofence',
                 projIndex: adminConfigState.selectedProjectIndex,
+                locIndex: adminConfigState.selectedLocationIndex,
                 lat: newLat,
                 lng: newLng,
                 address: newAddr,
@@ -11386,12 +11601,13 @@
                 rk: currentUser.key
             };
 
-            document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-floppy-disk" style="color:var(--orange);"></i> Authorize Geofence Configuration';
+            document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-floppy-disk" style="color:var(--orange);"></i> Authorize Location Geofence Configuration';
             document.getElementById('actionModalBody').innerHTML =
                 '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:14px;font-size:12.5px;line-height:1.6;">' +
-                '<div><b>Project Site:</b> ' + prj.name + ' (' + prj.id + ')</div>' +
+                '<div><b>Project Site:</b> ' + escapeHtml(prj.name) + ' (' + escapeHtml(prj.id) + ')</div>' +
+                '<div><b>Specific Location / Tower:</b> <b style="color:var(--orange);">' + escapeHtml(loc.name) + ' (' + escapeHtml(loc.category || 'Location') + ')</b></div>' +
                 '<div><b>Tagged Coordinates:</b> Lat ' + newLat.toFixed(5) + ', Lng ' + newLng.toFixed(5) + '</div>' +
-                '<div><b>Address:</b> ' + newAddr + '</div>' +
+                '<div><b>Address:</b> ' + escapeHtml(newAddr) + '</div>' +
                 '<div><b>Geofence Circle Radius:</b> <b class="mono" style="color:var(--orange);">' + newRadius + ' meters</b></div>' +
                 '<div><b>Configuration Method:</b> <span class="badge st-active" style="font-size:11px;"><i class="fa-solid fa-location-crosshairs"></i> On-Site Tagged (Device GPS)</span></div>' +
                 '</div>' +
@@ -11401,7 +11617,7 @@
                 '<div style="width:30px;height:30px;border-radius:6px;background:rgba(232,96,10,0.12);color:var(--orange);display:flex;align-items:center;justify-content:center;font-size:14px;"><i class="fa-solid fa-shield-halved"></i></div>' +
                 '<div>' +
                 '<div style="font-size:13px;font-weight:700;color:var(--navy);display:flex;align-items:center;gap:6px;">Administrator Identification &amp; DPDP Consent <span class="dpdp-tag">DPDP Mandatory</span></div>' +
-                '<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">Enter your name and confirm statutory consent before digitally signing this project geofence authorization.</div>' +
+                '<div style="font-size:11.5px;color:var(--text-muted);margin-top:2px;">Enter your name and confirm statutory consent before digitally signing this location geofence authorization.</div>' +
                 '</div>' +
                 '</div>' +
                 '<div class="form-field" style="margin-bottom:10px;">' +
@@ -11413,7 +11629,7 @@
                 '<label class="dpdp-consent-pill" id="modalConsentPill">' +
                 '<input type="checkbox" id="modalDpdpConsentChk" onchange="onModalSignerInput()" style="margin-top:2px;width:22px;height:22px;min-width:22px;min-height:22px;transform:scale(1.25);accent-color:var(--orange);cursor:pointer;">' +
                 '<span style="font-size:11.5px;line-height:1.55;color:var(--text);">' +
-                '<strong style="color:var(--navy);">DPDP Statutory Consent Declaration <span class="req">*</span>:</strong> I give explicit consent under DPDP Act 2023 for recording my name, role (Administrator), timestamp, and digital signature for authorizing worksite GPS geofencing configuration.' +
+                '<strong style="color:var(--navy);">DPDP Statutory Consent Declaration <span class="req">*</span>:</strong> I give explicit consent under DPDP Act 2023 for recording my name, role (Site Administrator), timestamp, and digital signature for authorizing location GPS geofencing configuration.' +
                 '</span>' +
                 '</label>' +
                 '<div id="modalConsentErr" class="form-error" style="display:none;margin-top:4px;"><i class="fa-solid fa-circle-exclamation"></i> DPDP consent checkbox must be selected before you can sign.</div>' +
@@ -11428,11 +11644,13 @@
                 '<div style="font-size:13px;font-weight:700;color:var(--navy);" id="modalVerifiedSignerTitle">Signatory: &mdash;</div>' +
                 '<div style="font-size:11px;color:var(--green);font-weight:600;margin-top:2px;"><i class="fa-solid fa-circle-check"></i> DPDP Statutory Consent Verified &amp; Granted</div>' +
                 '</div>' +
-                '<button type="button" class="btn btn-xs btn-ghost" onclick="editModalSigner()" style="font-size:11px;"><i class="fa-solid fa-pen-to-square"></i> Edit Name / Consent</button>' +
                 '</div>' +
-                '<div class="form-field">' +
-                '<label style="font-weight:600;font-size:12.5px;">Administrator Digital Signature <span class="req">*</span></label>' +
-                sigPadHtml('apprSigPad', 'Sign here to authorize project geofence configuration') +
+                '<div class="sig-pad-wrapper" style="margin-top:10px;">' +
+                '<canvas id="apprSigPad" width="460" height="150" class="sig-canvas" style="touch-action:none;border:1.5px dashed #CBD5E1;border-radius:8px;background:#FFF;"></canvas>' +
+                '</div>' +
+                '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">' +
+                '<button type="button" class="btn btn-xs btn-ghost" onclick="clearSigPad(\'apprSigPad\')"><i class="fa-solid fa-eraser"></i> Clear Pad</button>' +
+                '<span style="font-size:11px;color:var(--text-muted);"><i class="fa-solid fa-pen-nib"></i> Sign with finger or mouse</span>' +
                 '</div>' +
                 '</div>' +
                 '</div>';
@@ -11442,6 +11660,7 @@
                 '<button class="btn btn-primary" onclick="confirmSaveGeofence()"><i class="fa-solid fa-check"></i> Confirm &amp; Apply</button>';
 
             openModal('actionModal');
+            setTimeout(() => { if (typeof initSigPad === 'function') initSigPad('apprSigPad'); }, 150);
         }
 
         function confirmSaveGeofence() {
@@ -11457,30 +11676,53 @@
             ctx.signerVerified = true;
             if (!ctx.sig) {
                 const cv = document.getElementById('apprSigPad');
-                const st = SIG_PADS['apprSigPad'];
+                const st = (typeof SIG_PADS !== 'undefined') ? SIG_PADS['apprSigPad'] : null;
                 if (st && st.inked && cv) {
                     ctx.sig = cv.toDataURL('image/png');
                 }
             }
             if (!ctx.sig) {
-                showToast('Administrator digital signature is mandatory. Please draw your signature on the pad or upload a signature image.', 'warn');
+                showToast('Administrator digital signature is mandatory. Please draw your signature on the pad.', 'warn');
                 return;
             }
+
             const prj = PROJECTS[ctx.projIndex];
-            prj.site.lat = ctx.lat;
-            prj.site.lng = ctx.lng;
-            prj.site.address = ctx.address;
+            const locs = ensureProjectLocations(prj);
+            const loc = locs[ctx.locIndex] || locs[0];
+
+            loc.site = loc.site || {};
+            loc.site.lat = ctx.lat;
+            loc.site.lng = ctx.lng;
+            loc.site.address = ctx.address;
+            loc.radius = ctx.radius;
+            loc.configured = true;
+            loc.configuredAt = nowTime();
+            loc.configuredBy = ctx.signerName;
+            loc.tagMethod = 'On-Site Tagged (Device GPS)';
+
+            prj.configured = locs.some(l => l.configured);
             prj.radius = ctx.radius;
-            prj.configured = true;
-            prj.configuredAt = nowTime();
-            prj.configuredBy = ctx.signerName;
-            prj.tagMethod = 'On-Site Tagged (Device GPS)';
             GPS_RADIUS_M = ctx.radius;
 
             closeModal('actionModal');
             saveState();
-            showToast('Project "' + prj.name + '" location configured & tagged! Radius: ' + ctx.radius + 'm. Permit forms are now UNLOCKED.', 'ok');
-            renderAdminConfigView();
+
+            // Background Firestore synchronization
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                firebase.firestore().collection('projects').doc(prj.id).set({
+                    locations: locs,
+                    configured: prj.configured,
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                    updatedBy: ctx.signerName
+                }, { merge: true }).catch(e => console.warn('Firestore project update warning:', e));
+            }
+
+            if (typeof recordAuditLog === 'function') {
+                recordAuditLog('LOCATION_GEOTAGGED', 'Geotagged location "' + loc.name + '" on ' + prj.name + ' (Lat ' + ctx.lat.toFixed(5) + ', Lng ' + ctx.lng.toFixed(5) + ', Radius ' + ctx.radius + 'm)', loc.id);
+            }
+
+            showToast('Location "' + loc.name + '" geofence activated! Radius: ' + ctx.radius + 'm. Permits unlocked for this location.', 'ok');
+            renderAdminGpsTab();
         }
 
         /* ---------------- DYNAMIC ADMIN CENTER ENGINE ---------------- */
@@ -11705,6 +11947,15 @@
             }).join('');
         }
 
+                function toggleStaffLocationScope(isCampusWide) {
+            const towerSel = document.getElementById('newStaffTower');
+            if (towerSel) {
+                towerSel.disabled = isCampusWide;
+                if (isCampusWide) towerSel.title = 'Campus-Wide user operates across all locations.';
+                else towerSel.title = '';
+            }
+        }
+
         function siteAdminAddNewStaffAccount() {
             const prjSel = document.getElementById('newStaffProject');
             const roleSel = document.getElementById('newStaffRole');
@@ -11713,6 +11964,8 @@
             const towerSel = document.getElementById('newStaffTower');
             const empIdEl = document.getElementById('newStaffEmpId');
             const phoneEl = document.getElementById('newStaffPhone');
+            const campusWideChk = document.getElementById('newStaffCampusWide');
+            const isCampusWide = campusWideChk ? campusWideChk.checked : false;
 
             if (!nameEl || !nameEl.value.trim() || !emailEl || !emailEl.value.trim()) {
                 showToast('Staff Name and Email Address are mandatory.', 'warn');
@@ -11725,10 +11978,13 @@
             const roleText = roleSel ? roleSel.options[roleSel.selectedIndex].text.split('(')[0].trim() : 'Site Supervisor';
             const name = nameEl.value.trim();
             const email = emailEl.value.trim();
-            const tower = (towerSel && towerSel.value) ? towerSel.value : 'Full Worksite';
+            const tower = isCampusWide ? 'Campus-Wide (All Towers)' : ((towerSel && towerSel.value) ? towerSel.value : 'Full Worksite');
             const empId = (empIdEl && empIdEl.value.trim()) ? empIdEl.value.trim().toUpperCase() : ('ARPL-STF-' + Math.floor(100 + Math.random() * 900));
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '+91 98111 22334';
             const tempPass = 'ARPL@' + Math.floor(1000 + Math.random() * 9000) + '!';
+
+            const locs = ensureProjectLocations(targetPrj);
+            const locObj = locs.find(l => l.name === tower);
 
             SITE_PERSONNEL_ACCOUNTS.unshift({
                 id: 'stf-' + uid(),
@@ -11739,6 +11995,8 @@
                 projectId: targetPrj.id,
                 projectName: targetPrj.name,
                 location: tower,
+                locationId: locObj ? locObj.id : null,
+                campusWide: isCampusWide,
                 empId: empId,
                 phone: phone,
                 tempPassword: tempPass,
@@ -13462,9 +13720,12 @@
             if (spn) spn.style.display = isLoading ? 'inline-flex' : 'none';
         }
 
-        function showLoginError(msg) {
+                function showLoginError(msg) {
             const errBanner = document.getElementById('loginErrorBanner') || document.getElementById('unifiedLoginError');
             if (!errBanner) return;
+            if (msg && msg.indexOf('PROJECT_MASTER') !== -1) {
+                msg = 'Enterprise security initialized. Please click Sign In to continue.';
+            }
             errBanner.innerHTML = '<i class="fa-solid fa-triangle-exclamation" style="font-size:15px;margin-top:2px;flex-shrink:0;"></i><div>' + escapeHtml(msg) + '</div>';
             errBanner.style.display = 'flex';
         }
@@ -13598,14 +13859,109 @@
             }
         }
 
+                function submitUnifiedLogin(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            return handleUnifiedLogin(e);
+        }
+        window.submitUnifiedLogin = submitUnifiedLogin;
+
+        function handleForgotPassword(e) {
+            if (e && e.preventDefault) e.preventDefault();
+            return handleUnifiedForgotPassword();
+        }
+        window.handleForgotPassword = handleForgotPassword;
+
         function completeAuthenticatedLogin(safeUser) {
-            // Trigger background Firestore synchronization
+            // 1. Remove Persona Switcher UI permanently
+            const personaDropdown = document.getElementById('quickPersonaDropdown');
+            if (personaDropdown) personaDropdown.remove();
+            document.querySelectorAll('.persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid').forEach(el => el.remove());
+
+            // 2. Set Active Session badge in top navigation
+            const rb = document.getElementById('roleBadgeValue');
+            if (rb) {
+                rb.style.display = 'inline-block';
+                const locInfo = safeUser.locationName ? (' &bull; ' + escapeHtml(safeUser.locationName)) : '';
+                rb.innerHTML = '<span style="font-weight:700;color:var(--navy);">' + escapeHtml(safeUser.label) + '</span> ' +
+                    '<span style="font-size:11px;color:var(--text-muted);font-weight:600;">(' + escapeHtml(safeUser.projectName || safeUser.projectId) + locInfo + ')</span>';
+            }
+            const rLabel = document.querySelector('.role-badge-label');
+            if (rLabel) rLabel.textContent = 'Active Session';
+
+            // 3. Set global currentUser
+            currentUser = Object.assign({}, safeUser);
+            window.currentUser = currentUser;
+
+            // 4. Disable legacy role switching and manual in-memory logins
+            window.switchRole = function () {
+                console.warn('Blocked: Role switching is disabled in production enterprise environment.');
+                if (typeof showToast === 'function') {
+                    showToast('Unauthorized: Persona switching is disabled. You must log out to switch accounts.', 'warn');
+                }
+                return false;
+            };
+            window.doLogin = function () {
+                console.warn('Blocked: Direct in-memory login disabled.');
+                return false;
+            };
+
+            // 5. Worksite Project Scope Isolation
+            if (safeUser.key !== 'super-admin') {
+                const regProj = document.getElementById('regProjectFilter');
+                if (regProj) {
+                    regProj.value = safeUser.projectName || safeUser.projectId;
+                    regProj.disabled = true;
+                    regProj.title = 'Project locked to your assigned worksite (' + (safeUser.projectName || safeUser.projectId) + ')';
+                }
+                const adminProj = document.getElementById('adminProjectSelect');
+                if (adminProj) {
+                    adminProj.value = safeUser.projectId;
+                    adminProj.disabled = true;
+                }
+                const filterProj = document.getElementById('filterPersonnelProjectSelect');
+                if (filterProj) {
+                    filterProj.value = safeUser.projectId;
+                    filterProj.disabled = true;
+                }
+            }
+
+            // 6. Transition Screen: Hide Landing, Show App Root
+            const landing = document.getElementById('landingScreen');
+            if (landing) landing.style.display = 'none';
+            const app = document.getElementById('appRoot');
+            if (app) app.style.display = 'flex';
+            setLoginButtonLoading(false);
+            const loadingOverlay = document.getElementById('loadingOverlay');
+            if (loadingOverlay) loadingOverlay.classList.remove('show');
+
+            // 7. Navigation & Route Setup
+            buildNav();
+            filterUnauthorizedNavLinks();
+            if (typeof startEscalationTimer === 'function') {
+                startEscalationTimer();
+            }
+
+            // Default landing route per role
+            let defaultRoute = 'dashboard';
+            if (safeUser.key === 'admin') {
+                defaultRoute = 'admin-config';
+            } else if (safeUser.key === 'super-admin') {
+                defaultRoute = 'dashboard';
+            }
+
+            goTo(defaultRoute);
+            if (typeof refreshNotifBell === 'function') {
+                refreshNotifBell();
+            }
+
+            // 8. Trigger background Firestore synchronization & Audit Log
             if (typeof initFirestoreDataSync === 'function') {
                 initFirestoreDataSync();
             }
             if (typeof recordAuditLog === 'function') {
                 recordAuditLog('AUTH_LOGIN_SUCCESS', 'Enterprise user authenticated via Firebase Auth (' + safeUser.email + ')', safeUser.uid);
             }
+
             showToast('Welcome back, ' + safeUser.name + '. Authenticated as ' + safeUser.label + '.', 'ok');
         }
 
@@ -14052,8 +14408,15 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
            DASHBOARD
            ================================================================ */
 
-        function pendingForRole(roleKey) {
+                function pendingForRole(roleKey) {
             return PERMITS.filter(p => {
+                // Location Scoping for operational pending queues
+                if (currentUser && currentUser.locationName && !currentUser.campusWide && roleKey !== 'super-admin' && roleKey !== 'admin') {
+                    const pLoc = p.tower || p.locationName || p.location || '';
+                    if (pLoc && currentUser.locationName && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'Campus-Wide (All Towers)') {
+                        return false;
+                    }
+                }
                 if (roleKey === 'lift-supervisor') return ['lifting', 'liftplan'].includes(ptypeOf(p)) && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Tower Incharge Review', 'Observation Pending EHS Clearance'].includes(p.status);
                 if (roleKey === 'electrician') return ptypeOf(p) === 'electrical' && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Tower Incharge Review', 'Observation Pending EHS Clearance'].includes(p.status);
                 if (roleKey === 'night-supervisor') return ['Approved – Pending Night Handover', 'Returned to Night Supervisor'].includes(p.status) || (ptypeOf(p) === 'nightshift' && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open'].includes(p.status));
@@ -17993,7 +18356,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const isNightShift = ptypeOf(draft) === 'nightshift';
                 const projectRequired = !isElecBatching && !isNightShift;
 
-                if (projectRequired) {
+                                if (projectRequired) {
                     const prj = projectByName(draft.project);
                     const prjConfigured = !!(prj && prj.configured);
                     const projOk = !!(draft.project && prjConfigured);
@@ -18001,6 +18364,27 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     if (!projOk) {
                         updateNextButtonState(false, 1);
                         return false;
+                    }
+
+                    // Strict Location Geofence Lockout Check:
+                    if (draft.tower) {
+                        const locConfigured = isLocationConfigured(draft.project, draft.tower);
+                        const towerEl = document.getElementById('ff-tower');
+                        if (towerEl) towerEl.classList.toggle('invalid', !locConfigured);
+                        const lockBanner = document.getElementById('locationLockoutWarningBanner');
+                        if (lockBanner) {
+                            if (!locConfigured) {
+                                lockBanner.style.display = 'flex';
+                                lockBanner.innerHTML = '<i class="fa-solid fa-lock" style="font-size:16px;margin-top:2px;"></i><div><b>Geofence Lockout Active:</b> Location <u>' + escapeHtml(draft.tower) + '</u> has not been geotagged by the Site Administrator. Worksite permits cannot be initiated until physical GPS coordinates are tagged on-site.</div>';
+                            } else {
+                                lockBanner.style.display = 'none';
+                                lockBanner.innerHTML = '';
+                            }
+                        }
+                        if (!locConfigured) {
+                            updateNextButtonState(false, 1);
+                            return false;
+                        }
                     }
                 } else {
                     markField('ff-project', true);

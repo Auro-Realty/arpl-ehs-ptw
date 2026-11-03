@@ -1,3 +1,5 @@
+﻿var PROJECT_MASTER = window.PROJECT_MASTER || [];
+window.PROJECT_MASTER = PROJECT_MASTER;
 // ARPL EHS Enterprise Authentication & Session Protection Bridge
 (function () {
   // Ensure legacy demo persona switching & in-memory logins are strictly blocked

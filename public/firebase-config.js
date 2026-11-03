@@ -1,3 +1,5 @@
+﻿var PROJECT_MASTER = window.PROJECT_MASTER || [];
+window.PROJECT_MASTER = PROJECT_MASTER;
 /**
  * ARPL EHS Permit to Work - Firebase Web Configuration
  * Connected to GitHub Secrets (FIREBASE_API_KEY).
