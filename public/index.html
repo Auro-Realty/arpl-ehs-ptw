@@ -5221,18 +5221,21 @@
                     </div>
                 </div>
 
-                <!-- ADMIN CONFIG (SITE GPS & GEOFENCE) -->
+                <!-- ADMIN CONFIG (SITE GPS & GEOFENCE + SITE ROLE EMPANELMENT) -->
                 <div class="view" id="view-admin-config">
                     <div class="view-header">
                         <div>
-                            <h1 id="adminConsoleHeaderTitle"><i class="fa-solid fa-map-location-dot"></i> Site GPS &amp; Geofencing Configuration</h1>
-                            <p id="adminConsoleHeaderSub">Administrator control: Configure worksite locations, GPS coordinates, geofences, workflow tags, and role/personnel accounts</p>
+                            <h1 id="adminConsoleHeaderTitle"><i class="fa-solid fa-map-location-dot"></i> Site Administrator Worksite Console</h1>
+                            <p id="adminConsoleHeaderSub">Administrator control: Configure worksite GPS geofence, active towers/zones, workflow tags, and empanel operational site roles</p>
                         </div>
                         <div id="adminHeaderActions">
                             <button class="btn btn-primary" id="btnAdminSaveGeofence" onclick="confirmGeofenceChanges()"><i
                                     class="fa-solid fa-floppy-disk"></i> Save Location Geofence &amp; Workflow Tags</button>
                         </div>
                     </div>
+
+                    <!-- A. Top Scope Banner (Read-Only Worksite Lock for Site Admin) -->
+                    <div id="worksiteGovernanceHeader" style="margin-bottom: 18px;"></div>
 
                     <!-- Admin Navigation Tab Bar -->
                     <div class="admin-tab-bar" style="display:flex;gap:8px;border-bottom:2px solid var(--border);margin-bottom:20px;padding-bottom:2px;overflow-x:auto;">
@@ -5243,10 +5246,10 @@
                             <i class="fa-solid fa-building"></i> Projects &amp; Sites Master
                         </button>
                         <button type="button" class="admin-tab-btn active" id="tabBtnGps" onclick="switchAdminTab('gps')" style="padding:10px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--orange);border-bottom:3px solid var(--orange);display:flex;align-items:center;gap:8px;">
-                            <i class="fa-solid fa-map-location-dot"></i> Locations, GPS &amp; Workflow Tagging
+                            <i class="fa-solid fa-map-location-dot"></i> Worksite Geofence &amp; Towers
                         </button>
-                        <button type="button" class="admin-tab-btn" id="tabBtnAccounts" onclick="switchAdminTab('accounts')" style="padding:10px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:3px solid transparent;display:flex;align-items:center;gap:8px;">
-                            <i class="fa-solid fa-users-gear"></i> Roles &amp; Personnel Provisioning
+                        <button type="button" class="admin-tab-btn" id="tabBtnAccounts" onclick="switchAdminTab('accounts')" style="padding:10px 18px;font-size:13px;font-weight:700;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:3px solid transparent;display:flex;align-items:center;gap:8px;">
+                            <i class="fa-solid fa-users-gear"></i> Empanel Site Staff &amp; Roles
                         </button>
                         <button type="button" class="admin-tab-btn" id="tabBtnContractors" onclick="switchAdminTab('contractors')" style="padding:10px 18px;font-size:13px;font-weight:600;border:none;background:none;cursor:pointer;color:var(--text-muted);border-bottom:3px solid transparent;display:flex;align-items:center;gap:8px;">
                             <i class="fa-solid fa-helmet-safety"></i> Approved Contractor Directory
@@ -5342,7 +5345,7 @@
                                 <!-- Per-Project Configuration Status Banner -->
                                 <div id="adminProjectStatusBanner" style="margin-bottom: 16px;"></div>
 
-                                <div class="form-field" style="margin-bottom: 14px;">
+                                <div class="form-field" id="adminProjectSelectFieldWrap" style="margin-bottom: 14px;">
                                     <label for="adminProjectSelect">Assigned Project Site <span class="req">*</span></label>
                                     <select id="adminProjectSelect" onchange="onAdminSelectProject()"></select>
                                 </div>
@@ -5517,8 +5520,184 @@
                         </div>
                     </div>
 
-                    <!-- Panel: Roles & On-Site Personnel Accounts (Site Admin & Super Admin) -->
-                    <div id="adminPanelAccounts" class="admin-panel" style="display:none;">
+                    <!-- Panel: Site Staff & Role Empanelment Workspace (65% Left Directory / 35% Right Form) -->
+                    <div id="adminPanelAccounts" class="admin-panel" style="display:block; margin-top: 24px;">
+                        <style>
+                            .empanel-workspace-grid {
+                                display: grid;
+                                grid-template-columns: minmax(0, 65fr) minmax(0, 35fr);
+                                gap: 20px;
+                                align-items: start;
+                            }
+                            @media (max-width: 1024px) {
+                                .empanel-workspace-grid {
+                                    grid-template-columns: 1fr !important;
+                                }
+                            }
+                            .empanel-filter-pill {
+                                padding: 5px 12px;
+                                border-radius: 999px;
+                                font-size: 11.5px;
+                                font-weight: 700;
+                                border: 1px solid #CBD5E1;
+                                background: #F8FAFC;
+                                color: #475569;
+                                cursor: pointer;
+                                transition: all 0.15s ease;
+                            }
+                            .empanel-filter-pill.active {
+                                background: var(--navy);
+                                color: #FFFFFF;
+                                border-color: var(--navy);
+                            }
+                        </style>
+
+                        <div class="empanel-workspace-grid" style="margin-bottom: 22px;">
+                            <!-- B. Left Column (65% Width on Desktop, 100% on Split-Screen/Mobile): "Empaneled Worksite Roles Directory" Table -->
+                            <div>
+                                <div class="card" style="padding: 22px; border-radius: 14px; border: 1.5px solid #E2E8F0; background: #FFFFFF;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:10px;">
+                                        <div>
+                                            <h3 id="empaneledStaffCardTitle" style="font-size:15.5px;font-weight:800;margin:0;color:var(--navy);display:flex;align-items:center;gap:8px;">
+                                                <i class="fa-solid fa-users-gear" style="color:var(--orange);"></i> Empaneled Worksite Staff &amp; Approvers (0)
+                                            </h3>
+                                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Live Firebase Authentication accounts &amp; Firestore <span class="mono">/users/{uid}</span> role bindings scoped to this worksite.</p>
+                                        </div>
+                                        <!-- Role Filter Pill Bar -->
+                                        <div id="empanelRoleFilterPillBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                                            <button type="button" class="empanel-filter-pill active" data-group="all" onclick="setEmpanelRoleGroupFilter('all')">All Roles</button>
+                                            <button type="button" class="empanel-filter-pill" data-group="initiators" onclick="setEmpanelRoleGroupFilter('initiators')">Initiators</button>
+                                            <button type="button" class="empanel-filter-pill" data-group="reviewers" onclick="setEmpanelRoleGroupFilter('reviewers')">Reviewers</button>
+                                            <button type="button" class="empanel-filter-pill" data-group="approvers" onclick="setEmpanelRoleGroupFilter('approvers')">Approvers</button>
+                                            <button type="button" class="empanel-filter-pill" data-group="ehs" onclick="setEmpanelRoleGroupFilter('ehs')">EHS</button>
+                                        </div>
+                                    </div>
+                                    <div style="display:none;">
+                                        <select id="filterPersonnelProjectSelect" onchange="renderSitePersonnelTable()">
+                                            <option value="">All Worksites</option>
+                                        </select>
+                                    </div>
+                                    <div style="overflow-x:auto;">
+                                        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
+                                            <thead>
+                                                <tr style="background:#F8FAFC;border-bottom:2px solid #E2E8F0;text-align:left;color:#334155;font-size:11.5px;text-transform:uppercase;letter-spacing:0.3px;">
+                                                    <th style="padding:11px 12px;">Role &amp; Stage Badge</th>
+                                                    <th style="padding:11px 12px;">Full Name</th>
+                                                    <th style="padding:11px 12px;">Official Email &amp; Login ID</th>
+                                                    <th style="padding:11px 12px;">Assigned Tower / Zone</th>
+                                                    <th style="padding:11px 12px;">Account Status</th>
+                                                    <th style="padding:11px 12px;">Actions</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="sitePersonnelTableBody"></tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- C. Right Column (35% Width on Desktop, 100% on Split-Screen/Mobile): "Empanel New Site Role" Provisioning Form -->
+                            <div>
+                                <div class="card" style="border-radius: 14px; border: 1.5px solid #E2E8F0; background: #FFFFFF; padding: 24px;">
+                                    <h3 style="font-size:16px;font-weight:800;margin:0 0 4px;color:var(--navy);display:flex;align-items:center;gap:8px;">
+                                        <i class="fa-solid fa-user-plus" style="color:#E8600A;"></i> Empanel New Site Role
+                                    </h3>
+                                    <p style="font-size:12px;color:#64748B;margin:0 0 16px;">Creates a real Firebase login &amp; locks user to this worksite</p>
+
+                                    <form id="empanelSiteRoleForm" onsubmit="return handleEmpanelSiteRoleSubmit(event);" novalidate>
+                                        <!-- 1. Assigned Worksite (Read-Only Input) -->
+                                        <div class="form-field" style="margin-bottom:12px;">
+                                            <label for="empanelWorksiteReadonly" style="font-weight:700;font-size:12px;color:#1E293B;">Assigned Worksite (Locked)</label>
+                                            <input type="text" id="empanelWorksiteReadonly" readonly value="The Pearl (PRJ-PEARL)" style="background:#F1F5F9;color:#0F172A;font-weight:700;border:1px solid #CBD5E1;cursor:not-allowed;">
+                                            <select id="newStaffProject" onchange="onStaffProjectChange()" style="display:none;"></select>
+                                        </div>
+
+                                        <!-- 2. Operational Role -->
+                                        <div class="form-field" style="margin-bottom:12px;">
+                                            <label for="empanelRoleSelect" style="font-weight:700;font-size:12px;color:#1E293B;">Operational Role <span class="req">*</span></label>
+                                            <select id="empanelRoleSelect" required onchange="onEmpanelRoleSelectChange()">
+                                                <option value="site-supervisor">Site Supervisor (Permit Initiator / Permittee)</option>
+                                                <option value="site-engineer">Site Engineer / Tower Incharge (Stage 2 Reviewer)</option>
+                                                <option value="excavation-head">Excavation Execution Head (Conditional Reviewer)</option>
+                                                <option value="hw-section-head">Hot Work Section Head (Conditional Reviewer)</option>
+                                                <option value="mep">MEP Engineer (Parallel Technical Reviewer)</option>
+                                                <option value="pm">Plant &amp; Machinery / P&amp;M Head (Parallel Reviewer)</option>
+                                                <option value="quality-engineer">Quality Engineer (Parallel Reviewer)</option>
+                                                <option value="it">IT / Systems Engineer (Parallel Reviewer)</option>
+                                                <option value="ehs-officer">Site EHS Officer (Stage 3 Safety Approver &amp; PDF Custody)</option>
+                                                <option value="ehs-manager">Project EHS Manager (Stage 3 Final Approver &amp; PDF Custody)</option>
+                                                <option value="project-manager">Project Head / Project Manager (Escalation &amp; Oversight)</option>
+                                                <option value="electrician">Permittee Electrician (PTW-006 Electrical Initiator)</option>
+                                                <option value="blasting-incharge">Blasting In-charge (PTW-007 Drilling &amp; Blasting Initiator)</option>
+                                                <option value="lift-supervisor">Lifting Supervisor (PTW-009A/B Lifting Initiator)</option>
+                                                <option value="night-supervisor">Night Site Supervisor (PTW-010 Night Shift Handover)</option>
+                                            </select>
+                                            <select id="newStaffRole" onchange="onNewStaffRoleChange()" style="display:none;"></select>
+                                        </div>
+
+                                        <!-- 3. Staff Full Name -->
+                                        <div class="form-field" style="margin-bottom:12px;">
+                                            <label for="empanelFullName" style="font-weight:700;font-size:12px;color:#1E293B;">Staff Full Name <span class="req">*</span></label>
+                                            <input id="empanelFullName" type="text" placeholder="e.g. Suresh Reddy" required oninput="const n=document.getElementById('newStaffName');if(n)n.value=this.value;">
+                                            <input type="text" id="newStaffName" style="display:none;">
+                                        </div>
+
+                                        <!-- 4. Corporate Email Address -->
+                                        <div class="form-field" style="margin-bottom:12px;">
+                                            <label for="empanelEmail" style="font-weight:700;font-size:12px;color:#1E293B;">Corporate Email Address <span class="req">*</span></label>
+                                            <input id="empanelEmail" type="email" placeholder="suresh.r@aurorealty.com" required oninput="const e=document.getElementById('newStaffEmail');if(e)e.value=this.value;">
+                                            <input type="email" id="newStaffEmail" style="display:none;">
+                                        </div>
+
+                                        <!-- 5. Employee ID / Designation Code -->
+                                        <div class="form-field" style="margin-bottom:12px;">
+                                            <label for="empanelEmpId" style="font-weight:700;font-size:12px;color:#1E293B;">Employee ID / Designation Code <span class="req">*</span></label>
+                                            <input id="empanelEmpId" type="text" placeholder="e.g. ARPL-SUP-201" class="mono" required oninput="const m=document.getElementById('newStaffEmpId');if(m)m.value=this.value;">
+                                            <input type="text" id="newStaffEmpId" style="display:none;">
+                                        </div>
+
+                                        <!-- 6. Assigned Tower / Zone -->
+                                        <div class="form-field" style="margin-bottom:12px;">
+                                            <label for="empanelTowerSelect" style="font-weight:700;font-size:12px;color:#1E293B;">Assigned Tower / Zone</label>
+                                            <select id="empanelTowerSelect" onchange="const t=document.getElementById('newStaffTower');if(t)t.value=this.value;">
+                                                <option value="All Site Towers">All Site Towers</option>
+                                            </select>
+                                            <select id="newStaffTower" style="display:none;"></select>
+                                            <input type="checkbox" id="newStaffCampusWide" style="display:none;">
+                                            <select id="newStaffWorkflowScope" style="display:none;"><option value="ALL">ALL</option></select>
+                                            <input type="text" id="newStaffCustomRoleTitle" style="display:none;">
+                                            <input type="text" id="newStaffPhone" style="display:none;">
+                                        </div>
+
+                                        <!-- 7. Initial Login Password with Show/Hide Eye Toggle -->
+                                        <div class="form-field" style="margin-bottom:14px;">
+                                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                                                <label for="empanelPassword" style="font-weight:700;font-size:12px;color:#1E293B;margin:0;">Initial Login Password <span class="req">*</span></label>
+                                                <button type="button" class="btn btn-xs btn-ghost" onclick="generatePasswordInto('empanelPassword');const p=document.getElementById('newStaffPassword');if(p)p.value=document.getElementById('empanelPassword').value;" style="padding:2px 6px;font-size:10.5px;"><i class="fa-solid fa-key"></i> Auto-Generate</button>
+                                            </div>
+                                            <div style="position:relative;display:flex;align-items:center;">
+                                                <input id="empanelPassword" type="password" value="AuroRole2026!" required class="mono" style="width:100%;padding-right:40px;" oninput="const p=document.getElementById('newStaffPassword');if(p)p.value=this.value;">
+                                                <button type="button" id="toggleEmpanelPasswordBtn" aria-label="Toggle password visibility" onclick="toggleEmpanelPasswordVisibility()" style="position:absolute;right:10px;background:none;border:none;color:#64748B;cursor:pointer;padding:4px;">
+                                                    <i class="fa-solid fa-eye" id="toggleEmpanelPasswordIcon"></i>
+                                                </button>
+                                            </div>
+                                            <input type="text" id="newStaffPassword" value="AuroRole2026!" style="display:none;">
+                                            <div style="font-size:11px;color:#64748B;margin-top:5px;line-height:1.4;">
+                                                Minimum 6 characters. User can change or reset via 'Forgot Password?' on the login screen.
+                                            </div>
+                                        </div>
+
+                                        <!-- 8. Submit Button -->
+                                        <button id="empanelSubmitBtn" type="submit" style="width:100%;background:#E8600A;color:#FFFFFF;border:none;border-radius:8px;padding:11px 16px;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 6px rgba(232,96,10,0.28);">
+                                            <i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login
+                                        </button>
+
+                                        <!-- 9. Inline Feedback Banner -->
+                                        <div id="empanelFeedbackBanner" style="display:none;margin-top:12px;padding:11px 14px;border-radius:8px;font-size:12px;line-height:1.5;"></div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Project Custom Roles & Location/Workflow Tagging Section -->
                         <div class="card" style="padding:20px;margin-bottom:20px;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
@@ -5526,7 +5705,7 @@
                                     <h3 style="font-size:15px;font-weight:700;margin:0;color:var(--navy);display:flex;align-items:center;gap:8px;">
                                         <i class="fa-solid fa-id-badge" style="color:var(--orange);"></i> Project Role Definitions &amp; Location / Workflow Tagging
                                     </h3>
-                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Create project-specific roles tagged to specific Location Tag IDs and Permit Workflows, then assign personnel below.</p>
+                                    <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Create project-specific roles tagged to specific Location Tag IDs and Permit Workflows, then assign personnel above.</p>
                                 </div>
                                 <span class="dpdp-tag" style="background:#E8F5E9;color:var(--green);border-color:#C8E6C9;"><i class="fa-solid fa-sitemap"></i> Location-Tagged RBAC</span>
                             </div>
@@ -5578,129 +5757,6 @@
                                 <button type="button" class="btn btn-sm btn-primary" onclick="siteAdminCreateCustomRole()" style="height:35px;white-space:nowrap;"><i class="fa-solid fa-plus"></i> Create Tagged Role</button>
                             </div>
                             <div id="customRolesTableWrap"></div>
-                        </div>
-
-                        <div style="display:grid;grid-template-columns:1fr 390px;gap:20px;align-items:start;">
-                            <div>
-                                <div class="card" style="padding:20px;">
-                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
-                                        <div>
-                                            <h3 style="font-size:15px;font-weight:700;margin:0;color:var(--navy);display:flex;align-items:center;gap:8px;">
-                                                <i class="fa-solid fa-users-gear" style="color:var(--orange);"></i> On-Site Personnel &amp; Approval Flow Accounts
-                                            </h3>
-                                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Authenticated field personnel tagged to specific project locations and workflows.</p>
-                                        </div>
-                                        <div style="display:flex;gap:8px;align-items:center;">
-                                            <select id="filterPersonnelProjectSelect" onchange="renderSitePersonnelTable()" style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border);">
-                                                <option value="">All Worksites</option>
-                                            </select>
-                                        </div>
-                                    </div>
-                                    <div style="overflow-x:auto;">
-                                        <table style="width:100%;border-collapse:collapse;font-size:12.5px;">
-                                            <thead>
-                                                <tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">
-                                                    <th style="padding:10px 12px;">Staff Member</th>
-                                                    <th style="padding:10px 12px;">Tagged Role</th>
-                                                    <th style="padding:10px 12px;">Location Tag &amp; Workflows</th>
-                                                    <th style="padding:10px 12px;">Employee ID</th>
-                                                    <th style="padding:10px 12px;">Status</th>
-                                                    <th style="padding:10px 12px;">Action</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody id="sitePersonnelTableBody"></tbody>
-                                        </table>
-                                    </div>
-                                </div>
-                            </div>
-                            <div>
-                                <div class="card" style="padding:20px;">
-                                    <h3 style="font-size:14px;font-weight:700;margin:0 0 12px;color:var(--navy);display:flex;align-items:center;gap:8px;">
-                                        <i class="fa-solid fa-user-plus" style="color:var(--green);"></i> Provision On-Site Personnel Account
-                                    </h3>
-                                    <p style="font-size:11.8px;color:var(--text-muted);margin:0 0 14px;">Create a real Firebase Auth login account and tag the user to a Role, Location ID, and Permit Workflows.</p>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>Assigned Worksite <span class="req">*</span></label>
-                                        <select id="newStaffProject" onchange="onStaffProjectChange()"></select>
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>On-Site Role in Approval Flow <span class="req">*</span></label>
-                                        <select id="newStaffRole" onchange="onNewStaffRoleChange()">
-                                            <option value="site-supervisor">Site Supervisor (Civil / General Permittee)</option>
-                                            <option value="site-engineer">Site Engineer (Physical Ground Check)</option>
-                                            <option value="electrician">Electrician (PTW-006 Specialist)</option>
-                                            <option value="blasting-incharge">Blasting In-charge (PTW-007 Specialist)</option>
-                                            <option value="lift-supervisor">Lifting Supervisor (PTW-009 Specialist)</option>
-                                            <option value="night-supervisor">Night Site Supervisor (PTW-010 Handover)</option>
-                                            <option value="hw-section-head">Tower Incharge (Tower Section Head)</option>
-                                            <option value="excavation-head">Excavation Head (Earthwork Section Head)</option>
-                                            <option value="mep">MEP Engineer (Power &amp; Utility Clearance)</option>
-                                            <option value="pm">P&amp;M Engineer (Plant &amp; Machinery Fitness)</option>
-                                            <option value="it">IT Engineer (Telecom &amp; OFC Clearance)</option>
-                                            <option value="quality-engineer">Quality Engineer (Batching Plant Clearance)</option>
-                                            <option value="project-manager">Project Manager (Critical Lift Plan)</option>
-                                            <option value="ehs-officer">EHS Safety Officer (Field Surveillance)</option>
-                                            <option value="ehs-manager">EHS Safety Manager (Statutory Endorsement)</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>Custom Role Title / Tag Label (Optional)</label>
-                                        <input type="text" id="newStaffCustomRoleTitle" placeholder="e.g. Tower P1 Supervisor">
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>Staff Full Name <span class="req">*</span></label>
-                                        <input type="text" id="newStaffName" placeholder="Enter staff full name">
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>Official Email Address <span class="req">*</span></label>
-                                        <input type="email" id="newStaffEmail" placeholder="name@aurorealty.com">
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                                            <label style="margin:0;">Initial Login Password <span class="req">*</span></label>
-                                            <button type="button" class="btn btn-xs btn-ghost" onclick="generatePasswordInto('newStaffPassword')" style="padding:2px 6px;font-size:10.5px;"><i class="fa-solid fa-key"></i> Auto-Generate</button>
-                                        </div>
-                                        <input type="text" id="newStaffPassword" placeholder="Min. 6 characters (e.g. AuroStaff2026!)" class="mono">
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>Tagged Location &amp; Location ID <span class="req">*</span></label>
-                                        <select id="newStaffTower"></select>
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label class="dpdp-consent-pill" style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg);border-radius:6px;cursor:pointer;">
-                                            <input type="checkbox" id="newStaffCampusWide" onchange="toggleStaffLocationScope(this.checked)" style="width:16px;height:16px;accent-color:var(--orange);">
-                                            <span style="font-size:12px;font-weight:600;color:var(--navy);">Campus-Wide / All Locations Scope</span>
-                                        </label>
-                                    </div>
-                                    <div class="form-field" style="margin-bottom:12px;">
-                                        <label>Tagged Permit Workflows for User</label>
-                                        <select id="newStaffWorkflowScope" style="font-size:12px;">
-                                            <option value="ALL">All Role-Eligible Permit Workflows</option>
-                                            <option value="excavation">PTW-001 Excavation Work Only</option>
-                                            <option value="hotwork">PTW-002 Hot Work Only</option>
-                                            <option value="guardrail">PTW-003 Guard Rail Removal Only</option>
-                                            <option value="confined">PTW-004 Confined Space Only</option>
-                                            <option value="shaft">PTW-005 Shaft Work Only</option>
-                                            <option value="electrical">PTW-006 Electrical Work Only</option>
-                                            <option value="blasting">PTW-007 Drilling &amp; Blasting Only</option>
-                                            <option value="general">PTW-008 General Work Only</option>
-                                            <option value="lifting">PTW-009A/B Lifting Operations Only</option>
-                                            <option value="nightshift">PTW-010 Night Shift Work Only</option>
-                                        </select>
-                                    </div>
-                                    <div class="form-grid" style="margin-bottom:14px;">
-                                        <div class="form-field">
-                                            <label>Employee ID</label>
-                                            <input type="text" id="newStaffEmpId" placeholder="ARPL-SUP-201" class="mono">
-                                        </div>
-                                        <div class="form-field">
-                                            <label>Mobile Number</label>
-                                            <input type="text" id="newStaffPhone" placeholder="+91 98111 22334">
-                                        </div>
-                                    </div>
-                                    <button type="button" class="btn btn-primary btn-block" id="btnCreateStaffAccount" onclick="siteAdminAddNewStaffAccount()"><i class="fa-solid fa-id-card-clip"></i> Create On-Site Account</button>
-                                </div>
-                            </div>
                         </div>
                     </div>
 
@@ -11388,6 +11444,55 @@
             isTaggedOnSite: false
         };
 
+        function renderWorksiteGovernanceHeader() {
+            const hdr = document.getElementById('worksiteGovernanceHeader');
+            if (!hdr) return;
+            const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
+            const isSiteAdmin = currentUser && currentUser.key === 'admin';
+            if (isSiteAdmin && (currentUser.projectId || currentUser.projectName)) {
+                const assignedIdx = PROJECTS.findIndex(p => p.id === currentUser.projectId || p.name === currentUser.projectName);
+                if (assignedIdx >= 0) {
+                    adminConfigState.selectedProjectIndex = assignedIdx;
+                }
+            }
+            const prj = PROJECTS[adminConfigState.selectedProjectIndex] || PROJECTS[0] || { id: 'PRJ-PEARL', name: 'The Pearl', location: 'Hyderabad, Telangana', configured: false };
+            const isCfg = !!prj.configured;
+            const badgeHtml = isCfg
+                ? '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:11.5px;font-weight:700;background:#ECFDF5;color:#047857;border:1px solid #A7F3D0;"><i class="fa-solid fa-circle-check"></i> Configured</span>'
+                : '<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:11.5px;font-weight:700;background:#FFFBEB;color:#D97706;border:1px solid #FDE68A;"><i class="fa-solid fa-triangle-exclamation"></i> Pending GPS Geofence</span>';
+
+            const admName = (currentUser && currentUser.name) || prj.adminName || 'Site Administrator';
+            const admEmail = (currentUser && currentUser.email) || prj.adminEmail || 'admin@aurorealty.com';
+            const admEmpId = (currentUser && (currentUser.employeeId || currentUser.empId)) || prj.employeeId || 'ARPL-ADM-001';
+            const locText = prj.location || (prj.site && prj.site.address) || 'Hyderabad, Telangana';
+
+            hdr.innerHTML =
+                '<div style="background:linear-gradient(135deg,#FFFFFF 0%,#F8FAFC 100%);border:1.5px solid #E2E8F0;border-left:5px solid #E8600A;border-radius:12px;padding:16px 20px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:14px;box-shadow:0 2px 6px rgba(15,23,42,0.04);">' +
+                '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">' +
+                '<div style="width:44px;height:44px;border-radius:10px;background:rgba(232,96,10,0.12);color:#E8600A;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;"><i class="fa-solid fa-building-shield"></i></div>' +
+                '<div>' +
+                '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+                '<span style="font-size:17px;font-weight:800;color:#0F1E33;">' + escapeHtml(prj.name) + '</span>' +
+                '<span class="mono" style="font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:#F1F5F9;color:#1E293B;border:1px solid #CBD5E1;">' + escapeHtml(prj.id) + '</span>' +
+                badgeHtml +
+                '</div>' +
+                '<div style="font-size:12px;color:#64748B;margin-top:4px;"><i class="fa-solid fa-location-dot" style="color:#E8600A;margin-right:4px;"></i>' + escapeHtml(locText) + ' &bull; <b>Strict Worksite Scope Lock Active</b></div>' +
+                '</div>' +
+                '</div>' +
+                '<div style="display:flex;align-items:center;gap:12px;background:#F8FAFC;border:1px solid #E2E8F0;border-radius:10px;padding:10px 14px;">' +
+                '<div style="text-align:right;">' +
+                '<div style="font-size:12.5px;font-weight:800;color:#0F1E33;"><i class="fa-solid fa-user-shield" style="color:#008160;margin-right:5px;"></i>' + escapeHtml(admName) + '</div>' +
+                '<div style="font-size:11.5px;color:#475569;">' + escapeHtml(admEmail) + ' &bull; <span class="mono" style="font-weight:700;color:#0F1E33;">' + escapeHtml(admEmpId) + '</span></div>' +
+                '</div>' +
+                '</div>' +
+                '</div>';
+
+            const prjWrap = document.getElementById('adminProjectSelectFieldWrap');
+            if (prjWrap) {
+                prjWrap.style.display = isSuperAdmin ? 'block' : 'none';
+            }
+        }
+
         function renderAdminConfigView() {
             const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
@@ -11401,9 +11506,11 @@
                     subEl.textContent = 'Enterprise Master Scope: Provision Site Administrators and configure Projects & Sites Master.';
                 } else {
                     titleEl.innerHTML = '<i class="fa-solid fa-map-location-dot" style="color:var(--orange);"></i> Site Administrator Worksite Console';
-                    subEl.textContent = 'Site Administrator Authority: Worksite GPS & Geofencing (Location-Level), and On-Site Personnel Accounts.';
+                    subEl.textContent = 'Site Administrator Authority: Worksite GPS & Geofencing (Location-Level), and On-Site Role & Staff Empanelment.';
                 }
             }
+
+            renderWorksiteGovernanceHeader();
 
             if (btnSaveGeofence) {
                 btnSaveGeofence.style.display = (isSiteAdmin && adminCurrentTab === 'gps') ? 'inline-flex' : 'none';
@@ -12060,6 +12167,15 @@
 
             prj.configured = locs.some(l => l.configured);
             prj.radius = ctx.radius;
+            prj.lat = ctx.lat;
+            prj.lng = ctx.lng;
+            prj.geofence = {
+                lat: ctx.lat,
+                lng: ctx.lng,
+                radiusMeters: ctx.radius,
+                towers: prj.towers || [],
+                configuredBy: ctx.signerName
+            };
             GPS_RADIUS_M = ctx.radius;
 
             closeModal('actionModal');
@@ -12070,6 +12186,10 @@
                 firebase.firestore().collection('projects').doc(prj.id).set({
                     locations: locs,
                     configured: prj.configured,
+                    lat: ctx.lat,
+                    lng: ctx.lng,
+                    radius: ctx.radius,
+                    geofence: prj.geofence,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedBy: ctx.signerName
                 }, { merge: true }).catch(e => console.warn('Firestore project update warning:', e));
@@ -12080,6 +12200,7 @@
             }
 
             showToast('Location "' + loc.name + '" [' + loc.id + '] geofence & workflow tags activated!', 'ok');
+            renderWorksiteGovernanceHeader();
             renderAdminGpsTab();
         }
 
@@ -12103,6 +12224,8 @@
             }
 
             adminCurrentTab = tab;
+            renderWorksiteGovernanceHeader();
+
             const tabMap = {
                 'superadmins': { panelId: 'adminPanelSuperAdmins', btnId: 'tabBtnSuperAdmins' },
                 'projects': { panelId: 'adminPanelProjects', btnId: 'tabBtnProjects' },
@@ -12117,7 +12240,14 @@
                 const info = tabMap[t];
                 const panel = document.getElementById(info.panelId) || document.getElementById('adminPanel' + t.charAt(0).toUpperCase() + t.slice(1));
                 const btn = document.getElementById(info.btnId) || document.getElementById('tabBtn' + t.charAt(0).toUpperCase() + t.slice(1));
-                if (panel) panel.style.display = (t === tab ? 'block' : 'none');
+                if (panel) {
+                    if (isSiteAdmin && (t === 'gps' || t === 'accounts')) {
+                        // Keep both Geofence Config and Site Role Empanelment Workspace visible for Site Admin
+                        panel.style.display = 'block';
+                    } else {
+                        panel.style.display = (t === tab ? 'block' : 'none');
+                    }
+                }
                 if (btn) {
                     if (t === tab) {
                         btn.style.color = 'var(--orange)';
@@ -12133,13 +12263,24 @@
 
             const btnSaveGeofence = document.getElementById('btnAdminSaveGeofence');
             if (btnSaveGeofence) {
-                btnSaveGeofence.style.display = (isSiteAdmin && tab === 'gps') ? 'inline-flex' : 'none';
+                btnSaveGeofence.style.display = isSiteAdmin ? 'inline-flex' : 'none';
             }
 
             if (tab === 'superadmins') renderSuperAdminAdminsTab();
             if (tab === 'projects') renderAdminProjectsTab();
-            if (tab === 'gps') renderAdminGpsTab();
-            if (tab === 'accounts') renderAdminAccountsTab();
+            if (isSiteAdmin) {
+                renderAdminGpsTab();
+                renderAdminAccountsTab();
+                if (tab === 'accounts') {
+                    const accPanel = document.getElementById('adminPanelAccounts');
+                    if (accPanel && typeof accPanel.scrollIntoView === 'function') {
+                        setTimeout(() => accPanel.scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
+                    }
+                }
+            } else {
+                if (tab === 'gps') renderAdminGpsTab();
+                if (tab === 'accounts') renderAdminAccountsTab();
+            }
         }
 
         /* --- Firebase Secondary Auth Instance for Live Account Provisioning --- */
@@ -12149,7 +12290,8 @@
             if (!secApp) {
                 secApp = firebase.initializeApp(firebase.app().options, 'ProvisioningApp');
             }
-            return secApp.auth();
+            window.fbSecondaryAuth = secApp.auth();
+            return window.fbSecondaryAuth;
         }
 
         function generatePasswordInto(inputId) {
@@ -12461,21 +12603,99 @@
             }
         }
 
-        /* --- Site Admin & Super Admin: On-Site Personnel Accounts --- */
+        /* --- Site Admin & Super Admin: On-Site Personnel & Role Empanelment Workspace --- */
+        window.empanelRoleGroupFilter = 'all';
+
+        function getRoleWorkflowStageMeta(roleKey) {
+            const rk = String(roleKey || '').toLowerCase();
+            if (['site-supervisor', 'electrician', 'blasting-incharge', 'lift-supervisor', 'night-supervisor'].includes(rk)) {
+                return { stageBadge: 'Stage 1 Initiator', group: 'initiators', badgeStyle: 'background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;' };
+            }
+            if (['site-engineer', 'excavation-head', 'hw-section-head', 'section-head', 'mep', 'pm', 'quality-engineer', 'it'].includes(rk)) {
+                return { stageBadge: 'Stage 2 Reviewer', group: 'reviewers', badgeStyle: 'background:#FEF3C7;color:#B45309;border:1px solid #FDE68A;' };
+            }
+            if (['ehs-officer', 'ehs-manager'].includes(rk)) {
+                return { stageBadge: 'Statutory Custody', group: 'ehs', badgeStyle: 'background:#ECFDF5;color:#047857;border:1px solid #A7F3D0;' };
+            }
+            return { stageBadge: 'Stage 3 Approver', group: 'approvers', badgeStyle: 'background:#F3E8FF;color:#6D28D9;border:1px solid #DDD6FE;' };
+        }
+
+        function setEmpanelRoleGroupFilter(group) {
+            window.empanelRoleGroupFilter = group || 'all';
+            document.querySelectorAll('#empanelRoleFilterPillBar .empanel-filter-pill').forEach(btn => {
+                btn.classList.toggle('active', btn.getAttribute('data-group') === window.empanelRoleGroupFilter);
+            });
+            renderSitePersonnelTable();
+        }
+
+        function toggleEmpanelPasswordVisibility() {
+            const pwdInput = document.getElementById('empanelPassword');
+            const icon = document.getElementById('toggleEmpanelPasswordIcon');
+            if (!pwdInput) return;
+            if (pwdInput.type === 'password') {
+                pwdInput.type = 'text';
+                if (icon) { icon.classList.remove('fa-eye'); icon.classList.add('fa-eye-slash'); }
+            } else {
+                pwdInput.type = 'password';
+                if (icon) { icon.classList.remove('fa-eye-slash'); icon.classList.add('fa-eye'); }
+            }
+        }
+
+        function onEmpanelRoleSelectChange() {
+            const empanelSel = document.getElementById('empanelRoleSelect');
+            const newStaffSel = document.getElementById('newStaffRole');
+            if (empanelSel && newStaffSel) {
+                newStaffSel.value = empanelSel.value;
+            }
+            onNewStaffRoleChange();
+        }
+
+        function showEmpanelFeedbackBanner(type, messageHtml) {
+            const banner = document.getElementById('empanelFeedbackBanner');
+            if (!banner) return;
+            banner.style.display = 'block';
+            if (type === 'ok') {
+                banner.style.background = '#ECFDF5';
+                banner.style.border = '1px solid #A7F3D0';
+                banner.style.color = '#047857';
+            } else {
+                banner.style.background = '#FEF2F2';
+                banner.style.border = '1px solid #FECACA';
+                banner.style.color = '#DC2626';
+            }
+            banner.innerHTML = messageHtml;
+        }
+
         function onStaffProjectChange() {
             const prjSel = document.getElementById('newStaffProject');
             const towerSel = document.getElementById('newStaffTower');
+            const empanelTowerSel = document.getElementById('empanelTowerSelect');
+            const worksiteReadonly = document.getElementById('empanelWorksiteReadonly');
             const roleLocSel = document.getElementById('customRoleLocationSelect');
-            if (!prjSel) return;
-            const prj = PROJECTS.find(p => p.id === prjSel.value) || PROJECTS[0];
+            const isSiteAdmin = currentUser && currentUser.key === 'admin';
+            const lockedPrjId = (isSiteAdmin && currentUser.projectId) ? currentUser.projectId : (prjSel ? prjSel.value : (PROJECTS[0] ? PROJECTS[0].id : 'PRJ-PEARL'));
+            const prj = PROJECTS.find(p => p.id === lockedPrjId) || PROJECTS[0];
             const locs = ensureProjectLocations(prj);
 
+            if (worksiteReadonly && prj) {
+                worksiteReadonly.value = prj.name + ' (' + prj.id + ')';
+            }
+
+            if (empanelTowerSel && prj) {
+                const towerList = Array.isArray(prj.towers) && prj.towers.length
+                    ? prj.towers
+                    : locs.map(l => l.name);
+                empanelTowerSel.innerHTML = '<option value="All Site Towers">All Site Towers</option>' +
+                    towerList.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+            }
+
             if (towerSel) {
-                towerSel.innerHTML = locs.map(l =>
-                    '<option value="' + escapeHtml(l.name) + '" data-loc-id="' + escapeHtml(l.id) + '">' +
-                    escapeHtml(l.name) + ' [' + escapeHtml(l.id) + '] &mdash; ' + (l.configured ? '✓ Geotagged' : '⚠️ Untagged') +
-                    '</option>'
-                ).join('') + '<option value="Full Campus">Campus-Wide (All Locations)</option>';
+                towerSel.innerHTML = '<option value="All Site Towers">All Site Towers</option>' +
+                    locs.map(l =>
+                        '<option value="' + escapeHtml(l.name) + '" data-loc-id="' + escapeHtml(l.id) + '">' +
+                        escapeHtml(l.name) + ' [' + escapeHtml(l.id) + '] &mdash; ' + (l.configured ? '✓ Geotagged' : '⚠️ Untagged') +
+                        '</option>'
+                    ).join('') + '<option value="Full Campus">Campus-Wide (All Locations)</option>';
             }
             if (roleLocSel) {
                 roleLocSel.innerHTML = '<option value="ALL">Campus-Wide (All Locations)</option>' +
@@ -12484,17 +12704,21 @@
             const roleSel = document.getElementById('newStaffRole');
             if (roleSel) {
                 const baseOpts = [
-                    { v: 'site-supervisor', t: 'Site Supervisor (Permit Initiator)' },
-                    { v: 'site-engineer', t: 'Site Engineer (Verifier)' },
+                    { v: 'site-supervisor', t: 'Site Supervisor (Permit Initiator / Permittee)' },
+                    { v: 'site-engineer', t: 'Site Engineer / Tower Incharge (Stage 2 Reviewer)' },
+                    { v: 'excavation-head', t: 'Excavation Execution Head (Conditional Reviewer)' },
+                    { v: 'hw-section-head', t: 'Hot Work Section Head (Conditional Reviewer)' },
+                    { v: 'mep', t: 'MEP Engineer (Parallel Technical Reviewer)' },
+                    { v: 'pm', t: 'Plant & Machinery / P&M Head (Parallel Reviewer)' },
+                    { v: 'quality-engineer', t: 'Quality Engineer (Parallel Reviewer)' },
+                    { v: 'it', t: 'IT / Systems Engineer (Parallel Reviewer)' },
+                    { v: 'ehs-officer', t: 'Site EHS Officer (Stage 3 Safety Approver & PDF Custody)' },
+                    { v: 'ehs-manager', t: 'Project EHS Manager (Stage 3 Final Approver & PDF Custody)' },
+                    { v: 'project-manager', t: 'Project Head / Project Manager (Escalation & Oversight)' },
                     { v: 'electrician', t: 'Permittee Electrician (Electrical)' },
-                    { v: 'hw-section-head', t: 'Tower Incharge / Section Head' },
-                    { v: 'excavation-head', t: 'Excavation Incharge / Section Head' },
-                    { v: 'mep', t: 'MEP Department Approver' },
-                    { v: 'pm', t: 'Project Manager (PM)' },
-                    { v: 'it', t: 'IT / Systems Approver' },
-                    { v: 'ehs-officer', t: 'EHS Safety Officer' },
-                    { v: 'ehs-manager', t: 'EHS Manager' },
-                    { v: 'project-head', t: 'Project Head (Escalation)' }
+                    { v: 'blasting-incharge', t: 'Blasting In-charge (PTW-007)' },
+                    { v: 'lift-supervisor', t: 'Lifting Supervisor (PTW-009)' },
+                    { v: 'night-supervisor', t: 'Night Site Supervisor (PTW-010)' }
                 ];
                 const customRoles = (window.PROJECT_ROLES || []).filter(r => r.projectId === prj.id);
                 let html = '';
@@ -12515,33 +12739,26 @@
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
             const filterSel = document.getElementById('filterPersonnelProjectSelect');
             const newPrjSel = document.getElementById('newStaffProject');
+            const selectedPrj = PROJECTS[adminConfigState.selectedProjectIndex] || PROJECTS[0];
 
-            const defaultPrjId = (isSiteAdmin && currentUser.projectId) ? currentUser.projectId : (PROJECTS[0] ? PROJECTS[0].id : 'PRJ-PEARL');
+            const defaultPrjId = (isSiteAdmin && currentUser.projectId)
+                ? currentUser.projectId
+                : (selectedPrj ? selectedPrj.id : 'PRJ-PEARL');
 
             if (filterSel) {
-                const curVal = filterSel.value || defaultPrjId;
                 filterSel.innerHTML = (isSiteAdmin ? '' : '<option value="">All Worksites</option>') +
                     PROJECTS.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + p.id + ')</option>').join('');
-                filterSel.value = curVal;
-                if (isSiteAdmin && currentUser.projectId) {
-                    filterSel.value = currentUser.projectId;
-                    filterSel.disabled = true;
-                } else {
-                    filterSel.disabled = false;
-                }
+                filterSel.value = defaultPrjId;
+                filterSel.disabled = !!isSiteAdmin;
             }
             if (newPrjSel) {
                 newPrjSel.innerHTML = PROJECTS.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + p.id + ')</option>').join('');
-                if (filterSel && filterSel.value) {
-                    newPrjSel.value = filterSel.value;
-                }
-                if (isSiteAdmin && currentUser.projectId) {
-                    newPrjSel.value = currentUser.projectId;
-                    newPrjSel.disabled = true;
-                }
+                newPrjSel.value = defaultPrjId;
+                newPrjSel.disabled = !!isSiteAdmin;
                 onStaffProjectChange();
             }
 
+            renderWorksiteGovernanceHeader();
             renderSitePersonnelTable();
         }
 
@@ -12550,33 +12767,64 @@
             if (!tbody) return;
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
             const filterSel = document.getElementById('filterPersonnelProjectSelect');
-            const filterPrj = filterSel ? filterSel.value : ((isSiteAdmin && currentUser.projectId) ? currentUser.projectId : 'PRJ-PEARL');
-            const list = filterPrj ? SITE_PERSONNEL_ACCOUNTS.filter(s => s.projectId === filterPrj) : SITE_PERSONNEL_ACCOUNTS;
+            const selectedPrj = PROJECTS[adminConfigState.selectedProjectIndex] || PROJECTS[0];
+            const filterPrj = (isSiteAdmin && currentUser.projectId)
+                ? currentUser.projectId
+                : ((filterSel && filterSel.value) ? filterSel.value : (selectedPrj ? selectedPrj.id : 'PRJ-PEARL'));
+
+            const projectList = filterPrj
+                ? SITE_PERSONNEL_ACCOUNTS.filter(s => s.projectId === filterPrj)
+                : SITE_PERSONNEL_ACCOUNTS.slice();
+
+            const titleEl = document.getElementById('empaneledStaffCardTitle');
+            if (titleEl) {
+                titleEl.innerHTML = '<i class="fa-solid fa-users-gear" style="color:var(--orange);"></i> Empaneled Worksite Staff &amp; Approvers (' + projectList.length + ')';
+            }
+
+            const grp = window.empanelRoleGroupFilter || 'all';
+            const list = projectList.filter(s => {
+                if (grp === 'all') return true;
+                const meta = getRoleWorkflowStageMeta(s.role);
+                if (grp === 'approvers') {
+                    return meta.group === 'approvers' || meta.group === 'ehs' || ['excavation-head', 'hw-section-head'].includes(s.role);
+                }
+                return meta.group === grp;
+            });
 
             if (list.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted);">No on-site personnel accounts provisioned yet. Use the form on the left to provision staff accounts.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="6" style="padding:22px 16px;text-align:center;color:#64748B;font-size:12.5px;">No site roles empaneled for this project yet. Use the \'Empanel New Site Role\' form on the right to provision Site Supervisors, Site Engineers, and Approvers.</td></tr>';
                 return;
             }
 
             tbody.innerHTML = list.map((stf) => {
-                const isAct = stf.status === 'Active';
                 const rInfo = roleInfo(stf.role);
-                const pwdNote = stf.tempPassword ? ('<div style="font-size:10.5px;color:var(--brand-primary);margin-top:2px;" class="mono"><i class="fa-solid fa-key"></i> Pwd: ' + escapeHtml(stf.tempPassword) + '</div>') : '';
+                const stageMeta = getRoleWorkflowStageMeta(stf.role);
+                const roleTitle = stf.roleLabel || (rInfo && rInfo.label) || stf.role;
+                const empCode = stf.employeeId || stf.empId || 'N/A';
+                const towerDisplay = stf.assignedTower || stf.location || 'All Site Towers';
                 const locIdBadge = stf.locationId ? (' <span class="mono" style="font-size:10px;color:var(--brand-secondary);font-weight:700;">[' + escapeHtml(stf.locationId) + ']</span>') : '';
-                const wfScopeNote = (stf.allowedWorkflows && Array.isArray(stf.allowedWorkflows) && stf.allowedWorkflows.length < 10)
-                    ? ('<div style="font-size:10px;color:var(--brand-secondary);">Flows: ' + escapeHtml(stf.allowedWorkflows.join(', ')) + '</div>')
-                    : '';
 
-                return '<tr style="border-bottom:1px solid var(--border);">' +
-                    '<td style="padding:10px 12px;"><div style="font-weight:700;color:var(--navy);">' + escapeHtml(stf.name) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(stf.email) + ' &bull; ' + escapeHtml(stf.phone || '') + '</div>' + pwdNote + '</td>' +
-                    '<td style="padding:10px 12px;"><span class="badge" style="background:rgba(0,129,96,0.1);color:var(--brand-primary);font-size:11px;font-weight:600;"><i class="fa-solid ' + (rInfo.icon || 'fa-user') + '"></i> ' + escapeHtml(stf.roleLabel || stf.role) + '</span>' + wfScopeNote + '</td>' +
-                    '<td style="padding:10px 12px;"><div style="font-weight:600;color:var(--navy);font-size:12px;">' + escapeHtml(stf.projectName || stf.projectId) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(stf.location || 'Site Wide') + locIdBadge + '</div></td>' +
-                    '<td style="padding:10px 12px;" class="mono">' + escapeHtml(stf.empId || 'N/A') + '</td>' +
-                    '<td style="padding:10px 12px;"><span class="badge ' + (isAct ? 'st-active' : 'st-draft') + '" style="font-size:10.5px;"><i class="fa-solid ' + (isAct ? 'fa-circle-check' : 'fa-ban') + '"></i> ' + stf.status + '</span></td>' +
-                    '<td style="padding:10px 12px;white-space:nowrap;">' +
-                    '<button class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + stf.id + '\')" style="color:var(--blue);padding:2px 8px;font-size:11px;margin-right:6px;" title="Reset Login Password"><i class="fa-solid fa-key"></i> Reset Pwd</button>' +
-                    '<button class="btn btn-xs ' + (isAct ? 'btn-ghost' : 'btn-primary') + '" onclick="siteAdminToggleStaffStatus(\'' + stf.id + '\')" style="padding:2px 8px;font-size:11px;margin-right:6px;">' + (isAct ? 'Deactivate' : 'Activate') + '</button>' +
-                    '<button class="btn btn-xs btn-ghost" onclick="siteAdminRemoveStaff(\'' + stf.id + '\')" style="color:var(--red);padding:2px 6px;" title="Permanently Delete Account"><i class="fa-solid fa-trash-can"></i></button>' +
+                return '<tr style="border-bottom:1px solid #E2E8F0;">' +
+                    '<td style="padding:11px 12px;">' +
+                    '<div style="font-weight:700;color:#0F1E33;font-size:12.5px;">' + escapeHtml(roleTitle) + '</div>' +
+                    '<span style="display:inline-block;margin-top:3px;padding:2px 8px;border-radius:999px;font-size:10.5px;font-weight:700;' + stageMeta.badgeStyle + '">' + escapeHtml(stageMeta.stageBadge) + '</span>' +
+                    '</td>' +
+                    '<td style="padding:11px 12px;font-weight:700;color:#0F1E33;">' +
+                    '<i class="fa-solid fa-user-check" style="color:#047857;margin-right:6px;"></i>' + escapeHtml(stf.name) +
+                    '</td>' +
+                    '<td style="padding:11px 12px;">' +
+                    '<div style="font-weight:600;color:#0F1E33;font-size:12px;">' + escapeHtml(stf.email) + '</div>' +
+                    '<div class="mono" style="font-size:11px;color:#64748B;margin-top:2px;">ID: ' + escapeHtml(empCode) + '</div>' +
+                    '</td>' +
+                    '<td style="padding:11px 12px;">' +
+                    '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:6px;background:#F1F5F9;color:#1E293B;font-size:11.5px;font-weight:600;"><i class="fa-solid fa-building" style="color:#E8600A;font-size:10.5px;"></i> ' + escapeHtml(towerDisplay) + '</span>' + locIdBadge +
+                    '</td>' +
+                    '<td style="padding:11px 12px;">' +
+                    '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:#ECFDF5;color:#047857;border:1px solid #A7F3D0;">&bull; Active (Firebase Auth)</span>' +
+                    '</td>' +
+                    '<td style="padding:11px 12px;white-space:nowrap;">' +
+                    '<button type="button" class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + escapeHtml(stf.id) + '\')" style="color:#1D4ED8;padding:4px 8px;font-size:11px;margin-right:6px;border:1px solid #BFDBFE;background:#EFF6FF;" title="Send Firebase Password Reset Email"><i class="fa-solid fa-key"></i> Reset Password</button>' +
+                    '<button type="button" class="btn btn-xs btn-ghost" onclick="siteAdminRemoveStaff(\'' + escapeHtml(stf.id) + '\')" style="color:#DC2626;padding:4px 8px;font-size:11px;border:1px solid #FECACA;background:#FEF2F2;" title="Revoke &amp; Remove Role"><i class="fa-solid fa-trash-can"></i> Revoke / Remove</button>' +
                     '</td>' +
                     '</tr>';
             }).join('');
@@ -12591,61 +12839,110 @@
             }
         }
 
+        async function handleEmpanelSiteRoleSubmit(e) {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            await siteAdminAddNewStaffAccount();
+            return false;
+        }
+
         async function siteAdminAddNewStaffAccount() {
+            const isSiteAdmin = currentUser && currentUser.key === 'admin';
             const prjSel = document.getElementById('newStaffProject');
+            const empanelRoleEl = document.getElementById('empanelRoleSelect');
             const roleSel = document.getElementById('newStaffRole');
             const customTitleEl = document.getElementById('newStaffCustomRoleTitle');
+            const empanelNameEl = document.getElementById('empanelFullName');
             const nameEl = document.getElementById('newStaffName');
+            const empanelEmailEl = document.getElementById('empanelEmail');
             const emailEl = document.getElementById('newStaffEmail');
+            const empanelPwdEl = document.getElementById('empanelPassword');
             const pwdEl = document.getElementById('newStaffPassword');
+            const empanelTowerEl = document.getElementById('empanelTowerSelect');
             const towerSel = document.getElementById('newStaffTower');
             const wfScopeSel = document.getElementById('newStaffWorkflowScope');
+            const empanelEmpIdEl = document.getElementById('empanelEmpId');
             const empIdEl = document.getElementById('newStaffEmpId');
             const phoneEl = document.getElementById('newStaffPhone');
-            const campusWideChk = document.getElementById('newStaffCampusWide');
-            const isCampusWide = campusWideChk ? campusWideChk.checked : false;
+            const submitBtn = document.getElementById('empanelSubmitBtn');
 
-            if (!nameEl || !nameEl.value.trim() || !emailEl || !emailEl.value.trim()) {
-                showToast('Staff Name and Email Address are mandatory.', 'warn');
+            const rawName = (empanelNameEl && empanelNameEl.value.trim()) ? empanelNameEl.value.trim() : (nameEl ? nameEl.value.trim() : '');
+            const rawEmail = (empanelEmailEl && empanelEmailEl.value.trim()) ? empanelEmailEl.value.trim().toLowerCase() : (emailEl ? emailEl.value.trim().toLowerCase() : '');
+            const rawEmpId = (empanelEmpIdEl && empanelEmpIdEl.value.trim()) ? empanelEmpIdEl.value.trim().toUpperCase() : (empIdEl && empIdEl.value.trim() ? empIdEl.value.trim().toUpperCase() : '');
+            const rawPwd = (empanelPwdEl && empanelPwdEl.value) ? empanelPwdEl.value.trim() : (pwdEl && pwdEl.value ? pwdEl.value.trim() : 'AuroRole2026!');
+
+            const SYNTHETIC_BLOCKLIST = ['a. k. sharma', 'vikram verma', 'rajesh k. gupta', 'r. m. patel', 'suresh babu', 'k. srinivas', 'm. venkat', 'p. ramesh', 'anil kumar', 'd. rao'];
+
+            if (!rawName || !rawEmail || !rawEmpId) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-circle-exclamation"></i> <b>Validation Error:</b> Staff Full Name, Corporate Email Address, and Employee ID are mandatory.');
+                showToast('Staff Full Name, Corporate Email, and Employee ID are mandatory.', 'warn');
+                return;
+            }
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-circle-exclamation"></i> <b>Validation Error:</b> Please enter a valid corporate email address.');
+                showToast('Please enter a valid corporate email address.', 'warn');
+                return;
+            }
+            if (SYNTHETIC_BLOCKLIST.includes(rawName.toLowerCase())) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-ban"></i> <b>Blocked Synthetic Name:</b> Please enter a real operational staff member name.');
+                return;
+            }
+            if (!rawPwd || rawPwd.length < 6) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-circle-exclamation"></i> <b>Validation Error:</b> Initial Login Password must be at least 6 characters.');
+                showToast('Initial Login Password must be at least 6 characters.', 'warn');
                 return;
             }
 
-            const prjId = prjSel ? prjSel.value : PROJECTS[0].id;
-            const targetPrj = PROJECTS.find(p => p.id === prjId) || PROJECTS[0];
-            const roleKey = roleSel ? roleSel.value : 'site-supervisor';
-            const baseRoleText = roleSel ? roleSel.options[roleSel.selectedIndex].text.split('(')[0].split('[')[0].trim() : 'Site Supervisor';
+            const lockedPrjId = (isSiteAdmin && currentUser.projectId)
+                ? currentUser.projectId
+                : (prjSel && prjSel.value ? prjSel.value : (PROJECTS[adminConfigState.selectedProjectIndex] ? PROJECTS[adminConfigState.selectedProjectIndex].id : PROJECTS[0].id));
+            const targetPrj = PROJECTS.find(p => p.id === lockedPrjId) || PROJECTS[0];
+
+            const activeRoleSel = empanelRoleEl || roleSel;
+            const roleKey = activeRoleSel ? activeRoleSel.value : 'site-supervisor';
+            const baseRoleText = activeRoleSel && activeRoleSel.options[activeRoleSel.selectedIndex]
+                ? activeRoleSel.options[activeRoleSel.selectedIndex].text.split('(')[0].split('[')[0].trim()
+                : 'Site Supervisor';
             const roleText = (customTitleEl && customTitleEl.value.trim()) ? customTitleEl.value.trim() : baseRoleText;
-            const name = nameEl.value.trim();
-            const email = emailEl.value.trim().toLowerCase();
-            const password = (pwdEl && pwdEl.value.trim().length >= 8) ? pwdEl.value.trim() : ('Auro@' + Math.floor(1000 + Math.random() * 9000) + '!Ehs');
-            const tower = isCampusWide ? 'Campus-Wide (All Towers)' : ((towerSel && towerSel.value) ? towerSel.value : 'Full Worksite');
+
+            const assignedTower = (empanelTowerEl && empanelTowerEl.value)
+                ? empanelTowerEl.value
+                : ((towerSel && towerSel.value) ? towerSel.value : 'All Site Towers');
+            const isCampusWide = (assignedTower === 'All Site Towers' || assignedTower === 'Full Campus' || assignedTower === 'Campus-Wide (All Towers)');
+
             const wfScopeVal = wfScopeSel ? wfScopeSel.value : 'ALL';
-            const empId = (empIdEl && empIdEl.value.trim()) ? empIdEl.value.trim().toUpperCase() : ('ARPL-STF-' + Math.floor(100 + Math.random() * 900));
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '';
 
             const locs = ensureProjectLocations(targetPrj);
-            const locObj = locs.find(l => l.name === tower || l.id === tower);
+            const locObj = locs.find(l => l.name === assignedTower || l.id === assignedTower);
             const allowedWfs = wfScopeVal === 'ALL'
                 ? ((locObj && Array.isArray(locObj.allowedWorkflows)) ? locObj.allowedWorkflows.slice() : DEFAULT_ALL_WORKFLOWS.slice())
                 : [wfScopeVal];
+
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Provisioning Firebase Login...';
+            }
 
             let authUid = null;
             try {
                 const provAuth = getProvisioningAuth();
                 if (provAuth) {
-                    showToast('Creating Firebase Auth credentials for ' + email + '...', 'info');
                     try {
-                        const cred = await provAuth.createUserWithEmailAndPassword(email, password);
+                        const cred = await provAuth.createUserWithEmailAndPassword(rawEmail, rawPwd);
                         if (cred && cred.user) {
                             authUid = cred.user.uid;
-                            try { await cred.user.updateProfile({ displayName: name }); } catch (_e) {}
+                            try { await cred.user.updateProfile({ displayName: rawName }); } catch (_e) {}
                         }
                         await provAuth.signOut();
                     } catch (authErr) {
                         if (authErr && authErr.code === 'auth/email-already-in-use') {
-                            showToast('Firebase Auth user already exists for ' + email + '; updating role & location tags in Firestore.', 'info');
+                            showToast('Firebase Auth user already exists for ' + rawEmail + '; updating role binding in Firestore.', 'info');
                         } else {
-                            showToast('Firebase Auth Error: ' + (authErr.message || authErr), 'err');
+                            if (submitBtn) {
+                                submitBtn.disabled = false;
+                                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
+                            }
+                            showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Firebase Auth Error:</b> ' + escapeHtml(authErr.message || String(authErr)));
                             return;
                         }
                     }
@@ -12654,121 +12951,133 @@
                 console.warn('ProvisioningAuth warning:', e);
             }
 
+            const finalUid = authUid || ('stf-' + uid());
             const staffRecord = {
-                id: authUid || ('stf-' + uid()),
-                uid: authUid || null,
-                name: name,
-                email: email,
+                id: finalUid,
+                uid: finalUid,
+                name: rawName,
+                email: rawEmail,
+                employeeId: rawEmpId,
+                empId: rawEmpId,
                 role: roleKey,
                 uiRole: roleKey,
                 roleLabel: roleText,
                 projectId: targetPrj.id,
                 projectName: targetPrj.name,
-                location: tower,
-                locationName: isCampusWide ? null : tower,
+                assignedTower: assignedTower,
+                location: assignedTower,
+                locationName: isCampusWide ? null : assignedTower,
                 locationId: isCampusWide ? null : (locObj ? locObj.id : null),
                 campusWide: isCampusWide,
                 allowedWorkflows: allowedWfs,
-                empId: empId,
-                employeeId: empId,
                 phone: phone,
-                tempPassword: password,
                 status: 'Active',
-                createdAt: nowTime(),
-                createdBy: (currentUser && currentUser.email) || 'site-admin'
+                isRealFirestoreUser: true,
+                createdBy: (currentUser && currentUser.email) || 'site-admin',
+                createdByRole: 'project-admin',
+                createdAt: nowTime()
             };
 
-            const existingIdx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.email && s.email.toLowerCase() === email);
+            const existingIdx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.email && s.email.toLowerCase() === rawEmail);
             if (existingIdx >= 0) SITE_PERSONNEL_ACCOUNTS[existingIdx] = staffRecord;
             else SITE_PERSONNEL_ACCOUNTS.unshift(staffRecord);
+
+            targetPrj.roles = targetPrj.roles || {};
+            targetPrj.roles[roleKey] = {
+                uid: finalUid,
+                name: rawName,
+                email: rawEmail,
+                employeeId: rawEmpId,
+                role: roleKey,
+                assignedTower: assignedTower
+            };
 
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
                 const userDocData = {
-                    uid: authUid || staffRecord.id,
-                    name: name,
-                    displayName: name,
-                    email: email,
+                    uid: finalUid,
+                    name: rawName,
+                    displayName: rawName,
+                    email: rawEmail,
+                    employeeId: rawEmpId,
+                    empId: rawEmpId,
                     role: roleKey,
                     uiRole: roleKey,
                     roleLabel: roleText,
                     projectId: targetPrj.id,
                     projectName: targetPrj.name,
-                    location: tower,
-                    locationName: isCampusWide ? null : tower,
+                    assignedTower: assignedTower,
+                    location: assignedTower,
+                    locationName: isCampusWide ? null : assignedTower,
                     locationId: isCampusWide ? null : (locObj ? locObj.id : null),
                     campusWide: isCampusWide,
                     allowedWorkflows: allowedWfs,
-                    empId: empId,
-                    employeeId: empId,
                     phone: phone,
-                    status: 'Active',
                     createdBy: (currentUser && currentUser.email) || 'site-admin',
+                    createdByRole: 'project-admin',
+                    status: 'Active',
+                    isRealFirestoreUser: true,
                     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                 };
-                db.collection('users').doc(authUid || staffRecord.id).set(userDocData, { merge: true }).catch(() => {});
-                db.collection('site_personnel').doc(staffRecord.id).set(staffRecord, { merge: true }).catch(() => {});
+                try {
+                    await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
+                    await db.collection('site_personnel').doc(finalUid).set(staffRecord, { merge: true });
+                    await db.collection('projects').doc(targetPrj.id).set({
+                        roles: targetPrj.roles,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true });
+                } catch (fsErr) {
+                    console.warn('Firestore role empanelment write notice:', fsErr);
+                }
             }
 
             if (typeof recordAuditLog === 'function') {
-                recordAuditLog('PROVISION_SITE_STAFF', 'Provisioned ' + roleText + ' (' + email + ') at ' + tower + ' [' + (staffRecord.locationId || 'CAMPUS') + '] on ' + targetPrj.name, staffRecord.id);
+                recordAuditLog('PROVISION_SITE_STAFF', 'Provisioned ' + roleText + ' (' + rawName + ' / ' + rawEmail + ') at ' + assignedTower + ' on ' + targetPrj.name, finalUid);
             }
 
-            nameEl.value = '';
-            emailEl.value = '';
-            if (customTitleEl) customTitleEl.value = '';
-            if (pwdEl) pwdEl.value = '';
+            if (empanelNameEl) empanelNameEl.value = '';
+            if (empanelEmailEl) empanelEmailEl.value = '';
+            if (empanelEmpIdEl) empanelEmpIdEl.value = '';
+            if (nameEl) nameEl.value = '';
+            if (emailEl) emailEl.value = '';
             if (empIdEl) empIdEl.value = '';
-            if (phoneEl) phoneEl.value = '';
+            if (customTitleEl) customTitleEl.value = '';
+
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
+            }
+
             saveState();
             renderSitePersonnelTable();
 
-            document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-id-badge" style="color:var(--brand-primary);"></i> On-Site Personnel Account Provisioned';
-            document.getElementById('actionModalBody').innerHTML =
-                '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.6;">' +
-                '<div style="font-size:13px;font-weight:700;color:var(--brand-primary);margin-bottom:8px;"><i class="fa-solid fa-circle-check"></i> Firebase Authentication &amp; Location-Tagged RBAC Active</div>' +
-                '<div><b>Personnel Name:</b> ' + escapeHtml(name) + '</div>' +
-                '<div><b>Assigned Role:</b> <b>' + escapeHtml(roleText) + '</b> (<span class="mono">' + escapeHtml(roleKey) + '</span>)</div>' +
-                '<div><b>Assigned Project:</b> ' + escapeHtml(targetPrj.name) + ' (' + escapeHtml(targetPrj.id) + ')</div>' +
-                '<div><b>Tagged Location Scope:</b> <b style="color:var(--brand-secondary);">' + escapeHtml(tower) + (staffRecord.locationId ? (' [' + escapeHtml(staffRecord.locationId) + ']') : '') + '</b></div>' +
-                '<div><b>Login Email ID:</b> <span class="mono">' + escapeHtml(email) + '</span></div>' +
-                '<div style="margin:14px 0 8px;padding:12px;background:var(--bg);border:1px dashed var(--brand-primary);border-radius:6px;display:flex;align-items:center;justify-content:space-between;">' +
-                '<div><div style="font-size:11px;color:var(--text-muted);">INITIAL LOGIN PASSWORD:</div><div class="mono" style="font-size:16px;font-weight:700;color:var(--brand-secondary);letter-spacing:1px;">' + escapeHtml(password) + '</div></div>' +
-                '<button class="btn btn-xs btn-primary" onclick="navigator.clipboard.writeText(\'' + escapeHtml(password) + '\');showToast(\'Password copied to clipboard!\', \'ok\');"><i class="fa-solid fa-copy"></i> Copy Password</button>' +
-                '</div>' +
-                '</div>';
-            document.getElementById('actionModalFoot').innerHTML = '<button class="btn btn-primary" onclick="closeModal(\'actionModal\')">Done</button>';
-            openModal('actionModal');
+            showEmpanelFeedbackBanner(
+                'ok',
+                '<i class="fa-solid fa-circle-check"></i> <b>Role Provisioned &amp; Login Active:</b> <b>' + escapeHtml(rawName) + '</b> (<span class="mono">' + escapeHtml(rawEmail) + '</span>) has been empaneled as <b>' + escapeHtml(roleText) + '</b> for <b>' + escapeHtml(targetPrj.name) + '</b> (' + escapeHtml(assignedTower) + ').'
+            );
+            showToast('Provisioned ' + rawName + ' (' + roleText + ') for ' + targetPrj.name, 'ok');
         }
 
-        function siteAdminResetStaffPassword(staffId) {
+        async function siteAdminResetStaffPassword(staffId) {
             const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s.id === staffId);
-            if (!stf) return;
-            const tempPass = 'ARPL#' + Math.floor(1000 + Math.random() * 9000) + '!Ehs';
-            if (!confirm('Generate a new temporary password for ' + stf.name + ' (' + stf.email + ')?')) return;
-            stf.tempPassword = tempPass;
-            stf.passwordResetAt = nowTime();
-            stf.passwordResetBy = currentUser.name || 'Site Administrator';
-            saveState();
-            renderSitePersonnelTable();
-
-            document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-key" style="color:var(--orange);"></i> Temporary Password Generated';
-            document.getElementById('actionModalBody').innerHTML =
-                '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.6;">' +
-                '<div style="font-size:13px;font-weight:700;color:var(--navy);margin-bottom:8px;"><i class="fa-solid fa-circle-check" style="color:var(--green);"></i> Password Reset Successfully</div>' +
-                '<div><b>Personnel Name:</b> ' + escapeHtml(stf.name) + ' (' + escapeHtml(stf.roleLabel || stf.role) + ')</div>' +
-                '<div><b>Assigned Worksite:</b> ' + escapeHtml(stf.projectName || stf.projectId) + '</div>' +
-                '<div><b>Login Email ID:</b> <span class="mono">' + escapeHtml(stf.email) + '</span></div>' +
-                '<div style="margin:14px 0 8px;padding:12px;background:var(--bg);border:1px dashed var(--orange);border-radius:6px;display:flex;align-items:center;justify-content:space-between;">' +
-                '<div><div style="font-size:11px;color:var(--text-muted);">TEMPORARY LOGIN PASSWORD:</div><div class="mono" style="font-size:16px;font-weight:700;color:var(--orange);letter-spacing:1px;" id="dispTempPass">' + tempPass + '</div></div>' +
-                '<button class="btn btn-xs btn-primary" onclick="navigator.clipboard.writeText(\'' + tempPass + '\');showToast(\'Temporary password copied to clipboard!\', \'ok\');"><i class="fa-solid fa-copy"></i> Copy</button>' +
-                '</div>' +
-                '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;"><i class="fa-solid fa-shield-halved"></i> <b>Statutory Compliance (DPDP Act 2023):</b> This temporary credential must be changed by the staff member upon their first login.</div>' +
-                '</div>';
-            document.getElementById('actionModalFoot').innerHTML = '<button class="btn btn-primary" onclick="closeModal(\'actionModal\')">Done</button>';
-            openModal('actionModal');
-            showToast('Temporary password generated for ' + stf.name, 'ok');
+            if (!stf || !stf.email) return;
+            try {
+                if (typeof firebase !== 'undefined' && firebase.auth) {
+                    await firebase.auth().sendPasswordResetEmail(stf.email);
+                    showEmpanelFeedbackBanner(
+                        'ok',
+                        '<i class="fa-solid fa-envelope-circle-check"></i> <b>Password Reset Email Dispatched:</b> Sent official Firebase password reset link to <b>' + escapeHtml(stf.email) + '</b> (' + escapeHtml(stf.name) + ').'
+                    );
+                    showToast('Password reset email dispatched to ' + stf.email, 'ok');
+                    if (typeof recordAuditLog === 'function') {
+                        recordAuditLog('STAFF_PASSWORD_RESET', 'Sent Firebase password reset email to ' + stf.email, stf.id);
+                    }
+                    return;
+                }
+            } catch (err) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Reset Notice:</b> ' + escapeHtml(err.message || String(err)));
+            }
         }
 
         function siteAdminToggleStaffStatus(staffId) {
@@ -12780,15 +13089,43 @@
             renderSitePersonnelTable();
         }
 
-        function siteAdminRemoveStaff(staffId) {
+        async function siteAdminRemoveStaff(staffId) {
             const idx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.id === staffId);
             if (idx === -1) return;
             const stf = SITE_PERSONNEL_ACCOUNTS[idx];
-            if (!confirm('Permanently delete account for ' + stf.name + ' (' + stf.email + ')?\n\nThis will permanently delete this account and revoke all on-site approval authority.')) return;
             SITE_PERSONNEL_ACCOUNTS.splice(idx, 1);
+
+            const targetPrj = PROJECTS.find(p => p.id === stf.projectId);
+            if (targetPrj && targetPrj.roles && stf.role && targetPrj.roles[stf.role]) {
+                delete targetPrj.roles[stf.role];
+            }
+
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                try {
+                    if (stf.uid) await db.collection('users').doc(stf.uid).delete();
+                    if (stf.id) {
+                        await db.collection('users').doc(stf.id).delete();
+                        await db.collection('site_personnel').doc(stf.id).delete();
+                    }
+                    if (targetPrj) {
+                        await db.collection('projects').doc(targetPrj.id).set({
+                            roles: targetPrj.roles || {},
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    }
+                } catch (e) {
+                    console.warn('Firestore staff removal warning:', e);
+                }
+            }
+
             saveState();
-            showToast('Personnel account for ' + stf.name + ' deleted permanently.', 'ok');
             renderSitePersonnelTable();
+            showEmpanelFeedbackBanner(
+                'ok',
+                '<i class="fa-solid fa-user-xmark"></i> <b>Role Revoked:</b> Removed <b>' + escapeHtml(stf.name) + '</b> (' + escapeHtml(stf.email) + ') from <b>' + escapeHtml(stf.projectName || stf.projectId) + '</b>.'
+            );
+            showToast('Revoked and removed ' + stf.name + ' from worksite directory.', 'ok');
         }
 
         /* --- Super Admin: Projects & Structural Hierarchies (Modify Sites) --- */
@@ -14932,10 +15269,10 @@
             }
             if (normKey === 'admin') {
                 return [
-                    { id: 'dashboard', label: 'Site Dashboard', icon: 'fa-gauge-high' },
-                    { id: 'admin-config', label: 'Worksite GPS & Geofence', icon: 'fa-map-location-dot' },
-                    { id: 'users', label: 'On-Site Personnel Accounts', icon: 'fa-users-gear' },
-                    { id: 'register', label: 'Site Permits Register', icon: 'fa-table-list' },
+                    { id: 'dashboard', label: 'Worksite Dashboard', icon: 'fa-gauge-high' },
+                    { id: 'admin-config', label: 'Worksite Geofence & Towers', icon: 'fa-map-location-dot', adminTab: 'gps' },
+                    { id: 'users', label: 'Empanel Site Staff & Roles', icon: 'fa-users-gear', adminTab: 'accounts' },
+                    { id: 'register', label: 'Worksite Permits Register', icon: 'fa-table-list' },
                     { id: 'reports-mis', label: 'Site EHS Reports', icon: 'fa-chart-pie' },
                     { id: 'notifications', label: 'Notifications', icon: 'fa-bell', badge: true }
                 ];
@@ -14962,9 +15299,14 @@
             document.getElementById('navContainer').innerHTML =
                 '<div class="nav-group-label">Permit-to-Work</div><ul class="nav-list">' +
                 items.map(it => {
-                    const clickHandler = it.isLocked
-                        ? 'showSundayLockoutModal();return false;'
-                        : (it.isSundayTile ? 'openSundayWorkSelection();return false;' : ('goTo(\'' + it.id + '\');return false;'));
+                    let clickHandler = 'goTo(\'' + it.id + '\');return false;';
+                    if (it.isLocked) {
+                        clickHandler = 'showSundayLockoutModal();return false;';
+                    } else if (it.isSundayTile) {
+                        clickHandler = 'openSundayWorkSelection();return false;';
+                    } else if (it.adminTab) {
+                        clickHandler = 'goTo(\'admin-config\');if(typeof switchAdminTab===\'function\')switchAdminTab(\'' + it.adminTab + '\');setActiveNav(\'' + it.id + '\');return false;';
+                    }
                     const lockStyle = it.isLocked ? 'style="opacity:.65;"' : '';
                     return '<li class="nav-item" data-page="' + it.id + '"><a href="#" class="nav-link" data-page="' + it.id + '" data-nav="' + it.id + '" ' + lockStyle + ' onclick="' + clickHandler + '"><i class="fa-solid ' + it.icon + '"></i><span>' + it.label + '</span>' + (it.badge ? '<span class="nav-badge" id="navNotifBadge" style="display:none;">0</span>' : '') + '</a></li>';
                 }).join('') +
@@ -24898,7 +25240,8 @@ ptypeOf(p) === 'general' ?
                                         roleLabel: u.roleLabel || r,
                                         projectId: u.projectId,
                                         projectName: u.projectName || u.projectId,
-                                        location: u.location || u.locationName || 'Full Worksite',
+                                        assignedTower: u.assignedTower || u.location || u.locationName || 'All Site Towers',
+                                        location: u.assignedTower || u.location || u.locationName || 'All Site Towers',
                                         locationName: u.locationName || null,
                                         locationId: u.locationId || null,
                                         campusWide: !!u.campusWide,
@@ -24942,6 +25285,10 @@ ptypeOf(p) === 'general' ?
                 saveState();
                 if (typeof currentView !== 'undefined' && currentView === 'dashboard' && typeof buildDashboard === 'function') {
                     buildDashboard();
+                }
+                if (typeof currentView !== 'undefined' && currentView === 'admin-config') {
+                    if (typeof renderWorksiteGovernanceHeader === 'function') renderWorksiteGovernanceHeader();
+                    if (typeof renderSitePersonnelTable === 'function') renderSitePersonnelTable();
                 }
             } catch (err) {
                 console.warn('[Firestore Sync] Non-blocking sync notice:', err);
