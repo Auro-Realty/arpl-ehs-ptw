@@ -8,7 +8,11 @@ service cloud.firestore {
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.token.superAdmin == true;
+      return isAuthenticated() && (
+        request.auth.token.superAdmin == true ||
+        request.auth.token.role == 'super-admin' ||
+        request.auth.token.email == 'ehs.superadmin@aurorealty.com'
+      );
     }
 
     function isProjectAdmin(projectId) {
@@ -96,6 +100,31 @@ service cloud.firestore {
     match /counters/{counterId} {
       allow read: if isAuthenticated();
       allow write: if false; // Managed exclusively by Cloud Functions transaction
+    }
+
+    // Audit Logs Collection (Immutable statutory audit trail)
+    match /audit_logs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isAuthenticated();
+      allow update, delete: if false; // Tamper-proof immutable ledger
+    }
+
+    // Dynamic Roles & Permissions Governance
+    match /roles_permissions/{roleId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // Multi-stage Approval Workflows Configuration
+    match /approval_workflows/{workflowId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || (isAuthenticated() && request.auth.token.role in ['project-admin', 'site-admin']);
+    }
+
+    // System Settings & Statutory Retention Policies
+    match /system_settings/{settingId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
     }
   }
 }
