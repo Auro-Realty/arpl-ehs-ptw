@@ -165,6 +165,255 @@
             scroll-margin-top: 85px;
         }
 
+        /* Responsive Split-Grid Layouts for Admin & Management Panels */
+        .responsive-split-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+            gap: 20px;
+            align-items: start;
+            width: 100%;
+        }
+        @media (max-width: 1024px) {
+            .responsive-split-grid {
+                grid-template-columns: minmax(0, 1fr) !important;
+                gap: 16px !important;
+            }
+        }
+
+        /* Add Location / Tower Row (Fluid 4-col to 2-col to 1-col) */
+        .add-loc-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 130px auto;
+            gap: 8px;
+            align-items: end;
+            width: 100%;
+        }
+        @media (max-width: 768px) {
+            .add-loc-grid {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+            }
+        }
+        @media (max-width: 480px) {
+            .add-loc-grid {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+        }
+
+        /* Custom Role Creation Row (Fluid 5-col to 2-col to 1-col) */
+        .add-role-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+            gap: 10px;
+            align-items: end;
+            width: 100%;
+        }
+        @media (max-width: 1100px) {
+            .add-role-grid {
+                grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important;
+            }
+        }
+        @media (max-width: 580px) {
+            .add-role-grid {
+                grid-template-columns: minmax(0, 1fr) !important;
+            }
+        }
+
+        /* System Settings Grid (Fluid auto-fit, no overflow on 320px) */
+        .system-settings-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(min(290px, 100%), 1fr));
+            gap: 16px;
+            width: 100%;
+        }
+
+        /* Universal Table Scroll Wrapper & Mobile Momentum */
+        .table-wrap {
+            width: 100%;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: contain;
+            position: relative;
+            border-radius: 8px;
+            background: var(--surface);
+        }
+        .table-wrap table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        @media (max-width: 768px) {
+            .table-wrap table {
+                min-width: 640px;
+            }
+            .table-wrap {
+                border: 1px solid var(--border);
+                box-shadow: inset -10px 0 12px -6px rgba(16, 71, 110, 0.16);
+                margin-bottom: 8px;
+                -webkit-overflow-scrolling: touch;
+            }
+            .table-scroll table,
+            .table-responsive table {
+                min-width: 640px;
+            }
+            .mobile-table-hint {
+                display: flex !important;
+                align-items: center;
+                gap: 6px;
+                font-size: 11px;
+                font-weight: 600;
+                color: var(--teal);
+                margin-bottom: 6px;
+                padding: 4px 8px;
+                background: rgba(4, 132, 144, 0.08);
+                border-radius: 6px;
+                border: 1px dashed rgba(4, 132, 144, 0.3);
+            }
+        }
+
+        /* Topbar Responsive Logo & Title Wrappers */
+        .topbar-logo-wrap {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 10px;
+            background: #FFFFFF;
+            border: 1px solid #D8E4E8;
+            border-radius: 8px;
+            margin-right: 6px;
+            flex-shrink: 0;
+            transition: padding 0.15s ease;
+        }
+        .topbar-title-wrap {
+            flex: 1 1 auto;
+            min-width: 0;
+            overflow: hidden;
+        }
+        .topbar-sub {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 260px;
+        }
+        @media (max-width: 580px) {
+            .topbar-logo-wrap {
+                padding: 2px 6px;
+                margin-right: 4px;
+            }
+            .topbar-logo-wrap img {
+                height: 22px !important;
+            }
+            .topbar-title {
+                font-size: 14px;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+        }
+        @media (max-width: 360px) {
+            .topbar-logo-wrap {
+                padding: 2px 4px;
+            }
+            .topbar-logo-wrap img {
+                height: 18px !important;
+            }
+        }
+
+        /* Modern Ergonomic Mobile Bottom Navigation Bar (<= 768px) */
+        .mobile-bottom-bar {
+            display: none;
+        }
+        @media (max-width: 768px) {
+            .mobile-bottom-bar {
+                display: flex;
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                height: calc(58px + env(safe-area-inset-bottom, 0px));
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                background: #FFFFFF;
+                border-top: 1px solid var(--border);
+                box-shadow: 0 -3px 12px rgba(16, 71, 110, 0.08);
+                z-index: 990;
+                justify-content: space-around;
+                align-items: center;
+            }
+            .mbb-item {
+                flex: 1;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                background: none;
+                border: none;
+                padding: 6px 0;
+                color: var(--text-muted);
+                font-size: 10px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: color 0.15s ease;
+                -webkit-tap-highlight-color: transparent;
+                min-height: 48px;
+            }
+            .mbb-item i {
+                font-size: 17px;
+                margin-bottom: 2px;
+            }
+            .mbb-item.active {
+                color: var(--brand-primary);
+                font-weight: 700;
+            }
+            .mbb-item.active i {
+                color: var(--brand-primary);
+            }
+            .mbb-action-circle {
+                width: 38px;
+                height: 38px;
+                border-radius: 50%;
+                background: var(--brand-gradient-diag);
+                color: #FFFFFF;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                box-shadow: 0 4px 10px rgba(0, 129, 96, 0.35);
+                margin-top: -12px;
+                margin-bottom: 2px;
+            }
+            .mbb-action-circle i {
+                font-size: 16px;
+                margin-bottom: 0;
+                color: #FFFFFF;
+            }
+            .mbb-badge {
+                position: absolute;
+                top: -4px;
+                right: -8px;
+                background: #EF4444;
+                color: #fff;
+                font-size: 9px;
+                font-weight: 800;
+                padding: 1px 4px;
+                border-radius: 10px;
+                min-width: 14px;
+                text-align: center;
+            }
+            /* Add bottom content padding on mobile so fixed bottom bar does not obscure content */
+            .content {
+                padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)) !important;
+            }
+        }
+        @media (max-height: 500px) and (orientation: landscape) {
+            .mobile-bottom-bar {
+                height: calc(44px + env(safe-area-inset-bottom, 0px)) !important;
+            }
+            .mbb-action-circle {
+                width: 30px;
+                height: 30px;
+                margin-top: -6px;
+            }
+            .content {
+                padding-bottom: calc(54px + env(safe-area-inset-bottom, 0px)) !important;
+            }
+        }
+
         @keyframes highlightTargetPulse {
             0% { box-shadow: 0 0 0 4px rgba(0, 129, 96, 0.6); outline: 2px solid var(--brand-primary); }
             50% { box-shadow: 0 0 0 6px rgba(0, 129, 96, 0.3); outline: 2px solid var(--brand-primary); }
@@ -5135,12 +5384,12 @@
             <div class="topbar">
                 <button class="icon-btn no-print" id="mobileNavBtn" style="display:none;" onclick="toggleMobileNav()"
                     title="Menu" aria-label="Open Navigation Menu"><i class="fa-solid fa-bars"></i></button>
-                <div class="no-print" style="display:inline-flex;align-items:center;padding:3px 10px;background:#FFFFFF;border:1px solid #D8E4E8;border-radius:8px;margin-right:6px;flex-shrink:0;">
+                <div class="no-print topbar-logo-wrap">
                     <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢" style="height:26px;width:auto;object-fit:contain;display:block;">
                 </div>
-                <div style="flex-shrink:0;min-width:140px;">
+                <div class="topbar-title-wrap">
                     <div class="topbar-title" id="topbarTitle">Dashboard</div>
-                    <div class="topbar-sub" id="topbarSub" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:260px;">Overview</div>
+                    <div class="topbar-sub" id="topbarSub">Overview</div>
                 </div>
                 <div class="topbar-spacer"></div>
                 <div class="topbar-clock no-print" title="Current time — Indian Standard Time"><i
@@ -5327,7 +5576,7 @@
 
                     <!-- Panel 0: Provision Site Admins (Super Admin Only) -->
                     <div id="adminPanelSuperAdmins" class="admin-panel" style="display:none;">
-                        <div style="display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;">
+                        <div class="responsive-split-grid">
                             <div>
                                 <div class="card" style="padding:20px;">
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
@@ -5419,7 +5668,7 @@
                                         <span><i class="fa-solid fa-plus-circle" style="color:var(--green);"></i> Add New Location / Zone &amp; Tag ID to Project</span>
                                         <span class="badge" style="font-size:10px;background:#E8F5E9;color:var(--green);">Project Authority</span>
                                     </div>
-                                    <div style="display:grid;grid-template-columns:1fr 1fr 120px auto;gap:8px;align-items:end;">
+                                    <div class="add-loc-grid">
                                         <div class="form-field" style="margin:0;">
                                             <label style="font-size:11px;">Location / Tower Name <span class="req">*</span></label>
                                             <input type="text" id="siteAdminNewLocName" placeholder="e.g. Tower P8 / Zone A" oninput="autoSuggestLocTagId()" style="padding:6px 10px;font-size:12px;">
@@ -5772,7 +6021,7 @@
                                 </div>
                                 <span class="dpdp-tag" style="background:#E8F5E9;color:var(--green);border-color:#C8E6C9;"><i class="fa-solid fa-sitemap"></i> Location-Tagged RBAC</span>
                             </div>
-                            <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr auto;gap:10px;align-items:end;background:var(--bg);padding:14px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;">
+                            <div class="add-role-grid" style="background:var(--bg);padding:14px;border-radius:8px;border:1px solid var(--border);margin-bottom:14px;">
                                 <div class="form-field" style="margin:0;">
                                     <label style="font-size:11px;">Custom Role Title / Name <span class="req">*</span></label>
                                     <input type="text" id="customRoleTitleInput" placeholder="e.g. Tower P1 Civil Supervisor" style="padding:7px 10px;font-size:12px;">
@@ -5825,7 +6074,7 @@
 
                     <!-- Panel 2: Projects & Structural Hierarchies -->
                                         <div id="adminPanelProjects" class="admin-panel" style="display:none;">
-                                            <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;">
+                                            <div class="responsive-split-grid">
                                                 <div>
                                                     <div class="card" style="padding:20px;margin-bottom:16px;">
                                                         <h3 style="font-size:15px;font-weight:700;margin:0 0 14px;color:var(--navy);display:flex;align-items:center;gap:8px;">
@@ -5864,7 +6113,7 @@
                     
                                         <!-- Panel 3: Approved Contractor Directory -->
                                         <div id="adminPanelContractors" class="admin-panel" style="display:none;">
-                                            <div style="display:grid;grid-template-columns:1fr 340px;gap:20px;align-items:start;">
+                                            <div class="responsive-split-grid">
                                                 <div>
                                                     <div class="card" style="padding:20px;">
                                                         <h3 style="font-size:15px;font-weight:700;margin:0 0 14px;color:var(--navy);display:flex;align-items:center;gap:8px;">
@@ -6000,6 +6249,35 @@
                 <div class="view" id="view-system-settings"></div>
 
             </div>
+
+            <!-- ERGONOMIC MOBILE BOTTOM NAVIGATION BAR (<= 768px) -->
+            <nav class="mobile-bottom-bar no-print" id="mobileBottomBar" aria-label="Mobile Navigation">
+                <button type="button" class="mbb-item" onclick="goTo('dashboard')" data-mbb="dashboard" aria-label="Dashboard">
+                    <i class="fa-solid fa-gauge-high"></i>
+                    <span>Dashboard</span>
+                </button>
+                <button type="button" class="mbb-item" onclick="goTo('register')" data-mbb="register" aria-label="Permits Register">
+                    <i class="fa-solid fa-table-list"></i>
+                    <span>Permits</span>
+                </button>
+                <button type="button" class="mbb-item mbb-action-btn" id="mbbActionBtn" onclick="handleMobileBottomAction()" aria-label="Quick Action">
+                    <div class="mbb-action-circle">
+                        <i class="fa-solid fa-plus" id="mbbActionIcon"></i>
+                    </div>
+                    <span id="mbbActionLabel">Create</span>
+                </button>
+                <button type="button" class="mbb-item" onclick="goTo('notifications')" data-mbb="notifications" aria-label="Notifications">
+                    <div style="position:relative;display:inline-block;">
+                        <i class="fa-solid fa-bell"></i>
+                        <span class="mbb-badge" id="mbbNotifBadge" style="display:none;">0</span>
+                    </div>
+                    <span>Alerts</span>
+                </button>
+                <button type="button" class="mbb-item" onclick="toggleMobileNav(true)" aria-label="Open Full Menu">
+                    <i class="fa-solid fa-bars"></i>
+                    <span>Menu</span>
+                </button>
+            </nav>
         </div>
     </div>
 
@@ -6187,28 +6465,7 @@
                 ed.textContent = dd;
                 el.textContent = tt + ' IST';
             }
-            // Update Day Simulator buttons styling
-            const simDay = getSimulatedDay();
-            const btnLive = document.getElementById('btnSimLive');
-            const btnSat = document.getElementById('btnSimSat');
-            const btnSun = document.getElementById('btnSimSun');
-            const btnMon = document.getElementById('btnSimMon');
-            if (btnLive) {
-                btnLive.style.background = (simDay === null) ? 'var(--orange)' : 'transparent';
-                btnLive.style.color = (simDay === null) ? '#fff' : 'var(--text)';
-            }
-            if (btnSat) {
-                btnSat.style.background = (simDay === 6) ? '#F59E0B' : 'transparent';
-                btnSat.style.color = (simDay === 6) ? '#fff' : 'var(--text)';
-            }
-            if (btnSun) {
-                btnSun.style.background = (simDay === 0) ? '#EF4444' : 'transparent';
-                btnSun.style.color = (simDay === 0) ? '#fff' : 'var(--text)';
-            }
-            if (btnMon) {
-                btnMon.style.background = (simDay === 1) ? 'var(--navy)' : 'transparent';
-                btnMon.style.color = (simDay === 1) ? '#fff' : 'var(--text)';
-            }
+
         }
         setInterval(updateTopbarClock, 1000);
 
@@ -12708,7 +12965,7 @@
                 wrap.innerHTML = '<div style="font-size:11.5px;color:var(--text-muted);padding:8px 10px;background:#F8FAFC;border-radius:6px;border:1px dashed var(--border);">No custom project roles defined yet. Create a role above to tag it to a Location ID and Permit Workflow.</div>';
                 return;
             }
-            wrap.innerHTML = '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+            wrap.innerHTML = '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
                 '<thead><tr style="background:#F8FAFC;border-bottom:1.5px solid var(--border);text-align:left;color:var(--text-muted);font-size:10.5px;text-transform:uppercase;">' +
                 '<th style="padding:8px 10px;">Custom Role Title</th><th style="padding:8px 10px;">Base Authority</th><th style="padding:8px 10px;">Tagged Location ID</th><th style="padding:8px 10px;">Tagged Workflow Scope</th><th style="padding:8px 10px;">Action</th></tr></thead><tbody>' +
                 roles.map(r => {
@@ -15299,6 +15556,25 @@
             // 7. Navigation & Route Setup
             buildNav();
             filterUnauthorizedNavLinks();
+
+            // Configure Mobile Bottom Action Button based on Role
+            const mbbActionIcon = document.getElementById('mbbActionIcon');
+            const mbbActionLabel = document.getElementById('mbbActionLabel');
+            if (mbbActionIcon && mbbActionLabel) {
+                if (safeUser.key === 'super-admin') {
+                    mbbActionIcon.className = 'fa-solid fa-building';
+                    mbbActionLabel.textContent = 'Projects';
+                } else if (safeUser.key === 'admin' || safeUser.key === 'project-admin') {
+                    mbbActionIcon.className = 'fa-solid fa-map-location-dot';
+                    mbbActionLabel.textContent = 'Geofence';
+                } else if (INITIATOR_PERMIT_RULES[safeUser.key]) {
+                    mbbActionIcon.className = 'fa-solid fa-plus';
+                    mbbActionLabel.textContent = 'Create';
+                } else {
+                    mbbActionIcon.className = 'fa-solid fa-table-list';
+                    mbbActionLabel.textContent = 'Permits';
+                }
+            }
             if (typeof startEscalationTimer === 'function') {
                 startEscalationTimer();
             }
@@ -15465,6 +15741,29 @@
         }
         function setActiveNav(id) {
             document.querySelectorAll('.nav-link').forEach(a => a.classList.toggle('active', a.dataset.nav === id));
+            document.querySelectorAll('.mbb-item').forEach(b => {
+                if (b.dataset.mbb) {
+                    b.classList.toggle('active', b.dataset.mbb === id);
+                }
+            });
+        }
+
+        function handleMobileBottomAction() {
+            if (!currentUser) return;
+            if (currentUser.key === 'super-admin') {
+                goTo('projects');
+            } else if (currentUser.key === 'admin' || currentUser.key === 'project-admin') {
+                goTo('admin-config');
+                if (typeof switchAdminTab === 'function') switchAdminTab('gps');
+            } else if (INITIATOR_PERMIT_RULES[currentUser.key]) {
+                if (isSunday()) {
+                    showSundayLockoutModal();
+                } else {
+                    openPermitTypeSelection();
+                }
+            } else {
+                goTo('register');
+            }
         }
         if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
             document.addEventListener('DOMContentLoaded', () => {
@@ -16423,7 +16722,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="card-title" style="margin:0;"><i class="fa-solid fa-building" style="color:var(--orange);margin-right:6px;"></i> Worksite Construction Projects Operational Overview</div>' +
                     '<button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;" onclick="goTo(\'projects\')">View Projects Master <i class="fa-solid fa-arrow-right"></i></button>' +
                     '</div>' +
-                    '<div style="overflow-x:auto;">' +
+                    '<div class="mobile-table-hint" style="display:none;"><i class="fa-solid fa-arrows-left-right"></i> Swipe table horizontally to view towers, assigned admin, geofence status &amp; actions</div>' +
+                    '<div class="table-wrap">' +
                     '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
                     '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">' +
                     '<th style="padding:10px 12px;">Project / Site Code</th>' +
@@ -16445,7 +16745,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="card-title" style="margin:0;"><i class="fa-solid fa-table-list" style="color:var(--blue);margin-right:6px;"></i> Recent Cross-Site Permit Activity</div>' +
                     '<button class="btn btn-sm btn-ghost" style="white-space:nowrap;flex-shrink:0;" onclick="goTo(\'register\')">Full Register &rarr;</button>' +
                     '</div>' +
-                    '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
+                    '<div class="table-wrap"><table style="width:100%;border-collapse:collapse;font-size:12px;">' +
                     '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;"><th style="padding:8px 10px;">ID</th><th style="padding:8px 10px;">Type</th><th style="padding:8px 10px;">Location</th><th style="padding:8px 10px;">Status</th><th style="padding:8px 10px;">Date</th></tr></thead>' +
                     '<tbody>' + recentPermitsHtml + '</tbody></table></div>' +
                     '</div>' +
@@ -25484,10 +25784,15 @@ ptypeOf(p) === 'general' ?
         refreshNotifBell = function () {
             _origRefreshBell();
             const navBadge = document.getElementById('navNotifBadge');
+            const mbbBadge = document.getElementById('mbbNotifBadge');
+            const unread = notifsForCurrentUser().filter(n => !n.read).length;
             if (navBadge) {
-                const unread = notifsForCurrentUser().filter(n => !n.read).length;
                 navBadge.style.display = unread > 0 ? 'inline-flex' : 'none';
                 navBadge.textContent = unread > 99 ? '99+' : unread;
+            }
+            if (mbbBadge) {
+                mbbBadge.style.display = unread > 0 ? 'inline-flex' : 'none';
+                mbbBadge.textContent = unread > 99 ? '99+' : unread;
             }
         };
 
@@ -25760,7 +26065,7 @@ ptypeOf(p) === 'general' ?
                 '<p>Enterprise Master: Register, configure, and maintain structural hierarchies across all ARPL construction sites</p>' +
                 '</div>' +
                 '</div>' +
-                '<div style="display:grid;grid-template-columns:1fr 360px;gap:20px;align-items:start;">' +
+                '<div class="responsive-split-grid">' +
                 '<div>' +
                 '<div class="card card-pad" style="margin-bottom:16px;">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">' +
@@ -25877,7 +26182,7 @@ ptypeOf(p) === 'general' ?
                 '<p>Super Admin Authority: Empanel and assign Site Administrators with real Firebase Auth accounts over worksite GPS, locations, workflows, and staff</p>' +
                 '</div>' +
                 '</div>' +
-                '<div style="display:grid;grid-template-columns:1fr 380px;gap:20px;align-items:start;">' +
+                '<div class="responsive-split-grid">' +
                 '<div>' +
                 '<div class="card card-pad">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">' +
@@ -26156,7 +26461,7 @@ ptypeOf(p) === 'general' ?
                 '</div>' +
                 '</div>' +
                 '<div class="card card-pad">' +
-                '<div style="overflow-x:auto;">' +
+                '<div class="table-wrap">' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
                 '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">' +
                 '<th style="padding:10px 12px;">Personnel Name</th>' +
@@ -26226,7 +26531,7 @@ ptypeOf(p) === 'general' ?
                 '<div class="card card-pad" style="text-align:center;"><div style="font-size:24px;font-weight:800;color:var(--navy);">100%</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Strict Worksite Isolation</div></div>' +
                 '</div>' +
                 '<div class="card card-pad">' +
-                '<div style="overflow-x:auto;">' +
+                '<div class="table-wrap">' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
                 '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">' +
                 '<th style="padding:10px 12px;">Role Name</th>' +
@@ -26391,7 +26696,7 @@ ptypeOf(p) === 'general' ?
                 '<div class="search-box" style="width:100%;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="auditSearchInput" placeholder="Search audit logs by actor, email, action type, or project code..." oninput="renderAuditLogsView()" value="' + escapeHtml(q) + '"></div>' +
                 '</div>' +
                 '<div class="card card-pad">' +
-                '<div style="overflow-x:auto;">' +
+                '<div class="table-wrap">' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
                 '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">' +
                 '<th style="padding:10px 12px;">Timestamp (IST)</th>' +
@@ -26418,7 +26723,7 @@ ptypeOf(p) === 'general' ?
                 '<p>Cloud infrastructure, data residency, statutory retention, and security governance</p>' +
                 '</div>' +
                 '</div>' +
-                '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:20px;">' +
+                '<div class="system-settings-grid">' +
                 '<div class="card card-pad">' +
                 '<div style="font-weight:700;font-size:14px;color:var(--navy);margin-bottom:12px;display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-earth-asia" style="color:var(--blue);"></i> Data Residency &amp; Jurisdiction</div>' +
                 '<div style="font-size:12px;color:var(--text);line-height:1.6;">' +
