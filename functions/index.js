@@ -874,17 +874,46 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("invalid-argument", "Invalid official email address format.");
   }
 
-  // Whitelist of valid operational roles
+  // Whitelist of valid operational roles (standardized per project architecture & README.md)
   const ALLOWED_STAFF_ROLES = [
-    "site-supervisor", "safety-officer", "site-engineer", "mep-engineer",
-    "pm-engineer", "quality-engineer", "tower-incharge", "ehs-officer",
-    "ehs-manager", "blasting-incharge", "electrical-engineer",
-    "lifting-incharge", "contractor"
+    "site-supervisor", "supervisor",
+    "site-engineer", "engineer",
+    "mep", "mep-engineer",
+    "pm", "pm-engineer",
+    "it", "it-engineer",
+    "quality-engineer",
+    "excavation-head",
+    "hw-section-head", "tower-incharge",
+    "project-manager",
+    "ehs-officer", "ehs", "safety-officer",
+    "ehs-manager",
+    "electrician", "electrical-engineer",
+    "blasting-incharge",
+    "lift-supervisor", "lifting-incharge",
+    "night-supervisor",
+    "contractor",
+    "admin", "project-admin"
   ];
-  const cleanRole = sanitizeString(role, 32);
+  const cleanRole = sanitizeString(role, 32).toLowerCase();
   if (!ALLOWED_STAFF_ROLES.includes(cleanRole)) {
     throw new HttpsError("invalid-argument", `Invalid or unauthorized staff role: ${cleanRole}`);
   }
+
+  // Canonical role normalizer to eliminate technical naming divergences
+  const ROLE_CANONICAL_MAP = {
+    "supervisor": "site-supervisor",
+    "engineer": "site-engineer",
+    "mep-engineer": "mep",
+    "pm-engineer": "pm",
+    "it-engineer": "it",
+    "tower-incharge": "hw-section-head",
+    "electrical-engineer": "electrician",
+    "lifting-incharge": "lift-supervisor",
+    "safety-officer": "ehs-officer",
+    "ehs": "ehs-officer",
+    "admin": "project-admin"
+  };
+  const canonicalRole = ROLE_CANONICAL_MAP[cleanRole] || cleanRole;
 
   const cleanEmail = email.trim().toLowerCase();
   const cleanName = sanitizeString(displayName || name || cleanEmail.split("@")[0], 100);
@@ -896,10 +925,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   let cleanPassword;
   if (password) {
-    if (!validatePassword(password)) {
+    if (typeof password !== "string" || password.length < 6 || password.length > 128) {
       throw new HttpsError(
         "invalid-argument",
-        "Staff password must be at least 10 characters long and include uppercase, lowercase, numbers, and special symbols."
+        "Staff password must be at least 6 characters long."
       );
     }
     cleanPassword = password;
@@ -925,9 +954,9 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Set Custom Claims for Auth RBAC & Location/Workflow Scope
   await auth.setCustomUserClaims(userRecord.uid, {
-    role: cleanRole,
-    uiRole: cleanRole,
-    ptwRole: cleanRole,
+    role: canonicalRole,
+    uiRole: canonicalRole,
+    ptwRole: canonicalRole,
     projectId: projectId,
     locationId: cleanLocationId,
     locationName: cleanLocationName,
@@ -941,9 +970,9 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     email: cleanEmail,
     name: cleanName,
     displayName: cleanName,
-    role: cleanRole,
-    uiRole: cleanRole,
-    ptwRole: cleanRole,
+    role: canonicalRole,
+    uiRole: canonicalRole,
+    ptwRole: canonicalRole,
     roleLabel: cleanRoleLabel,
     projectId: projectId,
     projectName: sanitizeString(projectName || projectId, 100),

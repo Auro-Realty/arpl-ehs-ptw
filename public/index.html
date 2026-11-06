@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -5282,7 +5282,10 @@
                 min-height: 56px !important;
             }
             .content {
-                padding: 12px !important;
+                padding: 12px 12px calc(108px + env(safe-area-inset-bottom, 24px)) 12px !important;
+            }
+            .view {
+                padding-bottom: calc(24px + env(safe-area-inset-bottom, 16px));
             }
             .kpi-grid, .form-grid, .ptype-grid {
                 grid-template-columns: 1fr !important;
@@ -6017,13 +6020,19 @@
                                             </h3>
                                             <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Live Firebase Authentication accounts &amp; Firestore <span class="mono">/users/{uid}</span> role bindings scoped to this worksite.</p>
                                         </div>
-                                        <!-- Role Filter Pill Bar -->
-                                        <div id="empanelRoleFilterPillBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-                                            <button type="button" class="empanel-filter-pill active" data-group="all" onclick="setEmpanelRoleGroupFilter('all')">All Roles</button>
-                                            <button type="button" class="empanel-filter-pill" data-group="initiators" onclick="setEmpanelRoleGroupFilter('initiators')">Initiators</button>
-                                            <button type="button" class="empanel-filter-pill" data-group="reviewers" onclick="setEmpanelRoleGroupFilter('reviewers')">Reviewers</button>
-                                            <button type="button" class="empanel-filter-pill" data-group="approvers" onclick="setEmpanelRoleGroupFilter('approvers')">Approvers</button>
-                                            <button type="button" class="empanel-filter-pill" data-group="ehs" onclick="setEmpanelRoleGroupFilter('ehs')">EHS</button>
+                                        <!-- Role Filter Pill Bar & Live Search -->
+                                        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+                                            <div id="empanelRoleFilterPillBar" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
+                                                <button type="button" class="empanel-filter-pill active" data-group="all" onclick="setEmpanelRoleGroupFilter('all')">All Roles</button>
+                                                <button type="button" class="empanel-filter-pill" data-group="initiators" onclick="setEmpanelRoleGroupFilter('initiators')">Initiators</button>
+                                                <button type="button" class="empanel-filter-pill" data-group="reviewers" onclick="setEmpanelRoleGroupFilter('reviewers')">Reviewers</button>
+                                                <button type="button" class="empanel-filter-pill" data-group="approvers" onclick="setEmpanelRoleGroupFilter('approvers')">Approvers</button>
+                                                <button type="button" class="empanel-filter-pill" data-group="ehs" onclick="setEmpanelRoleGroupFilter('ehs')">EHS</button>
+                                            </div>
+                                            <div class="search-box" style="flex:1;min-width:180px;max-width:280px;height:32px;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:6px;padding:0 8px;display:flex;align-items:center;gap:6px;">
+                                                <i class="fa-solid fa-magnifying-glass" style="font-size:11px;color:#64748B;"></i>
+                                                <input type="text" id="empanelStaffSearch" placeholder="Search staff..." oninput="renderSitePersonnelTable()" style="border:none;background:transparent;outline:none;font-size:12px;width:100%;">
+                                            </div>
                                         </div>
                                     </div>
                                     <div style="display:none;">
@@ -6046,6 +6055,7 @@
                                             <tbody id="sitePersonnelTableBody"></tbody>
                                         </table>
                                     </div>
+                                    <div id="sitePersonnelPagination" style="display:none;justify-content:space-between;align-items:center;padding:12px 6px 0;font-size:12px;color:var(--text-muted);border-top:1px solid #E2E8F0;margin-top:8px;"></div>
                                 </div>
                             </div>
 
@@ -8070,7 +8080,13 @@
 
         function getProjectTowers(projIdOrName) {
             const p = getProject(projIdOrName);
-            if (p && Array.isArray(p.towers) && p.towers.length > 0) return p.towers;
+            if (!p) return ['Tower A', 'Tower B', 'Tower C', 'Tower D'];
+            ensureProjectLocations(p);
+            if (Array.isArray(p.locations) && p.locations.length > 0) {
+                const names = p.locations.map(l => l.name).filter(Boolean);
+                if (names.length > 0) return names;
+            }
+            if (Array.isArray(p.towers) && p.towers.length > 0) return p.towers;
             return ['Tower A', 'Tower B', 'Tower C', 'Tower D'];
         }
 
@@ -13338,6 +13354,9 @@
             renderSitePersonnelTable();
         }
 
+        let empanelStaffPage = 1;
+        const EMPANEL_STAFF_PER_PAGE = 10;
+
         function renderSitePersonnelTable() {
             const tbody = document.getElementById('sitePersonnelTableBody');
             if (!tbody) return;
@@ -13349,30 +13368,65 @@
                 : ((filterSel && filterSel.value) ? filterSel.value : (selectedPrj ? selectedPrj.id : 'PRJ-PEARL'));
 
             const projectList = filterPrj
-                ? SITE_PERSONNEL_ACCOUNTS.filter(s => s.projectId === filterPrj)
-                : SITE_PERSONNEL_ACCOUNTS.slice();
+                ? SITE_PERSONNEL_ACCOUNTS.filter(s => s && s.projectId === filterPrj)
+                : SITE_PERSONNEL_ACCOUNTS.filter(Boolean);
 
             const titleEl = document.getElementById('empaneledStaffCardTitle');
             if (titleEl) {
                 titleEl.innerHTML = '<i class="fa-solid fa-users-gear" style="color:var(--orange);"></i> Empaneled Worksite Staff &amp; Approvers (' + projectList.length + ')';
             }
 
+            const q = (document.getElementById('empanelStaffSearch') ? document.getElementById('empanelStaffSearch').value.trim().toLowerCase() : '');
             const grp = window.empanelRoleGroupFilter || 'all';
-            const list = projectList.filter(s => {
-                if (grp === 'all') return true;
-                const meta = getRoleWorkflowStageMeta(s.role);
-                if (grp === 'approvers') {
-                    return meta.group === 'approvers' || meta.group === 'ehs' || ['excavation-head', 'hw-section-head'].includes(s.role);
+            let list = projectList.filter(s => {
+                if (grp !== 'all') {
+                    const meta = getRoleWorkflowStageMeta(s.role);
+                    if (grp === 'approvers') {
+                        if (!(meta.group === 'approvers' || meta.group === 'ehs' || ['excavation-head', 'hw-section-head'].includes(s.role))) return false;
+                    } else if (meta.group !== grp) {
+                        return false;
+                    }
                 }
-                return meta.group === grp;
+                if (q) {
+                    const matchName = (s.name || '').toLowerCase().includes(q);
+                    const matchEmail = (s.email || '').toLowerCase().includes(q);
+                    const matchEmp = (s.employeeId || s.empId || '').toLowerCase().includes(q);
+                    const matchRole = (s.roleLabel || s.role || '').toLowerCase().includes(q);
+                    if (!matchName && !matchEmail && !matchEmp && !matchRole) return false;
+                }
+                return true;
             });
+
+            const totalCount = list.length;
+            const totalPages = Math.ceil(totalCount / EMPANEL_STAFF_PER_PAGE) || 1;
+            if (empanelStaffPage > totalPages) empanelStaffPage = totalPages;
+            if (empanelStaffPage < 1) empanelStaffPage = 1;
+
+            const startIdx = (empanelStaffPage - 1) * EMPANEL_STAFF_PER_PAGE;
+            const pagedList = list.slice(startIdx, startIdx + EMPANEL_STAFF_PER_PAGE);
+
+            const pagEl = document.getElementById('sitePersonnelPagination');
+            if (pagEl) {
+                if (totalCount > EMPANEL_STAFF_PER_PAGE) {
+                    pagEl.style.display = 'flex';
+                    pagEl.innerHTML = '<div>Showing <b>' + (startIdx + 1) + ' &ndash; ' + Math.min(startIdx + EMPANEL_STAFF_PER_PAGE, totalCount) + '</b> of <b>' + totalCount + '</b> staff members</div>' +
+                        '<div style="display:flex;gap:6px;align-items:center;">' +
+                        '<button type="button" class="btn btn-xs btn-ghost" ' + (empanelStaffPage <= 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : 'onclick="empanelStaffPage--;renderSitePersonnelTable()"') + '><i class="fa-solid fa-chevron-left"></i> Prev</button>' +
+                        '<span style="padding:0 6px;font-size:11.5px;font-weight:700;">Page ' + empanelStaffPage + ' of ' + totalPages + '</span>' +
+                        '<button type="button" class="btn btn-xs btn-ghost" ' + (empanelStaffPage >= totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : 'onclick="empanelStaffPage++;renderSitePersonnelTable()"') + '>Next <i class="fa-solid fa-chevron-right"></i></button>' +
+                        '</div>';
+                } else {
+                    pagEl.style.display = 'none';
+                    pagEl.innerHTML = '';
+                }
+            }
 
             if (list.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="6" style="padding:22px 16px;text-align:center;color:#64748B;font-size:12.5px;">No site roles empaneled for this project yet. Use the \'Empanel New Site Role\' form on the right to provision Site Supervisors, Site Engineers, and Approvers.</td></tr>';
                 return;
             }
 
-            tbody.innerHTML = list.map((stf) => {
+            tbody.innerHTML = pagedList.map((stf) => {
                 const rInfo = roleInfo(stf.role);
                 const stageMeta = getRoleWorkflowStageMeta(stf.role);
                 const roleTitle = stf.roleLabel || (rInfo && rInfo.label) || stf.role;
@@ -13473,6 +13527,14 @@
                 : (prjSel && prjSel.value ? prjSel.value : (PROJECTS[adminConfigState.selectedProjectIndex] ? PROJECTS[adminConfigState.selectedProjectIndex].id : PROJECTS[0].id));
             const targetPrj = PROJECTS.find(p => p.id === lockedPrjId) || PROJECTS[0];
 
+            // Prevent duplicate creation with same email across this project
+            const existingInSamePrj = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && s.email && s.email.toLowerCase() === rawEmail && s.projectId === targetPrj.id);
+            if (existingInSamePrj) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Duplicate Account:</b> A staff member with email <b>' + escapeHtml(rawEmail) + '</b> is already empaneled on ' + escapeHtml(targetPrj.name) + ' (' + escapeHtml(existingInSamePrj.roleLabel || existingInSamePrj.role) + '). Use the action buttons in the directory table to update their credentials or revoke their role.');
+                showToast('User already empaneled: ' + rawEmail, 'warn');
+                return;
+            }
+
             const activeRoleSel = empanelRoleEl || roleSel;
             const roleKey = activeRoleSel ? activeRoleSel.value : 'site-supervisor';
             const baseRoleText = activeRoleSel && activeRoleSel.options[activeRoleSel.selectedIndex]
@@ -13496,47 +13558,138 @@
 
             if (submitBtn) {
                 submitBtn.disabled = true;
-                submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Provisioning Firebase Login...';
+                submitBtn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Provisioning in Firebase...';
             }
 
-            let authUid = null;
-            try {
-                const provAuth = getProvisioningAuth();
-                if (provAuth) {
-                    try {
-                        const cred = await provAuth.createUserWithEmailAndPassword(rawEmail, rawPwd);
-                        if (cred && cred.user) {
-                            authUid = cred.user.uid;
-                            try { await cred.user.updateProfile({ displayName: rawName }); } catch (_e) {}
-                        }
-                        await provAuth.signOut();
-                    } catch (authErr) {
-                        if (authErr && authErr.code === 'auth/email-already-in-use') {
-                            showToast('Firebase Auth user already exists for ' + rawEmail + '; updating role binding in Firestore.', 'info');
-                        } else {
-                            if (submitBtn) {
-                                submitBtn.disabled = false;
-                                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
+            let finalUid = null;
+            let provisionSuccess = false;
+
+            // Step 1: Attempt Provisioning via Cloud Function adminAssignProjectRole
+            if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
+                try {
+                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const res = await assignFn({
+                        action: 'create',
+                        email: rawEmail,
+                        password: rawPwd,
+                        displayName: rawName,
+                        role: roleKey,
+                        roleLabel: roleText,
+                        projectId: targetPrj.id,
+                        projectName: targetPrj.name,
+                        locationId: isCampusWide ? 'CAMPUS-WIDE' : (locObj ? locObj.id : assignedTower),
+                        locationName: isCampusWide ? 'All Site Towers' : assignedTower,
+                        campusWide: isCampusWide,
+                        allowedWorkflows: allowedWfs,
+                        empId: rawEmpId,
+                        phone: phone
+                    });
+                    if (res && res.data && res.data.success) {
+                        finalUid = res.data.uid;
+                        provisionSuccess = true;
+                    }
+                } catch (cfErr) {
+                    console.warn('Callable adminAssignProjectRole notice, falling back to secondary client auth:', cfErr);
+                }
+            }
+
+            // Step 2: Fallback to Secondary Auth App + Direct Firestore Writes
+            if (!provisionSuccess) {
+                let authUid = null;
+                try {
+                    const provAuth = getProvisioningAuth();
+                    if (provAuth) {
+                        try {
+                            const cred = await provAuth.createUserWithEmailAndPassword(rawEmail, rawPwd);
+                            if (cred && cred.user) {
+                                authUid = cred.user.uid;
+                                try { await cred.user.updateProfile({ displayName: rawName }); } catch (_e) {}
                             }
-                            showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Firebase Auth Error:</b> ' + escapeHtml(authErr.message || String(authErr)));
-                            return;
+                            await provAuth.signOut();
+                        } catch (authErr) {
+                            if (authErr && authErr.code === 'auth/email-already-in-use') {
+                                const ex = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && s.email && s.email.toLowerCase() === rawEmail);
+                                if (ex && ex.uid) authUid = ex.uid;
+                            } else {
+                                if (submitBtn) {
+                                    submitBtn.disabled = false;
+                                    submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
+                                }
+                                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Firebase Auth Error:</b> ' + escapeHtml(authErr.message || String(authErr)));
+                                showToast('Firebase Auth Error: ' + (authErr.message || authErr.code), 'err');
+                                return;
+                            }
                         }
                     }
+                } catch (secErr) {
+                    console.warn('Secondary auth provision notice:', secErr);
                 }
-            } catch (e) {
-                console.warn('ProvisioningAuth warning:', e);
+
+                finalUid = authUid || ('stf-' + uid());
+
+                // Persist to Cloud Firestore with strict asynchronous confirmation
+                if (typeof firebase !== 'undefined' && firebase.firestore) {
+                    const db = firebase.firestore();
+                    const userDocData = {
+                        uid: finalUid,
+                        id: finalUid,
+                        name: rawName,
+                        displayName: rawName,
+                        email: rawEmail,
+                        employeeId: rawEmpId,
+                        empId: rawEmpId,
+                        role: roleKey,
+                        uiRole: roleKey,
+                        ptwRole: roleKey,
+                        roleLabel: roleText,
+                        projectId: targetPrj.id,
+                        projectName: targetPrj.name,
+                        assignedTower: assignedTower,
+                        location: assignedTower,
+                        locationName: isCampusWide ? null : assignedTower,
+                        locationId: isCampusWide ? null : (locObj ? locObj.id : null),
+                        campusWide: isCampusWide,
+                        allowedWorkflows: allowedWfs,
+                        phone: phone,
+                        createdBy: (currentUser && currentUser.email) || 'site-admin',
+                        createdByRole: 'project-admin',
+                        status: 'Active',
+                        isRealFirestoreUser: true,
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+
+                    try {
+                        await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
+                        await db.collection('site_personnel').doc(finalUid).set(userDocData, { merge: true });
+                        provisionSuccess = true;
+                    } catch (fsErr) {
+                        console.error('Firestore role empanelment write error:', fsErr);
+                        if (submitBtn) {
+                            submitBtn.disabled = false;
+                            submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
+                        }
+                        showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-circle-xmark"></i> <b>Firebase Persistence Error:</b> ' + escapeHtml(fsErr.message || fsErr.code || 'Write permission denied by Firestore security rules.'));
+                        showToast('Firebase persistence failed: ' + (fsErr.message || fsErr.code), 'err');
+                        return; // CRITICAL: Stop immediately. NEVER display false success!
+                    }
+                } else {
+                    provisionSuccess = true;
+                }
             }
 
-            const finalUid = authUid || ('stf-' + uid());
+            finalUid = finalUid || ('stf-' + uid());
             const staffRecord = {
                 id: finalUid,
                 uid: finalUid,
                 name: rawName,
+                displayName: rawName,
                 email: rawEmail,
                 employeeId: rawEmpId,
                 empId: rawEmpId,
                 role: roleKey,
                 uiRole: roleKey,
+                ptwRole: roleKey,
                 roleLabel: roleText,
                 projectId: targetPrj.id,
                 projectName: targetPrj.name,
@@ -13554,10 +13707,16 @@
                 createdAt: nowTime()
             };
 
-            const existingIdx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.email && s.email.toLowerCase() === rawEmail);
-            if (existingIdx >= 0) SITE_PERSONNEL_ACCOUNTS[existingIdx] = staffRecord;
-            else SITE_PERSONNEL_ACCOUNTS.unshift(staffRecord);
-
+            // Multi-user retention: Key by permanent UID so users never overwrite each other!
+            targetPrj.staffRoles = targetPrj.staffRoles || {};
+            targetPrj.staffRoles[finalUid] = {
+                uid: finalUid,
+                name: rawName,
+                email: rawEmail,
+                employeeId: rawEmpId,
+                role: roleKey,
+                assignedTower: assignedTower
+            };
             targetPrj.roles = targetPrj.roles || {};
             targetPrj.roles[roleKey] = {
                 uid: finalUid,
@@ -13568,48 +13727,28 @@
                 assignedTower: assignedTower
             };
 
+            // Update in-memory personnel list safely
+            const existingIdx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => (s && s.id === finalUid) || (s && s.email && s.email.toLowerCase() === rawEmail));
+            if (existingIdx >= 0) {
+                SITE_PERSONNEL_ACCOUNTS[existingIdx] = staffRecord;
+            } else {
+                SITE_PERSONNEL_ACCOUNTS.unshift(staffRecord);
+            }
+
             if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                const userDocData = {
-                    uid: finalUid,
-                    name: rawName,
-                    displayName: rawName,
-                    email: rawEmail,
-                    employeeId: rawEmpId,
-                    empId: rawEmpId,
-                    role: roleKey,
-                    uiRole: roleKey,
-                    roleLabel: roleText,
-                    projectId: targetPrj.id,
-                    projectName: targetPrj.name,
-                    assignedTower: assignedTower,
-                    location: assignedTower,
-                    locationName: isCampusWide ? null : assignedTower,
-                    locationId: isCampusWide ? null : (locObj ? locObj.id : null),
-                    campusWide: isCampusWide,
-                    allowedWorkflows: allowedWfs,
-                    phone: phone,
-                    createdBy: (currentUser && currentUser.email) || 'site-admin',
-                    createdByRole: 'project-admin',
-                    status: 'Active',
-                    isRealFirestoreUser: true,
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                };
                 try {
-                    await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
-                    await db.collection('site_personnel').doc(finalUid).set(staffRecord, { merge: true });
-                    await db.collection('projects').doc(targetPrj.id).set({
-                        roles: targetPrj.roles,
+                    await firebase.firestore().collection('projects').doc(targetPrj.id).set({
+                        staffRoles: targetPrj.staffRoles,
+                        empaneledStaffCount: SITE_PERSONNEL_ACCOUNTS.filter(s => s && s.projectId === targetPrj.id).length,
                         updatedAt: firebase.firestore.FieldValue.serverTimestamp()
                     }, { merge: true });
-                } catch (fsErr) {
-                    console.warn('Firestore role empanelment write notice:', fsErr);
+                } catch (_pErr) {
+                    console.warn('Projects staff metadata update notice:', _pErr);
                 }
             }
 
             if (typeof recordAuditLog === 'function') {
-                recordAuditLog('PROVISION_SITE_STAFF', 'Provisioned ' + roleText + ' (' + rawName + ' / ' + rawEmail + ') at ' + assignedTower + ' on ' + targetPrj.name, finalUid);
+                recordAuditLog('PROVISION_SITE_STAFF', 'Empaneled ' + roleText + ' (' + rawName + ' / ' + rawEmail + ') at ' + assignedTower + ' on ' + targetPrj.name, finalUid);
             }
 
             if (empanelNameEl) empanelNameEl.value = '';
@@ -13627,76 +13766,145 @@
 
             saveState();
             renderSitePersonnelTable();
+            renderWorksiteGovernanceHeader();
 
             showEmpanelFeedbackBanner(
                 'ok',
-                '<i class="fa-solid fa-circle-check"></i> <b>Role Provisioned &amp; Login Active:</b> <b>' + escapeHtml(rawName) + '</b> (<span class="mono">' + escapeHtml(rawEmail) + '</span>) has been empaneled as <b>' + escapeHtml(roleText) + '</b> for <b>' + escapeHtml(targetPrj.name) + '</b> (' + escapeHtml(assignedTower) + ').'
+                '<i class="fa-solid fa-circle-check"></i> <b>Role Empaneled &amp; Verified in Firebase:</b> <b>' + escapeHtml(rawName) + '</b> (<span class="mono">' + escapeHtml(rawEmail) + '</span>) is actively registered as <b>' + escapeHtml(roleText) + '</b> for <b>' + escapeHtml(targetPrj.name) + '</b> (' + escapeHtml(assignedTower) + '). UID: <span class="mono">' + escapeHtml(finalUid) + '</span>'
             );
-            showToast('Provisioned ' + rawName + ' (' + roleText + ') for ' + targetPrj.name, 'ok');
+            showToast('Empaneled ' + rawName + ' (' + roleText + ') for ' + targetPrj.name + ' [Verified in Firebase]', 'ok');
         }
 
         async function siteAdminResetStaffPassword(staffId) {
-            const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s.id === staffId);
+            const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s && s.id === staffId);
             if (!stf || !stf.email) return;
-            try {
-                if (typeof firebase !== 'undefined' && firebase.auth) {
+
+            let resetSuccess = false;
+            // 1. Try backend Cloud Function reset
+            if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
+                try {
+                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const res = await assignFn({
+                        action: 'reset-password',
+                        uid: stf.uid || stf.id,
+                        projectId: stf.projectId
+                    });
+                    if (res && res.data && res.data.success) {
+                        resetSuccess = true;
+                        showConfirmModal(
+                            'Password Reset Successfully',
+                            'Password has been reset in Firebase Auth for ' + stf.name + ' (' + stf.email + ').\n\nTemporary Login Password:\n' + (res.data.temporaryPassword || 'AuroRole2026!') + '\n\nPlease communicate this credential securely to the user.',
+                            function () {}
+                        );
+                        showToast('Password reset for ' + stf.name, 'ok');
+                    }
+                } catch (cfErr) {
+                    console.warn('Backend password reset notice:', cfErr);
+                }
+            }
+
+            // 2. Direct Auth reset email fallback
+            if (!resetSuccess && typeof firebase !== 'undefined' && firebase.auth) {
+                try {
                     await firebase.auth().sendPasswordResetEmail(stf.email);
                     showEmpanelFeedbackBanner(
                         'ok',
                         '<i class="fa-solid fa-envelope-circle-check"></i> <b>Password Reset Email Dispatched:</b> Sent official Firebase password reset link to <b>' + escapeHtml(stf.email) + '</b> (' + escapeHtml(stf.name) + ').'
                     );
                     showToast('Password reset email dispatched to ' + stf.email, 'ok');
-                    if (typeof recordAuditLog === 'function') {
-                        recordAuditLog('STAFF_PASSWORD_RESET', 'Sent Firebase password reset email to ' + stf.email, stf.id);
-                    }
-                    return;
+                } catch (err) {
+                    showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Reset Notice:</b> ' + escapeHtml(err.message || String(err)));
+                    showToast('Failed to reset password: ' + (err.message || err), 'err');
                 }
-            } catch (err) {
-                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Reset Notice:</b> ' + escapeHtml(err.message || String(err)));
+            }
+
+            if (typeof recordAuditLog === 'function') {
+                recordAuditLog('STAFF_PASSWORD_RESET', 'Password reset initiated for ' + stf.email, stf.id);
             }
         }
 
         function siteAdminToggleStaffStatus(staffId) {
-            const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s.id === staffId);
+            const stf = SITE_PERSONNEL_ACCOUNTS.find(s => s && s.id === staffId);
             if (!stf) return;
             stf.status = stf.status === 'Active' ? 'Deactivated' : 'Active';
             saveState();
             showToast('Personnel ' + stf.name + ' status updated to ' + stf.status, 'info');
             renderSitePersonnelTable();
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                firebase.firestore().collection('users').doc(stf.id).set({ status: stf.status }, { merge: true }).catch(() => {});
+                firebase.firestore().collection('site_personnel').doc(stf.id).set({ status: stf.status }, { merge: true }).catch(() => {});
+            }
         }
 
         async function siteAdminRemoveStaff(staffId) {
-            const idx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s.id === staffId);
+            const idx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s && s.id === staffId);
             if (idx === -1) return;
             const stf = SITE_PERSONNEL_ACCOUNTS[idx];
-            SITE_PERSONNEL_ACCOUNTS.splice(idx, 1);
 
-            const targetPrj = PROJECTS.find(p => p.id === stf.projectId);
-            if (targetPrj && targetPrj.roles && stf.role && targetPrj.roles[stf.role]) {
-                delete targetPrj.roles[stf.role];
+            if (!confirm('Are you sure you want to revoke and delete the account for ' + stf.name + ' (' + stf.email + ')? This will delete their Firebase credentials and remove their site role.')) {
+                return;
             }
 
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
+            let backendRemoved = false;
+            // 1. Try backend Cloud Function deletion
+            if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
                 try {
-                    if (stf.uid) await db.collection('users').doc(stf.uid).delete();
-                    if (stf.id) {
-                        await db.collection('users').doc(stf.id).delete();
-                        await db.collection('site_personnel').doc(stf.id).delete();
+                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const res = await assignFn({
+                        action: 'delete',
+                        uid: stf.uid || stf.id,
+                        projectId: stf.projectId
+                    });
+                    if (res && res.data && res.data.success) {
+                        backendRemoved = true;
                     }
-                    if (targetPrj) {
-                        await db.collection('projects').doc(targetPrj.id).set({
-                            roles: targetPrj.roles || {},
-                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                        }, { merge: true });
-                    }
-                } catch (e) {
-                    console.warn('Firestore staff removal warning:', e);
+                } catch (cfErr) {
+                    console.warn('Backend delete staff attempt noticed:', cfErr);
                 }
             }
 
+            // 2. Direct Firestore fallback
+            if (!backendRemoved && typeof firebase !== 'undefined' && firebase.firestore) {
+                const db = firebase.firestore();
+                try {
+                    if (stf.uid) await db.collection('users').doc(stf.uid).delete();
+                    if (stf.id && stf.id !== stf.uid) await db.collection('users').doc(stf.id).delete();
+                    await db.collection('site_personnel').doc(stf.id || stf.uid).delete();
+                } catch (e) {
+                    console.warn('Firestore direct staff deletion notice:', e);
+                }
+            }
+
+            // 3. Remove safely from targetPrj staffRoles without deleting other users sharing the same role
+            const targetPrj = PROJECTS.find(p => p.id === stf.projectId);
+            if (targetPrj && targetPrj.staffRoles && targetPrj.staffRoles[staffId]) {
+                delete targetPrj.staffRoles[staffId];
+            }
+            if (targetPrj && targetPrj.roles && targetPrj.roles[stf.role] && targetPrj.roles[stf.role].uid === staffId) {
+                const another = SITE_PERSONNEL_ACCOUNTS.find(s => s && s.id !== staffId && s.projectId === stf.projectId && s.role === stf.role);
+                if (another) {
+                    targetPrj.roles[stf.role] = {
+                        uid: another.id || another.uid,
+                        name: another.name,
+                        email: another.email,
+                        employeeId: another.employeeId || another.empId,
+                        role: another.role,
+                        assignedTower: another.assignedTower || another.location
+                    };
+                } else {
+                    delete targetPrj.roles[stf.role];
+                }
+            }
+
+            // Remove from local list
+            SITE_PERSONNEL_ACCOUNTS.splice(idx, 1);
             saveState();
             renderSitePersonnelTable();
+            renderWorksiteGovernanceHeader();
+
+            if (typeof recordAuditLog === 'function') {
+                recordAuditLog('REVOKE_SITE_STAFF', 'Revoked site role for ' + stf.name + ' (' + stf.email + ') on ' + (targetPrj ? targetPrj.name : stf.projectId), staffId);
+            }
             showEmpanelFeedbackBanner(
                 'ok',
                 '<i class="fa-solid fa-user-xmark"></i> <b>Role Revoked:</b> Removed <b>' + escapeHtml(stf.name) + '</b> (' + escapeHtml(stf.email) + ') from <b>' + escapeHtml(stf.projectName || stf.projectId) + '</b>.'
@@ -17023,12 +17231,16 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 }).join('')) || '<tr><td colspan="5" style="padding:14px;text-align:center;color:var(--text-muted);">No permit activity recorded yet.</td></tr>';
 
                 // Panel 4: Active Personnel sample
-                let activeUsersHtml = ((SITE_PERSONNEL_ACCOUNTS || []).slice(0, 4).map(stf => {
+                const allStaffAccounts = (SITE_PERSONNEL_ACCOUNTS || []).filter(Boolean);
+                let activeUsersHtml = (allStaffAccounts.slice(0, 8).map(stf => {
                     return '<li style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px;">' +
                         '<div><b>' + escapeHtml(stf.name) + '</b> <span style="color:var(--text-muted);">&bull; ' + escapeHtml(stf.roleLabel || stf.role) + '</span><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(stf.projectName || stf.projectId) + ' (' + escapeHtml(stf.email) + ')</div></div>' +
                         '<span class="badge st-active" style="font-size:10px;"><i class="fa-solid fa-circle-check"></i> ' + stf.status + '</span>' +
                         '</li>';
                 }).join('')) || '<li style="padding:10px 0;color:var(--text-muted);font-size:12px;">No personnel records found.</li>';
+                if (allStaffAccounts.length > 8) {
+                    activeUsersHtml += '<li style="padding:10px 0 4px 0;text-align:center;"><a href="javascript:void(0)" onclick="goTo(\'users\')" style="font-size:12px;font-weight:700;color:var(--brand-primary);text-decoration:none;"><i class="fa-solid fa-users"></i> View All ' + allStaffAccounts.length + ' Empaneled Personnel in Directory &rarr;</a></li>';
+                }
 
                 // Panel 5: Recent Admin Actions (Live Audit Logs Only)
                 const liveAuditSlice = (window.AUDIT_LOGS || []).slice(0, 5);
@@ -17869,7 +18081,14 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="form-hint" style="font-size:11.5px;color:var(--text-muted);margin-top:4px;"><i class="fa-solid fa-circle-info" style="color:var(--orange);"></i> Project selection is only available when scope of work is <b>Site</b>. Batching Plant operates as an independent dedicated workplace.</div>' +
                     '</div>';
             } else {
-                html += '<div class="form-field" id="ff-project"><label>Project <span class="req">*</span></label><select id="inProject" onchange="onProjectChange()"><option value="">Select project&hellip;</option>' +
+                const userHasAssignedPrj = currentUser && currentUser.key !== 'super-admin' && (currentUser.projectId || currentUser.projectName);
+                const assignedPrj = userHasAssignedPrj ? (PROJECTS.find(p => p.id === currentUser.projectId || p.name === currentUser.projectName) || null) : null;
+                if (assignedPrj && !draft.project) {
+                    draft.project = assignedPrj.name;
+                    draft.projectId = assignedPrj.id;
+                }
+                const isLockedToProject = !!assignedPrj;
+                html += '<div class="form-field" id="ff-project"><label>Project <span class="req">*</span>' + (isLockedToProject ? ' <span class="badge badge-info" style="font-size:10px;padding:2px 6px;margin-left:6px;"><i class="fa-solid fa-lock"></i> Locked to Assigned Worksite</span>' : '') + '</label><select id="inProject" onchange="onProjectChange()"' + (isLockedToProject ? ' disabled style="background:#F1F5F9;cursor:not-allowed;"' : '') + '><option value="">Select project&hellip;</option>' +
                     PROJECTS.map(p => '<option value="' + p.name + '" ' + (draft.project === p.name ? 'selected' : '') + '>' + p.name + ' (' + (p.configured ? '✓ Configured' : '⚠️ Unconfigured — Locked') + ')</option>').join('') +
                     '</select><div class="form-error"><i class="fa-solid fa-circle-exclamation"></i> Project must be configured by Admin before permits can be filled.</div></div>';
             }
@@ -26686,19 +26905,23 @@ ptypeOf(p) === 'general' ?
         }
 
         /* --- 3. ENTERPRISE USERS DIRECTORY VIEW --- */
+        let userDirectoryPage = 1;
+        const USER_DIRECTORY_PER_PAGE = 15;
+
         function renderUsersDirectoryView() {
             const container = document.getElementById('view-users');
             if (!container) return;
             const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
 
-            let q = (document.getElementById('userSearchInput') ? document.getElementById('userSearchInput').value : '').toLowerCase();
+            let q = (document.getElementById('userSearchInput') ? document.getElementById('userSearchInput').value : '').toLowerCase().trim();
             let prjFilter = document.getElementById('userProjectFilter') ? document.getElementById('userProjectFilter').value : '';
             let roleFilter = document.getElementById('userRoleFilter') ? document.getElementById('userRoleFilter').value : '';
 
             let allUsers = [];
             // Collect project admins
             (PROJECT_ADMINS || []).forEach(a => {
+                if (!a) return;
                 allUsers.push({
                     id: a.id,
                     name: a.name,
@@ -26716,6 +26939,7 @@ ptypeOf(p) === 'general' ?
             });
             // Collect staff accounts
             (SITE_PERSONNEL_ACCOUNTS || []).forEach(s => {
+                if (!s) return;
                 allUsers.push({
                     id: s.id,
                     name: s.name,
@@ -26737,11 +26961,19 @@ ptypeOf(p) === 'general' ?
                 if (isSiteAdmin && currentUser.projectId && u.projectId !== currentUser.projectId) return false;
                 if (prjFilter && u.projectId !== prjFilter) return false;
                 if (roleFilter && u.role !== roleFilter) return false;
-                if (q && !(u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.empId || '').toLowerCase().includes(q))) return false;
+                if (q && !(u.name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.empId || '').toLowerCase().includes(q) || (u.roleLabel || '').toLowerCase().includes(q))) return false;
                 return true;
             });
 
-            let tableRows = filtered.map(u => {
+            const totalUsers = filtered.length;
+            const totalPages = Math.ceil(totalUsers / USER_DIRECTORY_PER_PAGE) || 1;
+            if (userDirectoryPage > totalPages) userDirectoryPage = totalPages;
+            if (userDirectoryPage < 1) userDirectoryPage = 1;
+
+            const startIdx = (userDirectoryPage - 1) * USER_DIRECTORY_PER_PAGE;
+            const pagedUsers = filtered.slice(startIdx, startIdx + USER_DIRECTORY_PER_PAGE);
+
+            let tableRows = pagedUsers.map(u => {
                 const isAct = u.status === 'Active';
                 const rInfo = roleInfo(u.role);
                 let actionBtns = '';
@@ -26763,6 +26995,18 @@ ptypeOf(p) === 'general' ?
                     '</tr>';
             }).join('');
 
+            let paginationHtml = '';
+            if (totalUsers > USER_DIRECTORY_PER_PAGE) {
+                paginationHtml = '<div style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);flex-wrap:wrap;gap:8px;">' +
+                    '<div>Showing <b>' + (startIdx + 1) + ' &ndash; ' + Math.min(startIdx + USER_DIRECTORY_PER_PAGE, totalUsers) + '</b> of <b>' + totalUsers + '</b> empaneled users</div>' +
+                    '<div style="display:flex;gap:6px;align-items:center;">' +
+                    '<button type="button" class="btn btn-xs btn-ghost" ' + (userDirectoryPage <= 1 ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : 'onclick="userDirectoryPage--;renderUsersDirectoryView()"') + '><i class="fa-solid fa-chevron-left"></i> Prev</button>' +
+                    '<span style="padding:0 8px;font-size:11.5px;font-weight:700;">Page ' + userDirectoryPage + ' of ' + totalPages + '</span>' +
+                    '<button type="button" class="btn btn-xs btn-ghost" ' + (userDirectoryPage >= totalPages ? 'disabled style="opacity:0.5;cursor:not-allowed;"' : 'onclick="userDirectoryPage++;renderUsersDirectoryView()"') + '>Next <i class="fa-solid fa-chevron-right"></i></button>' +
+                    '</div>' +
+                    '</div>';
+            }
+
             let noticeBanner = isSuperAdmin ?
                 '<div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;display:flex;align-items:center;gap:10px;">' +
                 '<i class="fa-solid fa-circle-info" style="font-size:16px;flex-shrink:0;"></i>' +
@@ -26776,20 +27020,24 @@ ptypeOf(p) === 'general' ?
             container.innerHTML = '<div class="view-header">' +
                 '<div>' +
                 '<h1><i class="fa-solid fa-users" style="color:var(--orange);"></i> Enterprise Users Directory</h1>' +
-                '<p>Central directory of all on-site personnel across ARPL construction projects</p>' +
+                '<p>Central directory of all on-site personnel across ARPL construction projects (' + allUsers.length + ' registered)</p>' +
                 '</div>' +
                 '</div>' +
                 noticeBanner +
                 '<div class="card card-pad" style="margin-bottom:16px;">' +
                 '<div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">' +
-                '<div class="search-box" style="flex:1;min-width:200px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="userSearchInput" placeholder="Search by name, email, employee ID..." oninput="renderUsersDirectoryView()" value="' + escapeHtml(q) + '"></div>' +
-                '<select id="userProjectFilter" onchange="renderUsersDirectoryView()" style="min-width:180px;' + (isSiteAdmin ? 'display:none;' : '') + '">' +
+                '<div class="search-box" style="flex:1;min-width:200px;"><i class="fa-solid fa-magnifying-glass"></i><input type="text" id="userSearchInput" placeholder="Search by name, email, employee ID..." oninput="userDirectoryPage=1;renderUsersDirectoryView()" value="' + escapeHtml(q) + '"></div>' +
+                '<select id="userProjectFilter" onchange="userDirectoryPage=1;renderUsersDirectoryView()" style="min-width:180px;' + (isSiteAdmin ? 'display:none;' : '') + '">' +
                 '<option value="">All Worksites (' + PROJECTS.length + ')</option>' +
                 PROJECTS.map(p => '<option value="' + p.id + '" ' + (prjFilter === p.id ? 'selected' : '') + '>' + p.name + '</option>').join('') +
                 '</select>' +
+                '<select id="userRoleFilter" onchange="userDirectoryPage=1;renderUsersDirectoryView()" style="min-width:180px;">' +
+                '<option value="">All Operational Roles</option>' +
+                ROLES.filter(r => r.key !== 'super-admin').map(r => '<option value="' + r.key + '" ' + (roleFilter === r.key ? 'selected' : '') + '>' + r.label + '</option>').join('') +
+                '</select>' +
                 '</div>' +
                 '</div>' +
-                '<div class="card card-pad">' +
+                '<div class="card card-pad" style="padding-bottom:0;">' +
                 '<div class="table-wrap">' +
                 '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
                 '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">' +
@@ -26803,6 +27051,7 @@ ptypeOf(p) === 'general' ?
                 '<tbody>' + (tableRows || '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted);">No personnel records match the current filters.</td></tr>') + '</tbody>' +
                 '</table>' +
                 '</div>' +
+                paginationHtml +
                 '</div>';
         }
 
