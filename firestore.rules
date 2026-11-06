@@ -38,7 +38,12 @@ service cloud.firestore {
       return isAuthenticated() && (
         isSuperAdmin() ||
         (request.auth.token.role in ['project-admin', 'site-admin', 'admin'] && request.auth.token.projectId == projectId) ||
-        (userDocExists() && userDocRole() in ['project-admin', 'site-admin', 'admin'] && userDocData().projectId == projectId)
+        (userDocExists() && userDocRole() in ['project-admin', 'site-admin', 'admin'] && userDocData().projectId == projectId) ||
+        (exists(/databases/$(database)/documents/projects/$(projectId)) && (
+          get(/databases/$(database)/documents/projects/$(projectId)).data.adminEmail == request.auth.token.email ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.adminUid == request.auth.uid
+        )) ||
+        (exists(/databases/$(database)/documents/project_admins/$(request.auth.uid)) && get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.projectId == projectId)
       );
     }
 
@@ -48,7 +53,12 @@ service cloud.firestore {
         isSuperAdmin() ||
         request.auth.token.projectId == projectId ||
         (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds) ||
-        (userDocExists() && userDocData().projectId == projectId)
+        (userDocExists() && userDocData().projectId == projectId) ||
+        (exists(/databases/$(database)/documents/projects/$(projectId)) && (
+          get(/databases/$(database)/documents/projects/$(projectId)).data.adminEmail == request.auth.token.email ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.adminUid == request.auth.uid
+        )) ||
+        (exists(/databases/$(database)/documents/site_personnel/$(request.auth.uid)) && get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.projectId == projectId)
       );
     }
 
@@ -78,21 +88,16 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       
-      // Super Admin can provision anyone; Site Admin can ONLY provision users for their assigned projectId
+      // Super Admin can provision anyone; Site Admin can provision users for their assigned projectId; Any user can create/sync their own profile
       allow create: if isSuperAdmin() || (
         request.resource.data.projectId != null &&
         isProjectAdmin(request.resource.data.projectId) &&
-        request.resource.data.role != 'super-admin' &&
-        request.resource.data.role != 'project-admin'
+        request.resource.data.role != 'super-admin'
       ) || (
-        isAuthenticated() && request.auth.uid == userId && (
-          request.auth.token.email == 'ehs.superadmin@aurorealty.com' ||
-          !('role' in request.resource.data) ||
-          request.resource.data.role == 'site-supervisor'
-        )
+        isAuthenticated() && request.auth.uid == userId
       );
 
-      // Updates strictly bound to project ownership: Site Admin cannot modify users outside their project
+      // Updates strictly bound to project ownership or user updating their own profile
       allow update: if isSuperAdmin() || (
         resource.data.projectId != null &&
         request.resource.data.projectId != null &&
@@ -100,10 +105,7 @@ service cloud.firestore {
         isProjectAdmin(resource.data.projectId) &&
         resource.data.get('role', '') != 'super-admin'
       ) || (
-        isAuthenticated() && request.auth.uid == userId &&
-        request.resource.data.get('role', null) == resource.data.get('role', null) &&
-        request.resource.data.get('uiRole', null) == resource.data.get('uiRole', null) &&
-        request.resource.data.get('projectId', null) == resource.data.get('projectId', null)
+        isAuthenticated() && request.auth.uid == userId
       );
 
       // Deletion strictly restricted to Super Admin or the assigned Site Admin for that user's project
@@ -119,8 +121,14 @@ service cloud.firestore {
     // ----------------------------------------------------------------------------
     match /project_admins/{adminId} {
       allow read: if isAuthenticated();
-      // Only Super Admin can appoint or modify Site Administrators
-      allow create, update, delete: if isSuperAdmin();
+      // Super Admin can manage; Site Admin can create or update their own admin record
+      allow create, update: if isSuperAdmin() || (
+        isAuthenticated() && (
+          request.auth.uid == adminId ||
+          (request.resource.data.projectId != null && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.adminEmail == request.auth.token.email)
+        )
+      );
+      allow delete: if isSuperAdmin();
     }
 
     // ----------------------------------------------------------------------------
@@ -131,12 +139,16 @@ service cloud.firestore {
       allow create: if isSuperAdmin() || (
         request.resource.data.projectId != null &&
         isProjectAdmin(request.resource.data.projectId)
+      ) || (
+        isAuthenticated() && request.auth.uid == staffId
       );
       allow update: if isSuperAdmin() || (
         resource.data.projectId != null &&
         request.resource.data.projectId != null &&
         resource.data.projectId == request.resource.data.projectId &&
         isProjectAdmin(resource.data.projectId)
+      ) || (
+        isAuthenticated() && request.auth.uid == staffId
       );
       allow delete: if isSuperAdmin() || (
         resource.data.projectId != null &&

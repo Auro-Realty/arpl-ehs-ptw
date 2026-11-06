@@ -809,6 +809,70 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     }
   }
 
+  // Fallback check against projects master, project_admins, and users directory by email
+  if (!isProjAdmin && callerEmail) {
+    try {
+      const projDoc = await db.collection("projects").doc(projectId).get();
+      if (projDoc.exists) {
+        const pd = projDoc.data();
+        if ((pd.adminEmail && pd.adminEmail.toLowerCase() === callerEmail) || pd.adminUid === request.auth.uid) {
+          isProjAdmin = true;
+        }
+      }
+    } catch (_e) {}
+
+    if (!isProjAdmin) {
+      try {
+        const paSnap = await db.collection("project_admins").where("email", "==", callerEmail).limit(1).get();
+        if (!paSnap.empty) {
+          const pad = paSnap.docs[0].data();
+          if (pad.projectId === projectId || pad.role === "project-admin" || pad.role === "admin") {
+            isProjAdmin = true;
+          }
+        }
+      } catch (_e) {}
+    }
+
+    if (!isProjAdmin) {
+      try {
+        const uSnap = await db.collection("users").where("email", "==", callerEmail).limit(1).get();
+        if (!uSnap.empty) {
+          const ud = uSnap.docs[0].data();
+          if ((ud.role === "project-admin" || ud.role === "admin" || ud.uiRole === "admin") && ud.projectId === projectId) {
+            isProjAdmin = true;
+          }
+        }
+      } catch (_e) {}
+    }
+  }
+
+  // Auto self-heal caller's claims and users document on backend if confirmed
+  if (isProjAdmin && request.auth.uid) {
+    try {
+      if (!request.auth.token.role || request.auth.token.role !== "project-admin") {
+        await auth.setCustomUserClaims(request.auth.uid, {
+          role: "project-admin",
+          uiRole: "admin",
+          ptwRole: "project-admin",
+          projectId: projectId,
+          campusWide: true
+        });
+      }
+      await db.collection("users").doc(request.auth.uid).set({
+        uid: request.auth.uid,
+        id: request.auth.uid,
+        email: callerEmail,
+        role: "project-admin",
+        uiRole: "admin",
+        ptwRole: "project-admin",
+        projectId: projectId,
+        updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      }, { merge: true });
+    } catch (_syncErr) {
+      console.warn("Backend admin claim self-heal warning:", _syncErr);
+    }
+  }
+
   if (!isProjAdmin) {
     await recordServerAuditLog(
       "UNAUTHORIZED_PERSONNEL_ATTEMPT",

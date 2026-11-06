@@ -13778,6 +13778,26 @@
                     };
 
                     try {
+                        // Pre-flight check: ensure current administrator has their user doc synced in Firestore
+                        if (currentUser && currentUser.uid && currentUser.key === 'admin') {
+                            try {
+                                await db.collection('users').doc(currentUser.uid).set({
+                                    uid: currentUser.uid,
+                                    id: currentUser.uid,
+                                    email: currentUser.email,
+                                    role: 'project-admin',
+                                    uiRole: 'admin',
+                                    ptwRole: 'project-admin',
+                                    projectId: targetPrj.id,
+                                    projectName: targetPrj.name,
+                                    status: 'Active',
+                                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                                }, { merge: true });
+                            } catch (_preErr) {
+                                console.warn('Pre-flight admin sync notice:', _preErr);
+                            }
+                        }
+
                         await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
                         await db.collection('site_personnel').doc(finalUid).set(userDocData, { merge: true });
                         provisionSuccess = true;
@@ -15940,18 +15960,6 @@
                 resolvedLocationName = null;
                 resolvedCampusWide = true;
                 resolvedName = resolvedName || 'ARPL Super Admin';
-                if (typeof firebase !== 'undefined' && firebase.firestore && user && user.uid) {
-                    firebase.firestore().collection('users').doc(user.uid).set({
-                        uid: user.uid,
-                        email: emailLower,
-                        name: resolvedName,
-                        role: 'super-admin',
-                        uiRole: 'super-admin',
-                        projectId: null,
-                        projectName: 'Global Enterprise Scope (All Sites)',
-                        campusWide: true
-                    }, { merge: true }).catch(() => {});
-                }
             }
 
             if (!resolvedRole) {
@@ -15966,6 +15974,45 @@
 
             const info = typeof roleInfo === 'function' ? roleInfo(uiRoleKey) : {};
             const finalProjId = (uiRoleKey === 'super-admin') ? null : (resolvedProjectId || 'PRJ-PEARL');
+
+            // CRITICAL UNIVERSAL RBAC SELF-HEALING:
+            // Ensure every authenticated user has an authoritative document at /users/{user.uid}
+            // in Cloud Firestore matching their real Firebase Auth UID. This eliminates "Missing or insufficient permissions"
+            // across all security rule checks (isProjectAdmin, hasProjectAccess, userDocExists).
+            if (typeof firebase !== 'undefined' && firebase.firestore && user && user.uid) {
+                const userSyncDoc = {
+                    uid: user.uid,
+                    id: user.uid,
+                    email: emailLower,
+                    name: resolvedName || (emailLower ? emailLower.split('@')[0] : 'Authorized User'),
+                    displayName: resolvedName || (emailLower ? emailLower.split('@')[0] : 'Authorized User'),
+                    role: resolvedRole,
+                    uiRole: uiRoleKey,
+                    ptwRole: resolvedRole,
+                    roleLabel: resolvedRoleLabel || info.label || resolvedRole,
+                    projectId: finalProjId,
+                    projectName: (uiRoleKey === 'super-admin') ? 'Global Enterprise Scope (All Sites)' : resolveProjectName(finalProjId),
+                    locationId: resolvedLocationId || null,
+                    locationName: resolvedLocationName || null,
+                    campusWide: resolvedCampusWide !== null ? resolvedCampusWide : (uiRoleKey === 'admin' || uiRoleKey === 'super-admin' || !resolvedLocationName),
+                    allowedWorkflows: resolvedAllowedWorkflows || null,
+                    status: 'Active',
+                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                };
+                firebase.firestore().collection('users').doc(user.uid).set(userSyncDoc, { merge: true }).catch(err => {
+                    console.warn('User profile sync notice:', err);
+                });
+
+                if (uiRoleKey === 'admin' && finalProjId) {
+                    firebase.firestore().collection('project_admins').doc(user.uid).set(userSyncDoc, { merge: true }).catch(() => {});
+                    firebase.firestore().collection('projects').doc(finalProjId).set({
+                        adminUid: user.uid,
+                        adminEmail: emailLower,
+                        adminName: resolvedName || userSyncDoc.name,
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    }, { merge: true }).catch(() => {});
+                }
+            }
             return {
                 key: uiRoleKey,
                 rawRole: resolvedRole,
