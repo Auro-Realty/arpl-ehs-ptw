@@ -83,6 +83,55 @@ function validateProjectId(id) {
 }
 
 /**
+ * Authoritative Project-Specific Tower & Zone Mapping
+ * Business & Data Integrity Mandate:
+ * - The Pearl (PRJ-PEARL): P1, P2, P3, P4, P5, P6, P7, Clubhouse, Podium, NTA_PHASE-1, NTA_PHASE-2, NTA_PHASE-3
+ * - The Regent (PRJ-REGENT): Tower 4, Tower 5, NTA, Stores, FormWork, Precast, Phase-1
+ * - Sansa County (PRJ-SANSA): Sector 1 - Zone 1 & 2, Sector 1 - Zone 03, Sector 1 - Zone 04
+ */
+const AUTHORITATIVE_PROJECT_TOWERS = {
+  "PRJ-PEARL": [
+    "P1", "P2", "P3", "P4", "P5", "P6", "P7",
+    "Clubhouse", "Podium",
+    "NTA_PHASE-1", "NTA_PHASE-2", "NTA_PHASE-3"
+  ],
+  "PRJ-REGENT": [
+    "Tower 4", "Tower 5", "NTA", "Stores", "FormWork", "Precast", "Phase-1"
+  ],
+  "PRJ-SANSA": [
+    "Sector 1 - Zone 1 & 2", "Sector 1 - Zone 03", "Sector 1 - Zone 04"
+  ]
+};
+
+const CAMPUS_WIDE_TOWER_ALIASES = [
+  "All Site Towers",
+  "Campus-Wide (All Locations)",
+  "CAMPUS-WIDE",
+  "Full Worksite",
+  "ALL"
+];
+
+function validateProjectTower(projectId, towerNameOrLocId) {
+  if (!towerNameOrLocId) return true;
+  const clean = String(towerNameOrLocId).trim();
+  if (CAMPUS_WIDE_TOWER_ALIASES.some(a => a.toLowerCase() === clean.toLowerCase())) {
+    return true;
+  }
+  const allowed = AUTHORITATIVE_PROJECT_TOWERS[projectId];
+  if (!allowed) {
+    return true;
+  }
+  const isMatch = allowed.some(t => {
+    if (t.toLowerCase() === clean.toLowerCase()) return true;
+    const cleanNoSpace = clean.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    const tNoSpace = t.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+    if (cleanNoSpace.includes(tNoSpace) || tNoSpace.includes(cleanNoSpace)) return true;
+    return false;
+  });
+  return isMatch;
+}
+
+/**
  * Generate cryptographically secure random password (16 chars, meets all complexity rules)
  */
 function generateSecureRandomPassword(length = 16) {
@@ -922,6 +971,14 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   const cleanRoleLabel = sanitizeString(roleLabel || role, 64);
   const cleanLocationId = sanitizeString(locationId || "CAMPUS-WIDE", 32);
   const cleanLocationName = sanitizeString(locationName || "Full Worksite", 64);
+
+  // Validate assigned tower/zone against project's authoritative towers (Reject cross-project or generic Tower A/B)
+  if (!validateProjectTower(projectId, cleanLocationName) && !validateProjectTower(projectId, cleanLocationId)) {
+    throw new HttpsError(
+      "invalid-argument",
+      `Invalid tower/zone '${cleanLocationName}' for project '${projectId}'. Permitted towers: ${(AUTHORITATIVE_PROJECT_TOWERS[projectId] || []).join(", ")}`
+    );
+  }
 
   let cleanPassword;
   if (password) {

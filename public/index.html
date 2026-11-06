@@ -4201,8 +4201,12 @@
 
         /* Mobile Phones Portrait (<= 580px) */
         @media (max-width: 580px) {
-            .content {
-                padding: 14px 10px;
+            .content, #appContent {
+                padding: 14px 10px calc(140px + env(safe-area-inset-bottom, 34px)) 10px !important;
+            }
+
+            .view {
+                padding-bottom: calc(40px + env(safe-area-inset-bottom, 24px)) !important;
             }
 
             .topbar {
@@ -4705,8 +4709,8 @@
         }
 
         @media (max-width: 768px) {
-            .content {
-                padding-bottom: calc(88px + env(safe-area-inset-bottom, 24px)) !important;
+            .content, #appContent {
+                padding-bottom: calc(140px + env(safe-area-inset-bottom, 34px)) !important;
             }
             #view-projects > div,
             #view-project-admins > div {
@@ -5281,11 +5285,11 @@
                 height: auto !important;
                 min-height: 56px !important;
             }
-            .content {
-                padding: 12px 12px calc(108px + env(safe-area-inset-bottom, 24px)) 12px !important;
+            .content, #appContent {
+                padding: 12px 12px calc(140px + env(safe-area-inset-bottom, 34px)) 12px !important;
             }
             .view {
-                padding-bottom: calc(24px + env(safe-area-inset-bottom, 16px));
+                padding-bottom: calc(50px + env(safe-area-inset-bottom, 24px)) !important;
             }
             .kpi-grid, .form-grid, .ptype-grid {
                 grid-template-columns: 1fr !important;
@@ -6068,11 +6072,11 @@
                                     <p style="font-size:12px;color:#64748B;margin:0 0 16px;">Creates a real Firebase login &amp; locks user to this worksite</p>
 
                                     <form id="empanelSiteRoleForm" onsubmit="return handleEmpanelSiteRoleSubmit(event);" novalidate>
-                                        <!-- 1. Assigned Worksite (Read-Only Input) -->
+                                        <!-- 1. Assigned Worksite -->
                                         <div class="form-field" style="margin-bottom:12px;">
-                                            <label for="empanelWorksiteReadonly" style="font-weight:700;font-size:12px;color:#1E293B;">Assigned Worksite (Locked)</label>
+                                            <label id="empanelWorksiteLabel" for="empanelWorksiteReadonly" style="font-weight:700;font-size:12px;color:#1E293B;">Assigned Worksite (Locked)</label>
                                             <input type="text" id="empanelWorksiteReadonly" readonly value="The Pearl (PRJ-PEARL)" style="background:#F1F5F9;color:#0F172A;font-weight:700;border:1px solid #CBD5E1;cursor:not-allowed;">
-                                            <select id="newStaffProject" onchange="onStaffProjectChange()" style="display:none;"></select>
+                                            <select id="newStaffProject" onchange="onStaffProjectChange()" style="display:none;width:100%;padding:9px 12px;border:1px solid #CBD5E1;border-radius:6px;font-size:13px;font-weight:600;color:#0F172A;background:#fff;"></select>
                                         </div>
 
                                         <!-- 2. Operational Role -->
@@ -7930,6 +7934,39 @@
         window.PROJECT_MASTER = PROJECTS;
         window.CONTRACTORS = [];
 
+        /**
+         * Authoritative Project-Specific Tower & Zone Configuration
+         * A. The Pearl (PRJ-PEARL): P1, P2, P3, P4, P5, P6, P7, Clubhouse, Podium, NTA_PHASE-1, NTA_PHASE-2, NTA_PHASE-3 (12)
+         * B. The Regent (PRJ-REGENT): Tower 4, Tower 5, NTA, Stores, FormWork, Precast, Phase-1 (7)
+         * C. Sansa County (PRJ-SANSA): Sector 1 - Zone 1 & 2, Sector 1 - Zone 03, Sector 1 - Zone 04 (3)
+         */
+        const AUTHORITATIVE_PROJECT_TOWERS = {
+            'PRJ-PEARL': ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'],
+            'PRJ-REGENT': ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'],
+            'PRJ-SANSA': ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04']
+        };
+        window.AUTHORITATIVE_PROJECT_TOWERS = AUTHORITATIVE_PROJECT_TOWERS;
+
+        function getAuthoritativeTowers(projIdOrName) {
+            if (!projIdOrName) return [];
+            const str = String(projIdOrName).trim().toLowerCase();
+            if (str === 'prj-pearl' || str === 'the pearl' || str.indexOf('pearl') !== -1) {
+                return (AUTHORITATIVE_PROJECT_TOWERS['PRJ-PEARL'] || []).slice();
+            }
+            if (str === 'prj-regent' || str === 'the regent' || str.indexOf('regent') !== -1) {
+                return (AUTHORITATIVE_PROJECT_TOWERS['PRJ-REGENT'] || []).slice();
+            }
+            if (str === 'prj-sansa' || str === 'prj-sa' || str === 'sansa county' || str.indexOf('sansa') !== -1) {
+                return (AUTHORITATIVE_PROJECT_TOWERS['PRJ-SANSA'] || []).slice();
+            }
+            const p = (typeof getProject === 'function') ? getProject(projIdOrName) : null;
+            if (p && p.id && AUTHORITATIVE_PROJECT_TOWERS[p.id]) {
+                return AUTHORITATIVE_PROJECT_TOWERS[p.id].slice();
+            }
+            return [];
+        }
+        window.getAuthoritativeTowers = getAuthoritativeTowers;
+
         function normalizeProjectWithBaseline(pData, fallbackId) {
             if (!pData || typeof pData !== 'object') return null;
             const pid = pData.id || fallbackId || '';
@@ -7937,11 +7974,23 @@
             const merged = base ? Object.assign(JSON.parse(JSON.stringify(base)), pData) : Object.assign({}, pData);
             if (pid) merged.id = pid;
             if (!merged.name && base) merged.name = base.name;
-            if ((!Array.isArray(merged.towers) || merged.towers.length === 0) && base && Array.isArray(base.towers)) {
+            const authTowers = getAuthoritativeTowers(merged.id || pid || (base && base.id));
+            if (authTowers.length > 0) {
+                merged.towers = authTowers.slice();
+            } else if ((!Array.isArray(merged.towers) || merged.towers.length === 0) && base && Array.isArray(base.towers)) {
                 merged.towers = base.towers.slice();
             }
-            if ((!Array.isArray(merged.locations) || merged.locations.length === 0) && base && Array.isArray(base.locations)) {
-                merged.locations = JSON.parse(JSON.stringify(base.locations));
+            // Strip any generic fallback towers
+            if (Array.isArray(merged.towers)) {
+                merged.towers = merged.towers.filter(t => !['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(t));
+                if (merged.towers.length === 0 && authTowers.length > 0) {
+                    merged.towers = authTowers.slice();
+                }
+            }
+            if (!Array.isArray(merged.locations) || merged.locations.length === 0 || merged.locations.some(l => ['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(l.name))) {
+                if (base && Array.isArray(base.locations) && base.locations.length > 0 && !base.locations.some(l => ['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(l.name))) {
+                    merged.locations = JSON.parse(JSON.stringify(base.locations));
+                }
             }
             if ((!Array.isArray(merged.basements) || merged.basements.length === 0) && base && Array.isArray(base.basements)) {
                 merged.basements = base.basements.slice();
@@ -7967,20 +8016,31 @@
         /* Centralized Dynamic Structural Accessors & Location-Level Geofence Helpers */
         function ensureProjectLocations(prj) {
             if (!prj) return [];
-            const base = (typeof BASELINE_PROJECTS !== 'undefined') ? BASELINE_PROJECTS.find(b => b.id === prj.id) : null;
+            const authTowers = getAuthoritativeTowers(prj.id || prj.name);
+            if (authTowers.length > 0) {
+                prj.towers = authTowers.slice();
+            }
+            const base = (typeof BASELINE_PROJECTS !== 'undefined') ? BASELINE_PROJECTS.find(b => b.id === prj.id || (prj.name && b.name.toLowerCase() === String(prj.name).toLowerCase())) : null;
             if ((!Array.isArray(prj.towers) || prj.towers.length === 0) && base && Array.isArray(base.towers)) {
                 prj.towers = base.towers.slice();
             }
-            if (!Array.isArray(prj.locations) || prj.locations.length === 0) {
-                if (base && Array.isArray(base.locations) && base.locations.length > 0) {
+            // Enforce removal of generic demo tower names
+            if (Array.isArray(prj.towers)) {
+                prj.towers = prj.towers.filter(t => !['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(t));
+                if (prj.towers.length === 0 && authTowers.length > 0) {
+                    prj.towers = authTowers.slice();
+                }
+            }
+            if (!Array.isArray(prj.locations) || prj.locations.length === 0 || prj.locations.some(l => ['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(l.name))) {
+                if (base && Array.isArray(base.locations) && base.locations.length > 0 && !base.locations.some(l => ['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(l.name))) {
                     prj.locations = JSON.parse(JSON.stringify(base.locations));
                 } else {
-                    const towers = (Array.isArray(prj.towers) && prj.towers.length > 0) ? prj.towers : ['Tower 1', 'Podium'];
+                    const towers = (Array.isArray(prj.towers) && prj.towers.length > 0) ? prj.towers : authTowers;
                     prj.locations = towers.map((t, idx) => ({
                         id: 'LOC-' + (prj.id || 'PRJ').replace(/^PRJ-/, '') + '-' + t.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 6) + (idx + 1),
                         name: t,
                         code: t.replace(/\s+/g, '-').toUpperCase(),
-                        category: 'Location',
+                        category: (t.toLowerCase().includes('zone') || t.toLowerCase().includes('sector')) ? 'Zone' : 'Tower',
                         site: { lat: null, lng: null, address: t + ', ' + prj.name },
                         radius: prj.radius || 75,
                         configured: false,
@@ -8079,15 +8139,21 @@
         }
 
         function getProjectTowers(projIdOrName) {
+            const auth = getAuthoritativeTowers(projIdOrName);
+            if (auth && auth.length > 0) return auth;
             const p = getProject(projIdOrName);
-            if (!p) return ['Tower A', 'Tower B', 'Tower C', 'Tower D'];
-            ensureProjectLocations(p);
-            if (Array.isArray(p.locations) && p.locations.length > 0) {
-                const names = p.locations.map(l => l.name).filter(Boolean);
-                if (names.length > 0) return names;
+            if (p) {
+                ensureProjectLocations(p);
+                if (Array.isArray(p.towers) && p.towers.length > 0) {
+                    const filtered = p.towers.filter(t => !['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(t));
+                    if (filtered.length > 0) return filtered;
+                }
+                if (Array.isArray(p.locations) && p.locations.length > 0) {
+                    const locNames = p.locations.map(l => l.name).filter(n => n && !['Tower A', 'Tower B', 'Tower C', 'Tower D'].includes(n));
+                    if (locNames.length > 0) return locNames;
+                }
             }
-            if (Array.isArray(p.towers) && p.towers.length > 0) return p.towers;
-            return ['Tower A', 'Tower B', 'Tower C', 'Tower D'];
+            return [];
         }
 
         function getProjectBasements(projIdOrName) {
@@ -9553,48 +9619,60 @@
             if (ctx.captured) {
                 const c = ctx.captured;
                 html += '<div class="gps-box captured" style="' + (c.within ? '' : 'border-color:#EF5350;background:#FFEBEE;') + '"><div class="gps-row">' +
-                    '<div class="gps-info"><i class="fa-solid fa-location-dot" style="color:' + (c.within ? 'var(--green)' : '#C62828') + ';"></i> Lat <b>' + c.lat.toFixed(5) + '</b>, Lng <b>' + c.lng.toFixed(5) + '</b><br>' + escapeHtml(c.address) + '</div>' +
+                    '<div class="gps-info"><i class="fa-solid fa-location-dot" style="color:' + (c.within ? 'var(--green)' : '#C62828') + ';"></i> Lat <b>' + c.lat.toFixed(5) + '</b>, Lng <b>' + c.lng.toFixed(5) + '</b> <span style="font-size:11px;color:var(--text-muted);">(&plusmn;' + (c.accuracy || 10) + 'm)</span><br>' + escapeHtml(c.address) + '</div>' +
                     (ctx.gateEnabled ? '<span class="gps-status-pill ' + (c.within ? 'in' : 'out') + '"><i class="fa-solid ' + (c.within ? 'fa-circle-check' : 'fa-triangle-exclamation') + '"></i> ' + (c.within ? 'Within ' + c.radius + 'm of site' : 'Outside site radius &mdash; ' + Math.round(c.distance) + 'm away (Limit: ' + c.radius + 'm)') + '</span>' : '') +
                     '</div></div>';
                 if (ctx.gateEnabled && !c.within) {
                     html += '<div class="form-error" style="display:flex;margin-top:10px;"><i class="fa-solid fa-triangle-exclamation"></i> <b>Geofence Violation:</b> Captured coordinates are ' + Math.round(c.distance) + 'm away from the configured worksite center (Allowed threshold: ' + c.radius + 'm). Action is strictly blocked until you are within the worksite boundary.</div>';
                 }
+            } else if (ctx.lastError) {
+                html += '<div class="form-error" style="display:flex;margin-top:10px;"><i class="fa-solid fa-triangle-exclamation"></i> <b>GPS Access Error:</b> ' + escapeHtml(ctx.lastError) + '</div>';
             }
             html += '<div class="gps-sim-btns" style="margin-top:12px;">' +
-                '<button type="button" class="btn btn-sm btn-primary" onclick="tryRealGPS()"><i class="fa-solid fa-location-crosshairs"></i> Capture Live Device GPS</button>' +
+                '<button type="button" class="btn btn-sm btn-primary" onclick="tryRealGPS()"><i class="fa-solid fa-location-crosshairs"></i> ' + (ctx.lastError ? 'Retry Live Device GPS Capture' : 'Capture Live Device GPS') + '</button>' +
                 '</div>';
             document.getElementById('gpsModalBody').innerHTML = html;
         }
-        function computeCapture(lat, lng, address) {
+        function computeCapture(lat, lng, address, accuracy, timestamp) {
             const site = gpsModalCtx.siteCoord;
             const radius = gpsModalCtx.radius || (gpsModalCtx.p ? getProjectRadius(gpsModalCtx.p) : (GPS_RADIUS_M || 150));
+            const acc = (typeof accuracy === 'number' && !isNaN(accuracy)) ? Math.round(accuracy) : 10;
+            const ts = timestamp || Date.now();
             if (!site || site.lat === null || site.lat === undefined || isNaN(site.lat)) {
-                return { lat, lng, address: address || 'Captured location', distance: 0, within: false, radius };
+                return { lat, lng, address: address || 'Captured location', distance: 0, within: true, radius, accuracy: acc, timestamp: ts };
             }
             const distance = haversine(lat, lng, site.lat, site.lng);
-            const within = distance <= radius;
-            return { lat, lng, address: address || 'Captured location', distance, within, radius };
+            const within = distance <= (radius + Math.min(acc, 50));
+            return { lat, lng, address: address || 'Captured location', distance, within, radius, accuracy: acc, timestamp: ts };
         }
         function tryRealGPS() {
             const confirmBtn = document.getElementById('gpsConfirmBtn');
+            delete gpsModalCtx.lastError;
             if (!navigator.geolocation) {
                 showToast('Geolocation is not supported by this browser. Please use a GPS-enabled device.', 'err');
                 if (confirmBtn) confirmBtn.disabled = true;
+                gpsModalCtx.lastError = 'Geolocation API is not supported by this browser.';
                 renderGPSModalBody();
                 return;
             }
             showToast('Requesting live device GPS coordinates…', 'info');
             navigator.geolocation.getCurrentPosition(function (pos) {
-                gpsModalCtx.captured = computeCapture(pos.coords.latitude, pos.coords.longitude, 'Live Device GPS Reading');
+                gpsModalCtx.captured = computeCapture(pos.coords.latitude, pos.coords.longitude, 'Live Device GPS Reading', pos.coords.accuracy, pos.timestamp);
+                delete gpsModalCtx.lastError;
                 if (confirmBtn) {
                     confirmBtn.disabled = Boolean(gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within);
                 }
                 renderGPSModalBody();
             }, function (err) {
-                showToast('Location access denied or unavailable. Please enable browser location permissions to proceed.', 'err');
+                let msg = 'Location access denied or unavailable.';
+                if (err.code === 1) msg = 'Location permission denied by user. Please grant location access in browser/device settings.';
+                else if (err.code === 2) msg = 'GPS position unavailable. Please ensure location services are enabled on your device.';
+                else if (err.code === 3) msg = 'GPS acquisition timed out. Please retry.';
+                showToast(msg, 'err');
                 if (confirmBtn) confirmBtn.disabled = true;
+                gpsModalCtx.lastError = msg;
                 renderGPSModalBody();
-            }, { enableHighAccuracy: true, timeout: 10000 });
+            }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
         }
         function simulateGPS(onSite) {
             const site = gpsModalCtx.siteCoord || { lat: 17.4239, lng: 78.4738, address: 'Worksite Center' };
@@ -13268,26 +13346,38 @@
             const lockedPrjId = (isSiteAdmin && currentUser.projectId) ? currentUser.projectId : (prjSel ? prjSel.value : (PROJECTS[0] ? PROJECTS[0].id : 'PRJ-PEARL'));
             const prj = PROJECTS.find(p => p.id === lockedPrjId) || PROJECTS[0];
             const locs = ensureProjectLocations(prj);
+            const authTowers = getAuthoritativeTowers(prj ? prj.id : lockedPrjId);
 
             if (worksiteReadonly && prj) {
                 worksiteReadonly.value = prj.name + ' (' + prj.id + ')';
             }
 
-            if (empanelTowerSel && prj) {
-                const towerList = Array.isArray(prj.towers) && prj.towers.length
-                    ? prj.towers
-                    : locs.map(l => l.name);
-                empanelTowerSel.innerHTML = '<option value="All Site Towers">All Site Towers</option>' +
-                    towerList.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+            if (empanelTowerSel) {
+                empanelTowerSel.value = '';
+                if (!authTowers || authTowers.length === 0) {
+                    empanelTowerSel.innerHTML = '<option value="" disabled selected>No towers configured for this project. Please contact the administrator.</option>';
+                    empanelTowerSel.disabled = true;
+                } else {
+                    empanelTowerSel.disabled = false;
+                    empanelTowerSel.innerHTML = '<option value="All Site Towers">All Site Towers / Zones (Campus-Wide)</option>' +
+                        authTowers.map(t => '<option value="' + escapeHtml(t) + '">' + escapeHtml(t) + '</option>').join('');
+                }
             }
 
             if (towerSel) {
-                towerSel.innerHTML = '<option value="All Site Towers">All Site Towers</option>' +
-                    locs.map(l =>
-                        '<option value="' + escapeHtml(l.name) + '" data-loc-id="' + escapeHtml(l.id) + '">' +
-                        escapeHtml(l.name) + ' [' + escapeHtml(l.id) + '] &mdash; ' + (l.configured ? '✓ Geotagged' : '⚠️ Untagged') +
-                        '</option>'
-                    ).join('') + '<option value="Full Campus">Campus-Wide (All Locations)</option>';
+                towerSel.value = '';
+                if (!authTowers || authTowers.length === 0) {
+                    towerSel.innerHTML = '<option value="" disabled selected>No locations configured</option>';
+                    towerSel.disabled = true;
+                } else {
+                    towerSel.disabled = false;
+                    towerSel.innerHTML = '<option value="All Site Towers">All Site Towers / Zones (Campus-Wide)</option>' +
+                        locs.map(l =>
+                            '<option value="' + escapeHtml(l.name) + '" data-loc-id="' + escapeHtml(l.id) + '">' +
+                            escapeHtml(l.name) + ' [' + escapeHtml(l.id) + '] &mdash; ' + (l.configured ? '✓ Geotagged' : '⚠️ Untagged') +
+                            '</option>'
+                        ).join('') + '<option value="Full Campus">Campus-Wide (All Locations)</option>';
+                }
             }
             if (roleLocSel) {
                 roleLocSel.innerHTML = '<option value="ALL">Campus-Wide (All Locations)</option>' +
@@ -13329,8 +13419,11 @@
 
         function renderAdminAccountsTab() {
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
+            const isSuperAdmin = currentUser && (currentUser.key === 'super-admin' || currentUser.rawRole === 'super-admin');
             const filterSel = document.getElementById('filterPersonnelProjectSelect');
             const newPrjSel = document.getElementById('newStaffProject');
+            const worksiteReadonly = document.getElementById('empanelWorksiteReadonly');
+            const worksiteLabel = document.getElementById('empanelWorksiteLabel');
             const selectedPrj = PROJECTS[adminConfigState.selectedProjectIndex] || PROJECTS[0];
 
             const defaultPrjId = (isSiteAdmin && currentUser.projectId)
@@ -13346,9 +13439,27 @@
             if (newPrjSel) {
                 newPrjSel.innerHTML = PROJECTS.map(p => '<option value="' + p.id + '">' + escapeHtml(p.name) + ' (' + p.id + ')</option>').join('');
                 newPrjSel.value = defaultPrjId;
-                newPrjSel.disabled = !!isSiteAdmin;
+                if (isSuperAdmin) {
+                    newPrjSel.style.display = 'block';
+                    newPrjSel.disabled = false;
+                    if (worksiteReadonly) worksiteReadonly.style.display = 'none';
+                    if (worksiteLabel) worksiteLabel.innerHTML = 'Assigned Worksite <span class="req">*</span>';
+                } else {
+                    newPrjSel.style.display = 'none';
+                    newPrjSel.disabled = true;
+                    if (worksiteReadonly) {
+                        worksiteReadonly.style.display = 'block';
+                        const lockedPrj = PROJECTS.find(p => p.id === defaultPrjId) || selectedPrj;
+                        worksiteReadonly.value = lockedPrj.name + ' (' + lockedPrj.id + ')';
+                    }
+                    if (worksiteLabel) worksiteLabel.innerHTML = 'Assigned Worksite (Locked)';
+                }
                 onStaffProjectChange();
             }
+
+            renderWorksiteGovernanceHeader();
+            renderSitePersonnelTable();
+        }
 
             renderWorksiteGovernanceHeader();
             renderSitePersonnelTable();
@@ -13545,7 +13656,14 @@
             const assignedTower = (empanelTowerEl && empanelTowerEl.value)
                 ? empanelTowerEl.value
                 : ((towerSel && towerSel.value) ? towerSel.value : 'All Site Towers');
-            const isCampusWide = (assignedTower === 'All Site Towers' || assignedTower === 'Full Campus' || assignedTower === 'Campus-Wide (All Towers)');
+            const isCampusWide = (assignedTower === 'All Site Towers' || assignedTower === 'Full Campus' || assignedTower === 'Campus-Wide (All Towers)' || assignedTower === 'Campus-Wide (All Locations)' || assignedTower === 'CAMPUS-WIDE' || assignedTower === 'ALL');
+
+            const validProjectTowers = getAuthoritativeTowers(targetPrj.id);
+            if (!isCampusWide && validProjectTowers.length > 0 && !validProjectTowers.includes(assignedTower)) {
+                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-ban"></i> <b>Validation Error:</b> Assigned tower/zone <b>"' + escapeHtml(assignedTower) + '"</b> is not valid for ' + escapeHtml(targetPrj.name) + '. Permitted towers/zones: ' + validProjectTowers.join(', '));
+                showToast('Invalid tower for ' + targetPrj.name, 'warn');
+                return;
+            }
 
             const wfScopeVal = wfScopeSel ? wfScopeSel.value : 'ALL';
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '';
@@ -14298,7 +14416,7 @@
                 }, over);
             }
             PERMITS.push(base({
-                project: site1.name, tower: 'Tower A', location: 'Basement excavation zone, near shear wall grid C4-C7',
+                project: site1.name, tower: 'P1', location: 'P1 - Basement excavation zone, near shear wall grid C4-C7',
                 gps: site1.site, depth: '3.2', slope: '1:1.5',
                 createdAt: new Date(nowTime() - 3 * 3600 * 1000), submittedAt: new Date(nowTime() - 3 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() +  5 * 3600 * 1000),
@@ -14317,7 +14435,7 @@
                 extension: null, closure: null, surrender: null
             }));
             PERMITS.push(base({
-                project: site1.name, tower: 'Tower B', location: 'Perimeter trench for storm-water drain line',
+                project: site1.name, tower: 'P2', location: 'P2 - Perimeter trench for storm-water drain line',
                 gps: site1.site, depth: '1.8', slope: '1:1',
                 createdAt: new Date(nowTime() - 40 * 60000), submittedAt: new Date(nowTime() - 40 * 60000),
                 validTill: new Date(nowTime().getTime() +  6 * 3600 * 1000),
@@ -14332,7 +14450,7 @@
                 extension: null, closure: null, surrender: null
             }));
             PERMITS.push(base({
-                project: site2.name, tower: 'Block 2', location: 'Lift pit excavation, core zone',
+                project: site2.name, tower: 'Tower 4', location: 'Tower 4 - Lift pit excavation, core zone',
                 gps: site2.site, depth: '2.4', slope: '1:1.25',
                 createdAt: new Date(nowTime() - 90 * 60000), submittedAt: new Date(nowTime() - 90 * 60000),
                 validTill: new Date(nowTime().getTime() +  3 * 3600 * 1000),
@@ -14347,7 +14465,7 @@
                 extension: null, closure: null, surrender: null
             }));
             PERMITS.push(base({
-                project: site3.name, tower: 'Tower North', location: 'Utility trench crossing access road',
+                project: site3.name, tower: 'Sector 1 - Zone 1 & 2', location: 'Sector 1 - Zone 1 & 2 - Utility trench crossing access road',
                 gps: site3.site, depth: '1.5', slope: '1:1',
                 createdAt: new Date(nowTime() - 2 * 3600 * 1000), submittedAt: new Date(nowTime() - 2 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() +  2 * 3600 * 1000),
@@ -14362,7 +14480,7 @@
                 extension: null, closure: null, surrender: null
             }));
             PERMITS.push(base({
-                project: site1.name, tower: 'Tower A', location: 'Foundation footing grid D2-D5',
+                project: site1.name, tower: 'P1', location: 'P1 - Foundation footing grid D2-D5',
                 gps: site1.site, depth: '2.5', slope: '1:1.5',
                 createdAt: new Date(nowTime() - 15 * 60000), submittedAt: new Date(nowTime() - 15 * 60000),
                 validTill: new Date(nowTime().getTime() +  7 * 3600 * 1000),
@@ -14375,7 +14493,7 @@
                 extension: null, closure: null, surrender: null
             }));
             PERMITS.push(base({
-                project: site2.name, tower: 'Block 2', location: 'Storm drain excavation along main spine',
+                project: site2.name, tower: 'Tower 5', location: 'Tower 5 - Storm drain excavation along main spine',
                 gps: site2.site, depth: '1.9', slope: '1:1',
                 createdAt: new Date(nowTime() - 4 * 3600 * 1000), submittedAt: new Date(nowTime() - 4 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() +  3 * 3600 * 1000),
@@ -14399,7 +14517,7 @@
                 extension: null, closure: null, surrender: null
             }));
             const returnedP = base({
-                project: site2.name, tower: 'Block 1', location: 'Ramp excavation for basement vehicular entry',
+                project: site2.name, tower: 'Tower 4', location: 'Tower 4 - Ramp excavation for basement vehicular entry',
                 gps: site2.site, depth: '2.0', slope: '1:1.5',
                 createdAt: new Date(nowTime() - 5 * 3600 * 1000), submittedAt: new Date(nowTime() - 5 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() +  4 * 3600 * 1000),
@@ -14409,7 +14527,7 @@
             });
             PERMITS.push(returnedP);
             PERMITS.push(base({
-                project: site1.name, tower: 'Tower C', location: 'Soak pit excavation near STP yard',
+                project: site1.name, tower: 'P3', location: 'P3 - Soak pit excavation near STP yard',
                 gps: site1.site, depth: '1.2', slope: '1:1',
                 createdAt: new Date(nowTime() - 26 * 3600 * 1000), submittedAt: new Date(nowTime() - 26 * 3600 * 1000),
                 validTill: new Date(nowTime() - 2 * 3600 * 1000),
@@ -14418,7 +14536,7 @@
                 extension: null, closure: null, surrender: null
             }));
             PERMITS.push(base({
-                project: site3.name, tower: 'Tower South', location: 'Foundation excavation, Grid E1-E4',
+                project: site3.name, tower: 'Sector 1 - Zone 03', location: 'Sector 1 - Zone 03 - Foundation excavation, Grid E1-E4',
                 gps: site3.site, depth: '2.8', slope: '1:1.25',
                 createdAt: new Date(nowTime() - 4 * 24 * 3600 * 1000), submittedAt: new Date(nowTime() - 4 * 24 * 3600 * 1000),
                 validTill: new Date(nowTime() - 3 * 24 * 3600 * 1000),
@@ -14429,7 +14547,7 @@
                 surrender: { gps: { lat: site3.site.lat, lng: site3.site.lng, within: true }, photo: 'demo', remarks: 'Permit closed out and surrendered to EHS Department for filing.', surrenderedAt: new Date(nowTime() - 3 * 24 * 3600 * 1000), by: 'Duty Site Engineer' }
             }));
             PERMITS.push(base({
-                project: site2.name, tower: 'Block 3', location: 'Deep sump excavation near DG yard',
+                project: site2.name, tower: 'Stores', location: 'Stores - Deep sump excavation near DG yard',
                 gps: site2.site, depth: '4.1', slope: '1:2',
                 createdAt: new Date(nowTime() - 8 * 3600 * 1000), submittedAt: new Date(nowTime() - 8 * 3600 * 1000),
                 validTill: new Date(nowTime() - 1 * 3600 * 1000),
@@ -14480,7 +14598,7 @@
 
             // 1. Active Hot Work permit
             PERMITS.push(baseHotwork({
-                project: site1.name, tower: 'Tower A', location: 'Level 14 Core Wall Structural Rebar Fabrication Zone',
+                project: site1.name, tower: 'P1', location: 'P1 - Level 14 Core Wall Structural Rebar Fabrication Zone',
                 gps: site1.site, hotworkTypes: ['Welding', 'Abrasive wheel cutting'],
                 welderName: 'Ramesh Kumar', welderAffiliation: 'ARPL',
                 createdAt: new Date(nowTime() - 3 * 3600 * 1000), submittedAt: new Date(nowTime() - 3 * 3600 * 1000),
@@ -14499,7 +14617,7 @@
 
             // 1b. Pending Site Engineer Acknowledgment Hot Work permit (Directly testable by Site Engineer)
             PERMITS.push(baseHotwork({
-                project: site1.name, tower: 'Tower A', location: 'Level 2 Structural Core',
+                project: site1.name, tower: 'P1', location: 'P1 - Level 2 Structural Core',
                 gps: site1.site, hotworkTypes: ['Welding', 'Abrasive wheel cutting'],
                 welderName: 'Sunil Verma', welderAffiliation: 'ARPL',
                 createdAt: new Date(nowTime() - 15 * 60000), submittedAt: new Date(nowTime() - 15 * 60000),
@@ -14515,7 +14633,7 @@
 
             // 2. Pending Section Head Hot Work permit
             PERMITS.push(baseHotwork({
-                project: site2.name, tower: 'Block 2', location: 'Ground Floor Pipe Utility Duct',
+                project: site2.name, tower: 'Tower 4', location: 'Tower 4 - Ground Floor Pipe Utility Duct',
                 gps: site2.site, hotworkTypes: ['Gas Cutting'],
                 welderName: 'Mohammad Ansari', welderAffiliation: 'Subcontractor', welderContractor: 'Apex Heavy Metal Works',
                 createdAt: new Date(nowTime() - 45 * 60000), submittedAt: new Date(nowTime() - 45 * 60000),
@@ -14532,7 +14650,7 @@
 
             // 3. Pending EHS Approval Hot Work permit
             PERMITS.push(baseHotwork({
-                project: site1.name, tower: 'Tower B', location: 'Level 4 Electrical Substation Risers',
+                project: site1.name, tower: 'P2', location: 'P2 - Level 4 Electrical Substation Risers',
                 gps: site1.site, hotworkTypes: ['Welding', 'Soldering'],
                 welderName: 'Suresh Patel', welderAffiliation: 'ARPL',
                 createdAt: new Date(nowTime() - 50 * 60000), submittedAt: new Date(nowTime() - 50 * 60000),
@@ -14550,7 +14668,7 @@
 
             // 4. Returned for Correction Hot Work permit
             PERMITS.push(baseHotwork({
-                project: site3.name, tower: 'Tower South', location: 'Podium 2 External Steel Canopy',
+                project: site3.name, tower: 'Sector 1 - Zone 03', location: 'Sector 1 - Zone 03 - Podium 2 External Steel Canopy',
                 gps: site3.site, hotworkTypes: ['Abrasive wheel cutting'],
                 welderName: 'Vikram Singh', welderAffiliation: 'Subcontractor', welderContractor: 'SteelFab Engineering',
                 createdAt: new Date(nowTime() - 2 * 3600 * 1000), submittedAt: new Date(nowTime() - 2 * 3600 * 1000),
@@ -14587,7 +14705,7 @@
 
             // 1. Active Shaft Work permit
             PERMITS.push(baseShaft({
-                project: site1.name, tower: 'Tower A', location: 'Passenger Lift Shaft #2 (Floors 10–14)',
+                project: site1.name, tower: 'P1', location: 'P1 - Passenger Lift Shaft #2 (Floors 10-14)',
                 gps: site1.site, shaftLocationType: 'Tower', shaftFloor: 'Floor 12', numPersonnel: '4',
                 organization: 'ARPL',
                 createdAt: new Date(nowTime() - 3 * 3600 * 1000), submittedAt: new Date(nowTime() - 3 * 3600 * 1000),
@@ -14607,7 +14725,7 @@
 
             // 2. Pending MEP Clearance Shaft Work permit (Directly testable by MEP Engineer)
             PERMITS.push(baseShaft({
-                project: site1.name, tower: 'Tower B', location: 'Plumbing & Drainage Shaft Grid P4',
+                project: site1.name, tower: 'P2', location: 'P2 - Plumbing & Drainage Shaft Grid P4',
                 gps: site1.site, shaftLocationType: 'Tower', shaftFloor: 'Floor 5', numPersonnel: '3',
                 organization: 'Subcontractor', contractor: 'AquaFlow MEP Contracting',
                 createdAt: new Date(nowTime() - 30 * 60000), submittedAt: new Date(nowTime() - 30 * 60000),
@@ -14624,7 +14742,7 @@
 
             // 3. Pending Section Head Shaft Work permit
             PERMITS.push(baseShaft({
-                project: site2.name, tower: 'Block 2', location: 'Fire Fighting Riser Shaft Podium Level',
+                project: site2.name, tower: 'Tower 4', location: 'Tower 4 - Fire Fighting Riser Shaft Podium Level',
                 gps: site2.site, shaftLocationType: 'Podium', shaftFloor: 'Podium Level 2 (P2)', numPersonnel: '2',
                 organization: 'ARPL',
                 createdAt: new Date(nowTime() - 40 * 60000), submittedAt: new Date(nowTime() - 40 * 60000),
@@ -14645,7 +14763,7 @@
                 const res = Object.assign({
                     id: genPermitNumber('guardrail'), ptype: 'guardrail', activity: 'Guard Rail / Floor Protection Removal (PTW-003)', createdBy: 'Duty Site Supervisor',
                     weather: 'Sunny', organization: 'ARPL', contractor: null,
-                    locationStructure: { mode: 'tower', tower: 'Tower A', floor: 'Floor 14', unit: 'Flat 1402', basementPodium: '', area: '' },
+                    locationStructure: { mode: 'tower', tower: 'P1', floor: 'Floor 14', unit: 'Flat 1402', basementPodium: '', area: '' },
                     activities: ['Removal of Guard rail (Balcony / Common Area / Cutout)'],
                     activityOther: '',
                     startTime: '09:00',
@@ -14670,9 +14788,9 @@
 
             // 1. Active Guard Rail permit (Tower Mode)
             PERMITS.push(baseGuardrail({
-                project: site1.name, tower: 'Tower A', location: 'Tower A - Floor 14 - Flat 1402 Balcony Edge',
+                project: site1.name, tower: 'P1', location: 'P1 - Floor 14 - Flat 1402 Balcony Edge',
                 gps: site1.site,
-                locationStructure: { mode: 'tower', tower: 'Tower A', floor: 'Floor 14', unit: 'Flat 1402', basementPodium: '', area: '' },
+                locationStructure: { mode: 'tower', tower: 'P1', floor: 'Floor 14', unit: 'Flat 1402', basementPodium: '', area: '' },
                 activities: ['Removal of Guard rail (Balcony / Common Area / Cutout)', 'Removal of Shaft barrier / Gate'],
                 organization: 'ARPL',
                 createdAt: new Date(nowTime() - 3.5 * 3600 * 1000), submittedAt: new Date(nowTime() - 3.5 * 3600 * 1000),
@@ -14709,9 +14827,9 @@
 
             // 3. Pending Tower Incharge Review
             PERMITS.push(baseGuardrail({
-                project: site2.name, tower: 'Block 2', location: 'Block 2 - Floor 8 - Unit 801 Corridor',
+                project: site2.name, tower: 'Tower 4', location: 'Tower 4 - Floor 8 - Unit 801 Corridor',
                 gps: site2.site,
-                locationStructure: { mode: 'tower', tower: 'Block 2', floor: 'Floor 8', unit: 'Unit 801 Corridor', basementPodium: '', area: '' },
+                locationStructure: { mode: 'tower', tower: 'Tower 4', floor: 'Floor 8', unit: 'Unit 801 Corridor', basementPodium: '', area: '' },
                 activities: ['Removal of Edge protection'],
                 organization: 'ARPL',
                 createdAt: new Date(nowTime() - 45 * 60000), submittedAt: new Date(nowTime() - 45 * 60000),
@@ -14728,9 +14846,9 @@
 
             // 4. Pending EHS Verification (Tower Mode)
             PERMITS.push(baseGuardrail({
-                project: site3.name, tower: 'Tower North', location: 'Tower North - Floor 18 - Duplex Terrace Edge',
+                project: site3.name, tower: 'Sector 1 - Zone 1 & 2', location: 'Sector 1 - Zone 1 & 2 - Floor 18 - Duplex Terrace Edge',
                 gps: site3.site,
-                locationStructure: { mode: 'tower', tower: 'Tower North', floor: 'Floor 18', unit: 'Duplex Terrace Edge', basementPodium: '', area: '' },
+                locationStructure: { mode: 'tower', tower: 'Sector 1 - Zone 1 & 2', floor: 'Floor 18', unit: 'Duplex Terrace Edge', basementPodium: '', area: '' },
                 activities: ['Removal of Guard rail (Balcony / Common Area / Cutout)'],
                 organization: 'ARPL',
                 createdAt: new Date(nowTime() - 75 * 60000), submittedAt: new Date(nowTime() - 75 * 60000),
@@ -14748,9 +14866,9 @@
 
             // 5. Returned for Correction Guard Rail permit
             PERMITS.push(baseGuardrail({
-                project: site2.name, tower: 'Block 2', location: 'Block 2 - Floor 5 - Refuge Area Edge',
+                project: site2.name, tower: 'Tower 5', location: 'Tower 5 - Floor 5 - Refuge Area Edge',
                 gps: site2.site,
-                locationStructure: { mode: 'tower', tower: 'Block 2', floor: 'Floor 5', unit: 'Refuge Area Edge', basementPodium: '', area: '' },
+                locationStructure: { mode: 'tower', tower: 'Tower 5', floor: 'Floor 5', unit: 'Refuge Area Edge', basementPodium: '', area: '' },
                 activities: ['Removal of Guard rail (Balcony / Common Area / Cutout)'],
                 organization: 'ARPL',
                 createdAt: new Date(nowTime() - 90 * 60000), submittedAt: new Date(nowTime() - 90 * 60000),
@@ -14772,7 +14890,7 @@
                     id: genPermitNumber('confined'), ptype: 'confined', activity: 'Confined Space Entry (PTW-004)', createdBy: 'Duty Site Supervisor',
                     weather: 'Sunny', organization: 'ARPL', contractor: null,
                     locationStructure: 'Tower',
-                    tower: 'Tower A',
+                    tower: 'P1',
                     locFloor: 'Floor 1',
                     locUnit: 'UG Sump Room',
                     locBasementPodium: '',
@@ -14806,10 +14924,10 @@
 
             // 1. Pending Site Engineer Acknowledgment (Step 2 - Tower Mode)
             PERMITS.push(baseConfined({
-                project: site1.name, tower: 'Tower A', location: 'Tower A - Floor 1 - UG Sump Room',
+                project: site1.name, tower: 'P1', location: 'P1 - Floor 1 - UG Sump Room',
                 gps: site1.site,
                 locationStructure: 'Tower',
-                tower: 'Tower A', locFloor: 'Floor 1', locUnit: 'UG Sump Room',
+                tower: 'P1', locFloor: 'Floor 1', locUnit: 'UG Sump Room',
                 confinedActivity: 'UG Water Tank Cleaning / Maintenance',
                 numPersonnel: '3',
                 organization: 'ARPL',
@@ -14849,10 +14967,10 @@
 
             // 3. Active – Observation Open Confined Space Permit
             PERMITS.push(baseConfined({
-                project: site2.name, tower: 'Block 2', location: 'Block 2 - Floor -1 (Basement 1) - Domestic Sump Tank B',
+                project: site2.name, tower: 'Tower 4', location: 'Tower 4 - Floor -1 (Basement 1) - Domestic Sump Tank B',
                 gps: site2.site,
                 locationStructure: 'Tower',
-                tower: 'Block 2', locFloor: 'Basement 1 (B1)', locUnit: 'Domestic Sump Tank B',
+                tower: 'Tower 4', locFloor: 'Basement 1 (B1)', locUnit: 'Domestic Sump Tank B',
                 confinedActivity: 'Sump Waterproofing',
                 numPersonnel: '4',
                 organization: 'ARPL',
@@ -15009,10 +15127,10 @@
                     generalWorkOther: (over && over.generalWorkOther) || null,
                     weather: 'Sunny / Clear', organization: 'ARPL', contractor: null,
                     locationStructure: 'Tower',
-                    tower: 'Tower 1',
+                    tower: 'P1',
                     locFloor: 'Floor 14',
                     locUnit: 'Facade Zone B',
-                    location: 'Tower 1 - Floor 14 - Facade Zone B',
+                    location: 'P1 - Floor 14 - Facade Zone B',
                     startTime: '09:00',
                     checklist: qList.map((q, i) => ({
                         q, ans: 'yes', comment: null, photo: null, gps: null
@@ -15029,11 +15147,11 @@
 
             // 1. Pending Site Engineer Acknowledgment (Formwork Erection)
             PERMITS.push(baseGeneral({
-                project: site1.name, tower: 'Tower 2',
+                project: site1.name, tower: 'P2',
                 generalWorkType: 'Formwork Erection(shuttering)',
                 locationStructure: 'Tower',
                 locFloor: 'Floor 8', locUnit: 'Core Wall C',
-                location: 'Tower 2 - Floor 8 - Core Wall C',
+                location: 'P2 - Floor 8 - Core Wall C',
                 gps: site1.site,
                 createdAt: new Date(nowTime() - 40 * 60000), submittedAt: new Date(nowTime() - 40 * 60000),
                 validTill: new Date(nowTime().getTime() +  6 * 3600 * 1000),
@@ -15048,11 +15166,11 @@
 
             // 2. Active Permit (Erection of Glass Panel)
             PERMITS.push(baseGeneral({
-                project: site2.name, tower: 'Tower 1',
+                project: site2.name, tower: 'Tower 4',
                 generalWorkType: 'Erection of Glass Panel',
                 locationStructure: 'Tower',
                 locFloor: 'Floor 16', locUnit: 'External Glazing Grid 3',
-                location: 'Tower 1 - Floor 16 - External Glazing Grid 3',
+                location: 'Tower 4 - Floor 16 - External Glazing Grid 3',
                 gps: site2.site,
                 createdAt: new Date(nowTime() - 4 * 3600 * 1000), submittedAt: new Date(nowTime() - 4 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() +  4 * 3600 * 1000),
@@ -15133,10 +15251,10 @@
                 facilityScope: 'site',
                 project: site2.name,
                 locationStructure: 'Tower',
-                tower: 'Block 1',
+                tower: 'Tower 4',
                 locFloor: 'Floor 12',
                 locUnit: 'Electrical Riser Shaft B',
-                location: 'Block 1 - Floor 12 - Electrical Riser Shaft B',
+                location: 'Tower 4 - Floor 12 - Electrical Riser Shaft B',
                 gps: site2.site,
                 shutdownWhy: 'Installation of busduct tap-off box and HT cable termination',
                 electricalApparatus: ['Cables / Busbars', 'Distribution Boards'],
@@ -15175,10 +15293,10 @@
                     craneOperatorName: 'Rajesh Sharma', riggerName: 'Sunil Kumar',
                     liftingDocs: ['P&M Green Card Sticker', 'Lift Permit'],
                     locationStructure: 'Tower',
-                    tower: 'Tower A',
+                    tower: 'P1',
                     locFloor: 'Floor 8',
                     locUnit: 'Drop Zone 2',
-                    location: 'Tower A - Floor 8 - Drop Zone 2',
+                    location: 'P1 - Floor 8 - Drop Zone 2',
                     startTime: '09:00',
                     numWorkers: 4,
                     checklist: qList.map((q, i) => ({ q, ans: 'yes', comment: 'Inspected & verified', photo: null, gps: null })),
@@ -15194,7 +15312,7 @@
 
             // PTW-009A Routine Lifting Operation
             PERMITS.push(baseLifting({
-                project: site1.name, tower: 'Tower A',
+                project: site1.name, tower: 'P1',
                 createdAt: new Date(nowTime() - 3 * 3600 * 1000), submittedAt: new Date(nowTime() - 3 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() + 5 * 3600 * 1000),
                 status: 'Active', activatedAt: new Date(nowTime() - 2 * 3600 * 1000), stageEnteredAt: new Date(nowTime() - 2 * 3600 * 1000), escalation: { stage1: false, stage2: false },
@@ -15228,8 +15346,8 @@
                 slingSwl: 15.0,
                 liftingTandemLift: true,
                 liftingEquipmentType: 'Crawler Crane',
-                project: site2.name, tower: 'Tower B', locFloor: 'Terrace',
-                location: 'Tower B - Terrace - Central Plant Room',
+                project: site2.name, tower: 'Tower 5', locFloor: 'Terrace',
+                location: 'Tower 5 - Terrace - Central Plant Room',
                 createdAt: new Date(nowTime() - 60 * 60000), submittedAt: new Date(nowTime() - 60 * 60000),
                 validTill: new Date(nowTime().getTime() + 6 * 3600 * 1000),
                 status: 'Pending Project Manager Acknowledgment', stageEnteredAt: new Date(nowTime() - 15 * 60000), escalation: { stage1: false, stage2: false },
@@ -15260,8 +15378,8 @@
                     nightWorkType: 'hotwork',
                     nightSupervisorName: 'Venkatesh Rao', nightSupervisorPhone: '+91 98765 43210',
                     locationStructure: 'Tower',
-                    tower: 'Tower A', locFloor: 'Basement 1', locUnit: 'Zone B Plumbing Core',
-                    location: 'Tower A - Basement 1 - Zone B Plumbing Core',
+                    tower: 'P1', locFloor: 'Basement 1', locUnit: 'Zone B Plumbing Core',
+                    location: 'P1 - Basement 1 - Zone B Plumbing Core',
                     startTime: '20:30',
                     numWorkers: 5,
                     checklist: qList.map((q, i) => ({ q, ans: 'yes', comment: 'Night precautions verified', photo: null, gps: null })),
@@ -15277,7 +15395,7 @@
 
             // PTW-010 Night Shift Permit
             PERMITS.push(baseNightShift({
-                project: site1.name, tower: 'Tower A',
+                project: site1.name, tower: 'P1',
                 createdAt: new Date(nowTime() - 2 * 3600 * 1000), submittedAt: new Date(nowTime() - 2 * 3600 * 1000),
                 validTill: new Date(nowTime().getTime() + 8 * 3600 * 1000),
                 status: 'Approved – Pending Night Handover', stageEnteredAt: new Date(nowTime() - 30 * 60000), escalation: { stage1: false, stage2: false },
@@ -17208,7 +17326,10 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     const pPermits = PERMITS.filter(x => (x.project === p.name || x.projectId === p.id));
                     const pActive = pPermits.filter(x => x.status === 'Active').length;
                     const adm = PROJECT_ADMINS ? PROJECT_ADMINS.find(a => a.projectId === p.id) : null;
-                    const towerCount = (Array.isArray(p.towers) && p.towers.length > 0) ? p.towers.length : (Array.isArray(p.locations) ? p.locations.length : 0);
+                    const authList = getAuthoritativeTowers(p.id);
+                    const towerCount = (Array.isArray(p.towers) && p.towers.length > 0) ? p.towers.length :
+                                       (Array.isArray(p.locations) && p.locations.length > 0 ? p.locations.length :
+                                       (authList.length > 0 ? authList.length : 0));
                     return '<tr style="border-bottom:1px solid var(--border);">' +
                         '<td style="padding:10px 12px;font-weight:700;color:var(--navy);"><i class="fa-solid fa-building" style="color:var(--orange);margin-right:6px;"></i>' + escapeHtml(p.name) + ' <span class="mono" style="font-size:11px;color:var(--text-muted);">(' + p.id + ')</span></td>' +
                         '<td style="padding:10px 12px;font-size:12px;">' + towerCount + ' Towers / Zones</td>' +
@@ -17331,7 +17452,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '</div>' +
                     '<ul style="list-style:none;padding:0;margin:0;">' + activeUsersHtml + '</ul>' +
                     '</div>' +
-                    '</div>';
+                    '</div>' +
+                    '<div class="mobile-viewport-clearance" style="height:calc(100px + env(safe-area-inset-bottom, 34px));width:100%;pointer-events:none;"></div>';
             } else if (rk === 'admin') {
                 const assignedPrj = PROJECTS.find(p => p.id === currentUser.projectId || p.name === currentUser.projectName) || PROJECTS[0];
                 const sitePermits = PERMITS.filter(p => !assignedPrj || p.projectId === assignedPrj.id || p.project === assignedPrj.name);
@@ -18568,8 +18690,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
 
         function fillDemoLiftingSpecs() {
             if (!draft) return;
-            draft.project = draft.project || 'Auro Grand Residency';
-            draft.tower = draft.tower || 'Tower A';
+            draft.project = draft.project || (PROJECTS[0] ? PROJECTS[0].name : 'The Pearl');
+            draft.tower = draft.tower || (getAuthoritativeTowers(draft.project)[0] || 'P1');
             draft.locFloor = draft.locFloor || '5';
             draft.locUnit = draft.locUnit || '501';
             draft.loadDescription = draft.loadDescription || 'HVAC Chiller Unit & Air Handling Package (Weight: 4.5 MT)';
@@ -21535,36 +21657,57 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     p.activityOther = p.activityOther || p.guardrailActivityOther || '';
                     p.guardrailActivityOther = p.activityOther;
 
-                    // Normalize locationStructure
+                    // Normalize locationStructure and resolve authoritative tower
+                    const projObj = (typeof getProject === 'function') ? getProject(p.projectId || p.project) : null;
+                    const authProjTowers = getAuthoritativeTowers(p.projectId || p.project);
+                    const defaultTower = authProjTowers[0] || '';
                     if (typeof p.locationStructure === 'string') {
                         const isBp = p.locationStructure === 'Basement/Podium';
                         p.locationStructure = {
                             mode: isBp ? 'basement_podium' : 'tower',
-                            tower: p.tower || (isBp ? '' : 'Tower A'),
+                            tower: p.tower || (isBp ? '' : defaultTower),
                             floor: p.locFloor || p.grFloor || p.shaftFloor || p.floor || '',
                             unit: p.locUnit || p.grUnit || p.unit || '',
                             basementPodium: p.locBasementPodium || p.grBasementPodium || '',
                             area: p.locArea || p.grArea || p.area || ''
                         };
+                    } else if (p.locationStructure && typeof p.locationStructure === 'object') {
+                        if (!p.locationStructure.tower && p.locationStructure.mode === 'tower') {
+                            p.locationStructure.tower = p.tower || defaultTower;
+                        }
+                    }
+                    if (!p.tower && p.locationStructure && p.locationStructure.tower) {
+                        p.tower = p.locationStructure.tower;
                     }
                     if (p.gasReadings && !p.confinedGasReadings) {
                         p.confinedGasReadings = Object.assign({ testedAt: nowTime() }, p.gasReadings);
                     }
 
-                    // Geofence verification with automated demo fallback to project site
+                    // Strict Geotag Validation - Live device GPS coordinates required
+                    if (!p.gps || typeof p.gps.lat !== 'number' || typeof p.gps.lng !== 'number' || isNaN(p.gps.lat) || isNaN(p.gps.lng)) {
+                        overlay.classList.remove('show');
+                        showToast('Live device GPS geotag is mandatory before submitting. Please capture your coordinates.', 'err');
+                        return;
+                    }
                     const site = getProjectSiteCoord(p);
                     const radius = getProjectRadius(p);
-                    const dist = p.gps ? haversine(p.gps.lat, p.gps.lng, site.lat, site.lng) : Infinity;
-                    if (!p.gps || dist > radius || !p.gps.within) {
-                        p.gps = {
-                            lat: site.lat + (Math.random() - 0.5) * 0.0001,
-                            lng: site.lng + (Math.random() - 0.5) * 0.0001,
-                            address: (site && site.address) || (p.gps && p.gps.address) || 'Worksite vicinity',
-                            distance: 8,
-                            within: true,
-                            radius: radius
-                        };
+                    const dist = haversine(p.gps.lat, p.gps.lng, site.lat, site.lng);
+                    const accuracyTol = Math.min(p.gps.accuracy || 15, 50);
+                    if (dist > (radius + accuracyTol) && !p.gps.within) {
+                        overlay.classList.remove('show');
+                        showToast('Geofence Violation: Live GPS coordinates are outside the permitted project radius (' + Math.round(dist) + 'm away, limit ' + radius + 'm).', 'err');
+                        return;
                     }
+
+                    // Populate distinct project vs location geotagging schema fields
+                    p.projectId = p.projectId || (projObj ? projObj.id : (p.project === 'Sansa County' ? 'PRJ-SANSA' : (p.project === 'The Regent' ? 'PRJ-REGENT' : 'PRJ-PEARL')));
+                    p.projectName = p.projectName || (projObj ? projObj.name : (p.project || 'The Pearl'));
+                    p.locationName = p.locationName || p.tower || (p.locationStructure && p.locationStructure.tower) || p.location || 'Site';
+                    p.locationId = p.locationId || (p.tower ? ('LOC-' + p.projectId.replace('PRJ-', '') + '-' + p.tower.replace(/[^A-Za-z0-9]/g, '')) : 'CAMPUS-WIDE');
+                    p.latitude = p.gps.lat;
+                    p.longitude = p.gps.lng;
+                    p.accuracy = p.gps.accuracy || 10;
+                    p.geotaggedAt = p.geotaggedAt || new Date().toISOString();
 
                     p.signatories = p.signatories || {};
                     const creatorRole = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (ptypeOf(p) === 'blasting' && p.createdByRole === 'blasting-incharge' ? 'blasting-incharge' : 'site-supervisor'));
@@ -26051,17 +26194,16 @@ function trackerHtml(p) {
                     '<div>' +
                     '<div class="card card-pad dsec"><div class="dsec-title"><i class="fa-solid fa-clipboard-list"></i> General Information</div>' +
                     '<div class="review-item"><div class="rk">Requester</div><div class="rv">' + p.createdBy + '</div></div>' +
-                    (ptypeOf(p) === 'blasting'
-                        ? '<div class="review-item"><div class="rk">Project / Structure</div><div class="rv">' + p.project + ' — Open Surface / Yard (Manual)</div></div>'
-                        : (ptypeOf(p) === 'electrical' && (p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant'))
-                            ? '<div class="review-item"><div class="rk">Project / Structure</div><div class="rv">' + p.project + ' — Batching Plant (Manual)</div></div>'
-                            : (p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.mode === 'basement_podium'
-                                ? '<div class="review-item"><div class="rk">Project / Structure</div><div class="rv">' + p.project + ' — ' + (p.locationStructure.basementPodium || 'Basement/Podium') + '</div></div>'
-                                : '<div class="review-item"><div class="rk">Project / Tower</div><div class="rv">' + p.project + ' — ' + (p.tower || (typeof p.locationStructure === 'string' ? p.locationStructure : '—')) + '</div></div>'
-                            )
-                    ) +
-                    '<div class="review-item"><div class="rk">Location</div><div class="rv">' + p.location + '</div></div>' +
-                    '<div class="review-item"><div class="rk">GPS</div><div class="rv">' + (p.gps ? p.gps.lat.toFixed(5) + ', ' + p.gps.lng.toFixed(5) : '—') + '</div></div>' +
+                    '<div class="review-item"><div class="rk">Assigned Worksite</div><div class="rv"><b>' + escapeHtml(p.projectName || p.project || 'The Pearl') + '</b>' + (p.projectId ? (' <span class="mono" style="font-size:11px;color:var(--text-muted);">(' + p.projectId + ')</span>') : '') + '</div></div>' +
+                    '<div class="review-item"><div class="rk">Tower / Zone</div><div class="rv"><b>' + escapeHtml(p.locationName || p.tower || (p.locationStructure && typeof p.locationStructure === 'object' && (p.locationStructure.tower || p.locationStructure.basementPodium)) || '—') + '</b></div></div>' +
+                    '<div class="review-item"><div class="rk">Specific Work Area</div><div class="rv">' + escapeHtml(p.location || '—') + '</div></div>' +
+                    '<div class="review-item"><div class="rk">Live Device GPS Geotag</div><div class="rv">' +
+                    ((p.gps && p.gps.lat != null && p.gps.lng != null)
+                        ? ('<a href="https://www.google.com/maps?q=' + p.gps.lat + ',' + p.gps.lng + '" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:700;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i class="fa-solid fa-location-dot"></i> ' + (+p.gps.lat).toFixed(5) + ', ' + (+p.gps.lng).toFixed(5) + (p.gps.accuracy ? (' <span style="font-size:11px;color:var(--text-muted);font-weight:normal;">(&plusmn;' + Math.round(p.gps.accuracy) + 'm)</span>') : '') + ' <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i></a>')
+                        : (p.latitude != null && p.longitude != null)
+                            ? ('<a href="https://www.google.com/maps?q=' + p.latitude + ',' + p.longitude + '" target="_blank" rel="noopener noreferrer" style="color:var(--orange);font-weight:700;display:inline-flex;align-items:center;gap:6px;text-decoration:none;"><i class="fa-solid fa-location-dot"></i> ' + (+p.latitude).toFixed(5) + ', ' + (+p.longitude).toFixed(5) + (p.accuracy ? (' <span style="font-size:11px;color:var(--text-muted);font-weight:normal;">(&plusmn;' + Math.round(p.accuracy) + 'm)</span>') : '') + ' <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i></a>')
+                            : '<span style="color:var(--text-muted);">—</span>') +
+                    '</div></div>' +
                     '<div class="review-item"><div class="rk">Permit Type</div><div class="rv">' + pMeta(p).code + ' — ' + pMeta(p).name + '</div></div>' +
                     (ptypeOf(p) === 'guardrail' ?
                         (() => {
@@ -26396,7 +26538,8 @@ ptypeOf(p) === 'general' ?
                         const pData = doc.data() || {};
                         const docId = pData.id || doc.id;
                         const wasDemo = DEMO_SYNTHETIC_NAMES.includes(pData.configuredBy) || DEMO_SYNTHETIC_NAMES.includes(pData.adminName);
-                        const missingTowers = !Array.isArray(pData.towers) || pData.towers.length === 0 || !Array.isArray(pData.locations) || pData.locations.length === 0;
+                        const authExpected = getAuthoritativeTowers(docId);
+                        const missingTowers = !Array.isArray(pData.towers) || pData.towers.length === 0 || (authExpected.length > 0 && pData.towers.length !== authExpected.length) || !Array.isArray(pData.locations) || pData.locations.length === 0;
                         if (wasDemo) {
                             pData.configured = false;
                             pData.configuredBy = null;
@@ -26432,8 +26575,15 @@ ptypeOf(p) === 'general' ?
                     });
                     if (remoteMap.size > 0) {
                         PROJECTS = Array.from(remoteMap.values());
+                        PROJECTS.forEach(p => ensureProjectLocations(p));
                         window.PROJECTS = PROJECTS;
                         window.PROJECT_MASTER = PROJECTS;
+                        if (typeof renderSuperAdminDashboard === 'function' && document.getElementById('view-super-admin-dashboard') && document.getElementById('view-super-admin-dashboard').classList.contains('active')) {
+                            renderSuperAdminDashboard();
+                        }
+                        if (typeof renderAdminProjectsTab === 'function' && document.getElementById('view-projects') && document.getElementById('view-projects').classList.contains('active')) {
+                            renderAdminProjectsTab();
+                        }
                     }
                 } else if (currentUser && currentUser.key === 'super-admin') {
                     // Seed initial clean project structures to Firestore

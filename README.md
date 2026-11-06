@@ -161,24 +161,77 @@ The system enforces a **strict, multi-tenant governance model** with defense-in-
 
 ---
 
-## 5. Real Worksite Topological Baseline
+## 5. Real Worksite Topological Baseline & Dynamic Geotagging Architecture
 
-Every permit is bound to a validated structural hierarchy loaded dynamically from Firestore `projects/{projectId}` with fail-safe in-memory baseline defaults:
+Every permit and user account is strictly bound to a validated structural hierarchy loaded dynamically from Firestore `projects/{projectId}` backed by immutable authoritative configurations.
 
-### 1. The Pearl (`PRJ-PEARL`)
-- **Towers & Zones:** `P1`, `P2`, `P3`, `P4`, `P5`, `P6`, `P7`, `Clubhouse`, `Podium`, `NTA_PHASE-1`, `NTA_PHASE-2`, `NTA_PHASE-3`
-- **Geofence Baseline:** Latitude `17.4375° N`, Longitude `78.3650° E`, Radius `100m`
-- **Assigned Administrator:** Empaneled Site Admin (`PRJ-PEARL`)
+### Authoritative Worksite Configuration Matrix
 
-### 2. The Regent (`PRJ-REGENT`)
-- **Towers & Zones:** `Tower 4`, `Tower 5`, `NTA`, `Stores`, `FormWork`, `Precast`, `Phase-1`
-- **Geofence Baseline:** Latitude `17.4420° N`, Longitude `78.3710° E`, Radius `75m`
-- **Assigned Administrator:** Empaneled Site Admin (`PRJ-REGENT`)
+| Worksite Project | Project ID | Authoritative Towers & Zones Count | Authoritative Tower / Zone Manifest | Centroid GPS Baseline | Allowed Geofence Radius | Assigned Administrator |
+| :--- | :--- | :---: | :--- | :--- | :---: | :--- |
+| **The Pearl** | `PRJ-PEARL` | **12** | `P1`, `P2`, `P3`, `P4`, `P5`, `P6`, `P7`, `Clubhouse`, `Podium`, `NTA_PHASE-1`, `NTA_PHASE-2`, `NTA_PHASE-3` | `17.4375° N, 78.3650° E` | `100m` | Empaneled Site Admin (`PRJ-PEARL`) |
+| **The Regent** | `PRJ-REGENT` | **7** | `Tower 4`, `Tower 5`, `NTA`, `Stores`, `FormWork`, `Precast`, `Phase-1` | `17.4420° N, 78.3710° E` | `75m` | Empaneled Site Admin (`PRJ-REGENT`) |
+| **Sansa County** | `PRJ-SANSA` | **3** | `Sector 1 - Zone 1 & 2`, `Sector 1 - Zone 03`, `Sector 1 - Zone 04` | `17.4510° N, 78.3820° E` | `100m` | Empaneled Site Admin (`PRJ-SANSA`) |
 
-### 3. Sansa County (`PRJ-SANSA`)
-- **Towers & Zones:** `Sector 1 - Zone 1 & 2`, `Sector 1 - Zone 03`, `Sector 1 - Zone 04`
-- **Geofence Baseline:** Latitude `17.4510° N`, Longitude `78.3820° E`, Radius `100m`
-- **Assigned Administrator:** Empaneled Site Admin (`PRJ-SANSA`)
+### Dynamic Project-Based Dropdown Logic
+
+- **Role-Based Worksite Scoping:**
+  - **Super Admin:** Authorized to view, switch, and provision across all worksites. The worksite selector dynamically populates the project dropdown (`#newStaffProject`), and switching projects instantly loads only that project's authoritative towers.
+  - **Site Admin:** Structurally locked to their assigned worksite (e.g., `The Pearl (PRJ-PEARL)` or `Sansa County (PRJ-SANSA)`). The worksite selector is read-only and locked; the tower/zone dropdown displays only towers configured for their assigned worksite.
+- **Dynamic Invalidation & Cache Reset:** Changing the selected worksite immediately flushes dependent dropdown state, clears any pre-selected tower/zone, and populates the authoritative manifest for the newly selected project.
+- **Permanent Purge of Generic Placeholders:** Generic demo tower options (`Tower A`, `Tower B`, `Tower C`, `Tower D`) are permanently eliminated from production accessors, database initializers, and UI dropdowns.
+- **Backend Role Guard:** Cloud Function `adminAssignProjectRole` strictly validates `cleanLocationName` and `cleanLocationId` against `AUTHORITATIVE_PROJECT_TOWERS[projectId]`, rejecting mismatched or generic tower assignments with `invalid-argument`.
+
+### Location vs. Project Geotagging Architecture
+
+The platform enforces strict conceptual and operational separation between **Project** and **Location**:
+
+```mermaid
+flowchart LR
+    subgraph Macro ["Project Tier (Worksite)"]
+        PRJ["Project Master<br/>(e.g., Sansa County PRJ-SANSA)<br/>Centroid Coordinates & Worksite Radius"]
+    end
+
+    subgraph Micro ["Location Tier (Physical Work Area)"]
+        LOC["Physical Location / Tower / Zone<br/>(e.g., Sector 1 - Zone 1 & 2)<br/>Specific Grid Reference & Structural Level"]
+    end
+
+    subgraph Geotag ["Live Geotag Verification Tier"]
+        GPS["Live Device GPS Capture<br/>(Hardware Geolocation API)<br/>Latitude, Longitude, Accuracy, IST Timestamp"]
+        MAP["Statutory Audit Evidence<br/>Google Maps Direct Deep-Link<br/>https://www.google.com/maps?q={lat},{lng}"]
+    end
+
+    PRJ --> LOC
+    LOC --> GPS
+    GPS --> MAP
+```
+
+1. **Macro Worksite (Project):** Represents the macro construction site boundary (e.g., Sansa County, The Pearl, The Regent) governed by site-level boundary coordinates and statutory license.
+2. **Micro Work Area (Location):** Represents the specific physical tower, zone, floor, or underground structure where high-risk work is actively executed (e.g., `Sector 1 - Zone 1 & 2`, `P1`, `Clubhouse`).
+3. **Mandatory Live Device Geotagging:**
+   - Geotags must be captured directly from the physical field device via the browser/device Geolocation API (`enableHighAccuracy: true`).
+   - Synthetic, randomized, or project centroid coordinates are strictly blocked; silent fallback to project-level coordinates is prohibited.
+   - If device GPS is denied or unavailable, the application displays an explicit error message with a retry mechanism.
+4. **Data Persistence Schema:** Database documents and API payloads explicitly separate worksite metadata from device geotags:
+   ```json
+   {
+     "projectId": "PRJ-SANSA",
+     "projectName": "Sansa County",
+     "locationId": "LOC-SANSA-Z12",
+     "locationName": "Sector 1 - Zone 1 & 2",
+     "latitude": 17.45102,
+     "longitude": 78.38204,
+     "accuracy": 8,
+     "geotaggedAt": "2026-11-06T13:40:00.000Z"
+   }
+   ```
+5. **Interactive Google Maps Deep-Linking:** All permit inspection views, statutory audit logs, and PDF export manifests feature direct Google Maps verification links (`https://www.google.com/maps?q={latitude},{longitude}`) for instant field-coordinate verification.
+
+### Mobile Safari Viewport & Ergonomic Safe-Area Clearance
+
+On iOS Safari and modern mobile browsers, the floating bottom URL and navigation bar dynamic height can occlude bottom dashboard widgets and action footers. The platform resolves this with:
+- Dedicated safe area bottom padding: `padding-bottom: calc(140px + env(safe-area-inset-bottom, 34px)) !important;` across all mobile viewport breakpoints (`<= 768px`, `<= 640px`, `<= 580px`).
+- Explicit mobile viewport clearance anchors (`.mobile-viewport-clearance`) on governance dashboards to ensure all administrative cards (`Recent Administrative Actions`, `Audit Trail`) remain completely visible and interactive above the browser chrome.
 
 ---
 
