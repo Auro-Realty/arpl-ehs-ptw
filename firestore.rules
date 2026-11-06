@@ -3,7 +3,7 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     // ============================================================================
-    // ARPL EHS PERMIT-TO-WORK — HARDENED FIRESTORE RBAC SECURITY RULES
+    // ARPL EHS PERMIT-TO-WORK -- HARDENED FIRESTORE RBAC SECURITY RULES
     // Statutory Compliance: DPDP Act 2023, Factories Act 1948 & ISO 45001
     // Principles: Least Privilege, Multi-Tenant Isolation, Strict IDOR Prevention
     // ============================================================================
@@ -284,3 +284,4 @@ service cloud.firestore {
     }
   }
 }
+

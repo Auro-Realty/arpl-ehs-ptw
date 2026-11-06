@@ -3,7 +3,7 @@ service firebase.storage {
   match /b/{bucket}/o {
 
     // ============================================================================
-    // ARPL EHS PERMIT-TO-WORK — HARDENED CLOUD STORAGE SECURITY RULES
+    // ARPL EHS PERMIT-TO-WORK -- HARDENED CLOUD STORAGE SECURITY RULES
     // Prohibits executable/scriptable files (SVG, HTML, JS) to eliminate Stored XSS
     // Enforces project-scoped access and strict byte size limits
     // ============================================================================
@@ -61,3 +61,4 @@ service firebase.storage {
     }
   }
 }
+
