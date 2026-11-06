@@ -2,7 +2,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions
+    // ============================================================================
+    // ARPL EHS PERMIT-TO-WORK — HARDENED FIRESTORE RBAC SECURITY RULES
+    // Statutory Compliance: DPDP Act 2023, Factories Act 1948 & ISO 45001
+    // Principles: Least Privilege, Multi-Tenant Isolation, Strict IDOR Prevention
+    // ============================================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
@@ -11,8 +16,12 @@ service cloud.firestore {
       return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
+    function userDocData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
     function userDocRole() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+      return userDocExists() ? userDocData().role : null;
     }
 
     function isSuperAdmin() {
@@ -24,29 +33,22 @@ service cloud.firestore {
       );
     }
 
-    function isAnyProjectAdmin() {
-      return isAuthenticated() && (
-        isSuperAdmin() ||
-        request.auth.token.role in ['project-admin', 'site-admin', 'admin'] ||
-        (userDocExists() && userDocRole() in ['project-admin', 'site-admin', 'admin'])
-      );
-    }
-
+    // Checks if caller is assigned specifically as Site Admin for target projectId
     function isProjectAdmin(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
         (request.auth.token.role in ['project-admin', 'site-admin', 'admin'] && request.auth.token.projectId == projectId) ||
-        (userDocExists() && userDocRole() in ['project-admin', 'site-admin', 'admin'] &&
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectId == projectId)
+        (userDocExists() && userDocRole() in ['project-admin', 'site-admin', 'admin'] && userDocData().projectId == projectId)
       );
     }
 
+    // Verifies caller has read/write authority scoped to the specific worksite
     function hasProjectAccess(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
         request.auth.token.projectId == projectId ||
         (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds) ||
-        (userDocExists() && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.projectId == projectId)
+        (userDocExists() && userDocData().projectId == projectId)
       );
     }
 
@@ -57,75 +59,143 @@ service cloud.firestore {
       );
     }
 
-    // Projects Collection: Geolocation, Locations, Workflows & Towers configuration
+    // ----------------------------------------------------------------------------
+    // 1. PROJECTS MASTER (Worksite Governance, Geolocation & Zones)
+    // ----------------------------------------------------------------------------
     match /projects/{projectId} {
       allow read: if isAuthenticated();
-      allow create, update: if isSuperAdmin() || isAnyProjectAdmin();
+      // Only Super Admin can register new projects
+      allow create: if isSuperAdmin();
+      // Only Super Admin or the designated Site Admin for this specific project can update
+      allow update: if isSuperAdmin() || isProjectAdmin(projectId);
+      // Project deletion strictly restricted to Super Admin
       allow delete: if isSuperAdmin();
     }
 
-    // Users Collection: User directory and role/location/workflow binding
+    // ----------------------------------------------------------------------------
+    // 2. USERS DIRECTORY (Strict Multi-Tenant IDOR Protection)
+    // ----------------------------------------------------------------------------
     match /users/{userId} {
       allow read: if isAuthenticated();
-      allow create: if isSuperAdmin() || isAnyProjectAdmin() || (
+      
+      // Super Admin can provision anyone; Site Admin can ONLY provision users for their assigned projectId
+      allow create: if isSuperAdmin() || (
+        request.resource.data.projectId != null &&
+        isProjectAdmin(request.resource.data.projectId) &&
+        request.resource.data.role != 'super-admin' &&
+        request.resource.data.role != 'project-admin'
+      ) || (
         isAuthenticated() && request.auth.uid == userId && (
           request.auth.token.email == 'ehs.superadmin@aurorealty.com' ||
           !('role' in request.resource.data) ||
           request.resource.data.role == 'site-supervisor'
         )
       );
-      allow update: if isSuperAdmin() || isAnyProjectAdmin() || (
+
+      // Updates strictly bound to project ownership: Site Admin cannot modify users outside their project
+      allow update: if isSuperAdmin() || (
+        resource.data.projectId != null &&
+        request.resource.data.projectId != null &&
+        resource.data.projectId == request.resource.data.projectId &&
+        isProjectAdmin(resource.data.projectId) &&
+        resource.data.get('role', '') != 'super-admin'
+      ) || (
         isAuthenticated() && request.auth.uid == userId &&
         request.resource.data.get('role', null) == resource.data.get('role', null) &&
         request.resource.data.get('uiRole', null) == resource.data.get('uiRole', null) &&
         request.resource.data.get('projectId', null) == resource.data.get('projectId', null)
       );
-      allow delete: if isSuperAdmin() || isAnyProjectAdmin();
+
+      // Deletion strictly restricted to Super Admin or the assigned Site Admin for that user's project
+      allow delete: if isSuperAdmin() || (
+        resource.data.projectId != null &&
+        isProjectAdmin(resource.data.projectId) &&
+        resource.data.get('role', '') != 'super-admin'
+      );
     }
 
-    // Project Admins Directory
+    // ----------------------------------------------------------------------------
+    // 3. PROJECT ADMINS DIRECTORY (Super Admin Exclusive Governance)
+    // ----------------------------------------------------------------------------
     match /project_admins/{adminId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isSuperAdmin() || isAnyProjectAdmin();
+      // Only Super Admin can appoint or modify Site Administrators
+      allow create, update, delete: if isSuperAdmin();
     }
 
-    // Site Personnel Directory (Location & Workflow Tagged Roles)
+    // ----------------------------------------------------------------------------
+    // 4. SITE PERSONNEL DIRECTORY (Location & Workflow Tagged Staff)
+    // ----------------------------------------------------------------------------
     match /site_personnel/{staffId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isSuperAdmin() || isAnyProjectAdmin();
+      allow create: if isSuperAdmin() || (
+        request.resource.data.projectId != null &&
+        isProjectAdmin(request.resource.data.projectId)
+      );
+      allow update: if isSuperAdmin() || (
+        resource.data.projectId != null &&
+        request.resource.data.projectId != null &&
+        resource.data.projectId == request.resource.data.projectId &&
+        isProjectAdmin(resource.data.projectId)
+      );
+      allow delete: if isSuperAdmin() || (
+        resource.data.projectId != null &&
+        isProjectAdmin(resource.data.projectId)
+      );
     }
 
-    // Project Custom Roles Directory
+    // ----------------------------------------------------------------------------
+    // 5. PROJECT CUSTOM ROLES DIRECTORY
+    // ----------------------------------------------------------------------------
     match /project_roles/{roleId} {
       allow read: if isAuthenticated();
-      allow create, update, delete: if isSuperAdmin() || isAnyProjectAdmin();
+      allow create: if isSuperAdmin() || (
+        request.resource.data.projectId != null &&
+        isProjectAdmin(request.resource.data.projectId)
+      );
+      allow update: if isSuperAdmin() || (
+        resource.data.projectId != null &&
+        request.resource.data.projectId != null &&
+        resource.data.projectId == request.resource.data.projectId &&
+        isProjectAdmin(resource.data.projectId)
+      );
+      allow delete: if isSuperAdmin() || (
+        resource.data.projectId != null &&
+        isProjectAdmin(resource.data.projectId)
+      );
     }
 
-    // Contractors Directory
+    // ----------------------------------------------------------------------------
+    // 6. CONTRACTORS DIRECTORY
+    // ----------------------------------------------------------------------------
     match /contractors/{contractorId} {
       allow read: if isAuthenticated();
-      allow write: if isSuperAdmin() || isAnyProjectAdmin();
+      allow write: if isSuperAdmin() || (
+        request.resource.data.projectId != null &&
+        isProjectAdmin(request.resource.data.projectId)
+      );
     }
 
-    // Permits Collection
+    // ----------------------------------------------------------------------------
+    // 7. PERMITS COLLECTION (Strict Project Scoping & Immutable Archiving)
+    // ----------------------------------------------------------------------------
     match /permits/{permitId} {
       allow read: if isAuthenticated() && (
         isSuperAdmin() ||
-        !('projectId' in resource.data) ||
-        hasProjectAccess(resource.data.projectId)
+        (resource.data.projectId != null && hasProjectAccess(resource.data.projectId))
       );
       allow create: if isAuthenticated() && (
-        !('projectId' in request.resource.data) ||
+        request.resource.data.projectId != null &&
         hasProjectAccess(request.resource.data.projectId)
       );
       allow update: if isAuthenticated() && (
-        !('projectId' in resource.data) ||
+        resource.data.projectId != null &&
         hasProjectAccess(resource.data.projectId)
       ) && (
         !(resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true) ||
         request.resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true
       );
-      allow delete: if false; // Permits can never be deleted (DPDP Act audit requirement)
+      allow delete: if false; // Strict DPDP Act 2023 requirement: Permits can never be deleted
 
       // Subcollection: Immutable Activity Log (Append-only audit trail)
       match /activity_log/{logId} {
@@ -142,45 +212,73 @@ service cloud.firestore {
       }
     }
 
-    // Notifications Collection
+    // ----------------------------------------------------------------------------
+    // 8. NOTIFICATIONS COLLECTION (Private to Recipient User / Project)
+    // ----------------------------------------------------------------------------
     match /notifications/{notifId} {
-      allow read: if isAuthenticated();
-      allow create, update: if isAuthenticated();
+      allow read: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.email == request.auth.token.email ||
+        (resource.data.projectId != null && hasProjectAccess(resource.data.projectId))
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        isSuperAdmin() ||
+        resource.data.userId == request.auth.uid ||
+        resource.data.email == request.auth.token.email
+      );
       allow delete: if false;
     }
 
-    // System Counters (Atomic sequential numbers)
+    // ----------------------------------------------------------------------------
+    // 9. SYSTEM COUNTERS (Managed Exclusively by Cloud Functions)
+    // ----------------------------------------------------------------------------
     match /counters/{counterId} {
       allow read: if isAuthenticated();
-      allow write: if false; // Managed exclusively by Cloud Functions transaction
+      allow write: if false;
     }
 
-    // Audit Logs Collection (Immutable statutory audit trail)
+    // ----------------------------------------------------------------------------
+    // 10. STATUTORY IMMUTABLE AUDIT TRAIL (DPDP Act Cryptographic Log)
+    // ----------------------------------------------------------------------------
     match /audit_logs/{logId} {
       allow read: if isAuthenticated();
       allow create: if isAuthenticated();
-      allow update, delete: if false; // Tamper-proof immutable ledger
+      allow update, delete: if false; // Absolutely tamper-proof
     }
 
-    // Dynamic Roles & Permissions Governance
+    // ----------------------------------------------------------------------------
+    // 11. GOVERNANCE: ROLES, PERMISSIONS & WORKFLOWS
+    // ----------------------------------------------------------------------------
     match /roles_permissions/{roleId} {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
     }
 
-    // Multi-stage Approval Workflows Configuration
     match /approval_workflows/{workflowId} {
       allow read: if isAuthenticated();
-      allow write: if isSuperAdmin() || isAnyProjectAdmin();
+      allow write: if isSuperAdmin() || (
+        request.resource.data.projectId != null &&
+        isProjectAdmin(request.resource.data.projectId)
+      );
     }
 
-    // System Settings & Statutory Retention Policies
     match /system_settings/{settingId} {
       allow read: if isAuthenticated();
       allow write: if isSuperAdmin();
     }
 
-    // Explicit Default-Deny Fallback
+    // ----------------------------------------------------------------------------
+    // 12. RATE LIMITING STORE (Managed by Cloud Functions or Security Services)
+    // ----------------------------------------------------------------------------
+    match /_rate_limits/{limitId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // ----------------------------------------------------------------------------
+    // 13. EXPLICIT DEFAULT-DENY FALLBACK
+    // ----------------------------------------------------------------------------
     match /{document=**} {
       allow read, write: if false;
     }

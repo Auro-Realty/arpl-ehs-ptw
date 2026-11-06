@@ -2,12 +2,22 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // ============================================================================
+    // ARPL EHS PERMIT-TO-WORK — HARDENED CLOUD STORAGE SECURITY RULES
+    // Prohibits executable/scriptable files (SVG, HTML, JS) to eliminate Stored XSS
+    // Enforces project-scoped access and strict byte size limits
+    // ============================================================================
+
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function isSuperAdmin() {
-      return isAuthenticated() && request.auth.token.superAdmin == true;
+      return isAuthenticated() && (
+        request.auth.token.superAdmin == true ||
+        request.auth.token.role == 'super-admin' ||
+        request.auth.token.email == 'ehs.superadmin@aurorealty.com'
+      );
     }
 
     function hasProjectAccess(projectId) {
@@ -19,26 +29,34 @@ service firebase.storage {
     }
 
     // Temporary Field & Inspection Images (Targeted by 24h GCS Lifecycle Auto-Deletion)
+    // Strictly whitelisted to raster image types (BLOCKS SVG to eliminate Stored XSS risks)
     match /temp-images/{projectId}/{permitId}/{imageId} {
       allow read: if hasProjectAccess(projectId);
       allow create: if hasProjectAccess(projectId)
                     && request.resource.size < 10 * 1024 * 1024
-                    && request.resource.contentType.matches('image/.*');
+                    && request.resource.contentType in [
+                      'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'
+                    ];
       allow update, delete: if false; // Auto-deleted by GCS lifecycle after 24 hours
     }
 
-    // Digital Signatures (Compressed PNG / WebP)
+    // Digital Signatures (Strictly PNG or WebP raster signatures <= 512KB)
     match /signatures/{projectId}/{permitId}/{signatureId} {
       allow read: if hasProjectAccess(projectId);
       allow create: if hasProjectAccess(projectId)
-                    && request.resource.size < 1024 * 1024
-                    && request.resource.contentType.matches('image/.*');
+                    && request.resource.size < 512 * 1024
+                    && request.resource.contentType in ['image/png', 'image/webp'];
       allow update, delete: if false;
     }
 
     // Statutory Permanent PDFs
-    // Strictly blocked from direct bucket read/write; served only via the single-use download Cloud Function
+    // Strictly blocked from direct bucket read/write; served only via single-use download Cloud Function
     match /statutory-pdfs/{projectId}/{permitId}/{fileName} {
+      allow read, write: if false;
+    }
+
+    // Explicit Default-Deny Fallback
+    match /{allPaths=**} {
       allow read, write: if false;
     }
   }

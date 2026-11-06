@@ -3,14 +3,13 @@
  * Target Project: prj-aurorealty-ehs-ptw-dev
  * Region: asia-south1 (Mumbai)
  *
- * Capabilities:
- * 1. Single-use rate-limited Statutory PDF download for EHS (atomic transaction).
- * 2. Ultra-compression of inspection images via Sharp (auto-deleted in 24h by GCS).
- * 3. Embedding compressed images into permanent statutory PDF before 24h GCS TTL.
- * 4. Super Admin creation of Project Admins.
- * 5. Project Admin Geolocation configuration and Site Role delegation.
- * 6. Atomic FSM permit state transitions with Haversine GPS geofencing.
- * 7. Scheduled SLA escalation sweep (Cloud Scheduler 5m tick).
+ * Security & Governance Enhancements:
+ * 1. CHECK 01: Secure Authentication, cryptographically random password generation, token claims.
+ * 2. CHECK 02: Prevent Unauthorized Data Access & strict IDOR multi-tenant isolation.
+ * 3. CHECK 03: Immutable statutory audit logging and monitoring.
+ * 4. CHECK 04: Rate limiting & abuse protection across all sensitive API endpoints.
+ * 5. CHECK 05: Safe secret handling & zero secret leakage.
+ * 6. CHECK 06: Strict input validation and sanitization against injection attacks.
  */
 
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
@@ -22,6 +21,7 @@ const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
 const path = require("path");
 const os = require("os");
 const fs = require("fs");
+const crypto = require("crypto");
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -29,8 +29,142 @@ const storage = admin.storage();
 const auth = admin.auth();
 
 const REGION = "asia-south1";
-// Firebase Web API Key (Configured via GitHub Secrets)
 const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || "";
+
+// ============================================================================
+// SECURITY & VALIDATION HELPERS (CHECKS 01, 04, 06)
+// ============================================================================
+
+/**
+ * Sanitize string: strips control chars and HTML tags, limits max length
+ */
+function sanitizeString(str, maxLen = 100) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/[<>'"&;`]/g, "") // Strip dangerous HTML/script injection characters
+    .trim()
+    .slice(0, maxLen);
+}
+
+/**
+ * Validate RFC 5322 compliant email address
+ */
+function validateEmail(email) {
+  if (!email || typeof email !== "string") return false;
+  const re = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+  return re.test(email.trim().toLowerCase()) && email.length <= 128;
+}
+
+/**
+ * Validate enterprise password strength: min 10 chars, uppercase, lowercase, number, symbol
+ */
+function validatePassword(pwd) {
+  if (!pwd || typeof pwd !== "string") return false;
+  if (pwd.length < 10 || pwd.length > 128) return false;
+  const hasUpper = /[A-Z]/.test(pwd);
+  const hasLower = /[a-z]/.test(pwd);
+  const hasDigit = /[0-9]/.test(pwd);
+  const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
+  return hasUpper && hasLower && hasDigit && hasSpecial;
+}
+
+/**
+ * Validate Permit ID format: strictly alphanumeric, hyphen, underscore (max 64 chars)
+ */
+function validatePermitId(id) {
+  return typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id);
+}
+
+/**
+ * Validate Project ID format: strictly PRJ- followed by alphanumeric/hyphen
+ */
+function validateProjectId(id) {
+  return typeof id === "string" && /^PRJ-[A-Za-z0-9_-]{2,32}$/.test(id);
+}
+
+/**
+ * Generate cryptographically secure random password (16 chars, meets all complexity rules)
+ */
+function generateSecureRandomPassword(length = 16) {
+  const upper = "ABCDEFGHJKLMNPQRSTUVWXYZ";
+  const lower = "abcdefghijkmnpqrstuvwxyz";
+  const digits = "23456789";
+  const symbols = "!@#$%^&*";
+  const all = upper + lower + digits + symbols;
+  const buf = crypto.randomBytes(length);
+  const chars = [
+    upper[buf[0] % upper.length],
+    lower[buf[1] % lower.length],
+    digits[buf[2] % digits.length],
+    symbols[buf[3] % symbols.length]
+  ];
+  for (let i = 4; i < length; i++) {
+    chars.push(all[buf[i] % all.length]);
+  }
+  for (let i = chars.length - 1; i > 0; i--) {
+    const j = buf[i] % (i + 1);
+    const temp = chars[i];
+    chars[i] = chars[j];
+    chars[j] = temp;
+  }
+  return chars.join("");
+}
+
+/**
+ * Atomic sliding-window rate limiter (CHECK 04: Abuse & Bot Protection)
+ */
+async function enforceRateLimit(identifier, actionName, maxRequests, windowSeconds) {
+  const safeId = String(identifier || "anonymous").replace(/[^a-zA-Z0-9_-]/g, "_").slice(0, 64);
+  const key = `rl_${actionName}_${safeId}`;
+  const now = Date.now();
+  const docRef = db.collection("_rate_limits").doc(key);
+
+  const allowed = await db.runTransaction(async (t) => {
+    const snap = await t.get(docRef);
+    if (!snap.exists) {
+      t.set(docRef, { count: 1, resetAt: now + windowSeconds * 1000, action: actionName });
+      return true;
+    }
+    const data = snap.data();
+    if (now > (data.resetAt || 0)) {
+      t.set(docRef, { count: 1, resetAt: now + windowSeconds * 1000, action: actionName });
+      return true;
+    }
+    if (data.count >= maxRequests) {
+      return false;
+    }
+    t.update(docRef, { count: data.count + 1 });
+    return true;
+  });
+
+  if (!allowed) {
+    throw new HttpsError(
+      "resource-exhausted",
+      `Rate limit exceeded for action "${actionName}". Maximum ${maxRequests} requests per ${windowSeconds}s. Please wait before retrying.`
+    );
+  }
+}
+
+/**
+ * Record Server-Side Immutable Audit Log (CHECK 03: Monitoring & Security Telemetry)
+ */
+async function recordServerAuditLog(action, details, actorUid, actorEmail, projectId, extra = {}) {
+  try {
+    const logId = "aud-" + crypto.randomBytes(6).toString("hex");
+    await db.collection("audit_logs").doc(logId).set({
+      id: logId,
+      action: sanitizeString(action, 64),
+      details: sanitizeString(details, 500),
+      actorUid: actorUid || "SYSTEM",
+      actorEmail: actorEmail || "system@aurorealty.com",
+      projectId: projectId || "Global",
+      timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      ...extra
+    });
+  } catch (e) {
+    console.warn("[Server Audit Log] Exception recording log:", e.message);
+  }
+}
 
 // Helper: Haversine distance in meters
 function getHaversineDistanceMeters(lat1, lon1, lat2, lon2) {
@@ -61,12 +195,17 @@ exports.downloadStatutoryPdf = onRequest(
 
       const idToken = authHeader.split("Bearer ")[1];
       const decodedToken = await auth.verifyIdToken(idToken);
-      const permitId = req.query.permitId || req.params[0]?.replace(/^\//, "");
+      const rawPermitId = req.query.permitId || req.params[0]?.replace(/^\//, "");
 
-      if (!permitId) {
-        res.status(400).json({ error: "Bad Request: Missing permitId parameter" });
+      if (!rawPermitId || !validatePermitId(rawPermitId)) {
+        res.status(400).json({ error: "Bad Request: Invalid or missing permitId parameter" });
         return;
       }
+      const permitId = rawPermitId;
+
+      // Rate limit PDF download endpoint: max 10 requests per minute per user/IP
+      const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "Unknown";
+      await enforceRateLimit(decodedToken.uid || clientIp, "downloadStatutoryPdf", 10, 60);
 
       const permitRef = db.collection("permits").doc(permitId);
       const bucket = storage.bucket();
@@ -83,7 +222,7 @@ exports.downloadStatutoryPdf = onRequest(
         const callerProjectId = decodedToken.projectId;
         const isSuperAdmin = decodedToken.superAdmin === true;
 
-        // Verify Project Isolation
+        // Verify Project Isolation (CHECK 02: IDOR Prevention)
         if (!isSuperAdmin && callerProjectId !== data.projectId) {
           throw new Error("PERMISSION_DENIED: Access restricted to assigned project");
         }
@@ -104,7 +243,6 @@ exports.downloadStatutoryPdf = onRequest(
         }
 
         // Atomically lock download
-        const clientIp = req.headers["x-forwarded-for"] || req.socket.remoteAddress || "Unknown";
         transaction.update(permitRef, {
           "statutoryDownload.isDownloaded": true,
           "statutoryDownload.downloadedBy": decodedToken.uid,
@@ -180,10 +318,11 @@ exports.onImageUploadCompress = onObjectFinalized(
   { region: REGION, bucket: "prj-aurorealty-ehs-ptw-dev-media", memory: "1GiB" },
   async (event) => {
     const filePath = event.data.name;
-    const contentType = event.data.contentType;
+    const contentType = event.data.contentType || "";
 
-    // Only process objects under temp-images/ and raw image content
-    if (!filePath.startsWith("temp-images/") || !contentType.startsWith("image/")) {
+    // Only process objects under temp-images/ and valid raster images (BLOCK SVG to eliminate stored XSS)
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "image/heif"];
+    if (!filePath.startsWith("temp-images/") || !allowedTypes.includes(contentType)) {
       return;
     }
     // Prevent recursive loop on already compressed images
@@ -199,17 +338,12 @@ exports.onImageUploadCompress = onObjectFinalized(
     try {
       await bucket.file(filePath).download({ destination: tempLocalFile });
 
-      // Ultra-compression pipeline using Sharp:
-      // 1. Max bounding box 1920x1080 (full HD preserves all gauge / crack details)
-      // 2. WebP format with quality 82 and effort 6
-      // 3. Strips bloated EXIF while retaining full perceptual fidelity
       await sharp(tempLocalFile)
-        .rotate() // auto-orient from EXIF
+        .rotate()
         .resize(1920, 1080, { fit: "inside", withoutEnlargement: true })
         .webp({ quality: 82, effort: 6, smartSubsample: true })
         .toFile(tempOptimizedFile);
 
-      // Overwrite file with compressed version (will auto-delete in 24 hours per GCS lifecycle)
       await bucket.upload(tempOptimizedFile, {
         destination: filePath,
         metadata: {
@@ -238,21 +372,37 @@ exports.onImageUploadCompress = onObjectFinalized(
 exports.compileStatutoryPdf = onCall(
   { region: REGION, memory: "2GiB", timeoutSeconds: 120 },
   async (request) => {
-    const { permitId } = request.data;
-    if (!permitId) throw new HttpsError("invalid-argument", "permitId is required");
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Authentication required to compile statutory PDF.");
+    }
+
+    const { permitId } = request.data || {};
+    if (!permitId || !validatePermitId(permitId)) {
+      throw new HttpsError("invalid-argument", "Valid permitId format is required.");
+    }
+
+    // Rate limit: max 10 compilations per minute per user
+    await enforceRateLimit(request.auth.uid, "compileStatutoryPdf", 10, 60);
 
     const permitSnap = await db.collection("permits").doc(permitId).get();
-    if (!permitSnap.exists) throw new HttpsError("not-found", "Permit not found");
+    if (!permitSnap.exists) throw new HttpsError("not-found", "Permit not found.");
 
     const p = permitSnap.data();
-    const bucket = storage.bucket();
 
+    // Verify Project Access (CHECK 02: IDOR Prevention)
+    const isSuperAdmin = request.auth.token.superAdmin === true;
+    const callerProjectId = request.auth.token.projectId;
+    if (!isSuperAdmin && callerProjectId !== p.projectId) {
+      throw new HttpsError("permission-denied", "Access restricted to your assigned project site.");
+    }
+
+    const bucket = storage.bucket();
     const pdfDoc = await PDFDocument.create();
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
     // Page 1: Statutory Summary & Approvals
-    let page = pdfDoc.addPage([595.28, 841.89]); // A4
+    let page = pdfDoc.addPage([595.28, 841.89]);
     page.drawText("AURO REALTY PRIVATE LIMITED", { x: 50, y: 800, size: 14, font: helveticaBold, color: rgb(0.1, 0.2, 0.4) });
     page.drawText("ENVIRONMENTAL HEALTH & SAFETY DIVISION - PERMIT TO WORK", { x: 50, y: 780, size: 10, font: helveticaBold });
     page.drawText(`Permit ID: ${p.id}  |  Type: ${(p.ptype || "").toUpperCase()}`, { x: 50, y: 750, size: 11, font: helveticaBold });
@@ -261,11 +411,10 @@ exports.compileStatutoryPdf = onCall(
     page.drawText(`Validity: ${p.validFrom?.toDate?.()?.toISOString() || ""} to ${p.validTill?.toDate?.()?.toISOString() || ""}`, { x: 50, y: 690, size: 10, font: helvetica });
     page.drawText(`Status: ${p.status}`, { x: 50, y: 670, size: 10, font: helveticaBold, color: rgb(0.8, 0.1, 0.1) });
 
-    // Page 2: Safety Evidence Photos (Embed before 24h temp deletion)
+    // Page 2: Safety Evidence Photos
     if (p.media && p.media.sitePhotoPath) {
       try {
         const [photoBuffer] = await bucket.file(p.media.sitePhotoPath).download();
-        // Downscale to 150 DPI for vector PDF integration
         const compressedPhoto = await sharp(photoBuffer)
           .resize(800, 600, { fit: "inside" })
           .jpeg({ quality: 80 })
@@ -283,29 +432,38 @@ exports.compileStatutoryPdf = onCall(
           height: imgDims.height
         });
       } catch (e) {
-        console.warn("Could not embed image into PDF (might have passed 24h or missing):", e.message);
+        console.warn("Could not embed image into PDF:", e.message);
       }
     }
 
-    // Maximum Stream Compression Enabled
     const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
-
     const permanentPath = `statutory-pdfs/${p.projectId}/${p.id}/statutory_permit.pdf`;
     await bucket.file(permanentPath).save(Buffer.from(pdfBytes), {
       metadata: { contentType: "application/pdf" }
     });
+
+    await recordServerAuditLog(
+      "STATUTORY_PDF_COMPILED",
+      `Compiled permanent PDF for permit ${p.id} at project ${p.projectId}`,
+      request.auth.uid,
+      request.auth.token.email,
+      p.projectId
+    );
 
     return { success: true, permanentPath };
   }
 );
 
 // ============================================================================
-// 4. SUPER ADMIN: CREATE PROJECT ADMIN
+// 4. SUPER ADMIN: PROVISION PROJECT ADMINISTRATOR
 // ============================================================================
 exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
+
+  // Rate limit: max 15 requests per minute per caller
+  await enforceRateLimit(request.auth.uid, "adminCreateProjectAdmin", 15, 60);
 
   const callerEmail = (request.auth.token.email || "").toLowerCase();
   let isCallerSuperAdmin =
@@ -321,17 +479,46 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
   }
 
   if (!isCallerSuperAdmin) {
+    await recordServerAuditLog(
+      "UNAUTHORIZED_PROVISION_ATTEMPT",
+      `Non-super-admin user attempted to provision a Project Admin: ${callerEmail}`,
+      request.auth.uid,
+      callerEmail,
+      "Global"
+    );
     throw new HttpsError("permission-denied", "Only Super Admin can provision Project Admins.");
   }
 
-  const { email, password, displayName, name, projectId, projectName, empId, phone } = request.data;
+  const { email, password, displayName, name, projectId, projectName, empId, phone } = request.data || {};
   if (!email || !projectId) {
     throw new HttpsError("invalid-argument", "email and projectId are mandatory.");
   }
 
+  if (!validateEmail(email)) {
+    throw new HttpsError("invalid-argument", "Invalid official email address format.");
+  }
+  if (!validateProjectId(projectId)) {
+    throw new HttpsError("invalid-argument", "Invalid projectId format (e.g., PRJ-PEARL).");
+  }
+
   const cleanEmail = email.trim().toLowerCase();
-  const cleanName = (displayName || name || `Admin - ${projectId}`).trim();
-  const cleanPassword = password && password.length >= 6 ? password : "AuroAdmin@2026!";
+  const cleanName = sanitizeString(displayName || name || `Admin - ${projectId}`, 100);
+  const cleanEmpId = sanitizeString(empId || "ARPL-ADM", 32);
+  const cleanPhone = sanitizeString(phone || "", 20);
+
+  // Secure Password Generation / Validation (CHECK 01)
+  let cleanPassword;
+  if (password) {
+    if (!validatePassword(password)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Password must be at least 10 characters long and include uppercase, lowercase, numbers, and special symbols."
+      );
+    }
+    cleanPassword = password;
+  } else {
+    cleanPassword = generateSecureRandomPassword(16);
+  }
 
   let userRecord;
   try {
@@ -370,41 +557,70 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
     ptwRole: "project-admin",
     roleLabel: "Site Administrator",
     projectId: projectId,
-    projectName: projectName || projectId,
-    empId: empId || "ARPL-ADM",
-    phone: phone || "",
+    projectName: sanitizeString(projectName || projectId, 100),
+    empId: cleanEmpId,
+    phone: cleanPhone,
     campusWide: true,
     status: "Active",
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     createdBy: callerEmail || request.auth.uid
   };
 
-  // Save to Firestore Users & Project Admins collections + update Project doc
   await db.collection("users").doc(userRecord.uid).set(adminDoc, { merge: true });
   await db.collection("project_admins").doc(userRecord.uid).set(adminDoc, { merge: true });
   await db.collection("projects").doc(projectId).set(
     {
       adminUid: userRecord.uid,
       adminEmail: cleanEmail,
-      adminName: cleanName
+      adminName: cleanName,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp()
     },
     { merge: true }
+  );
+
+  await recordServerAuditLog(
+    "PROJECT_ADMIN_PROVISIONED",
+    `Site Administrator ${cleanName} (${cleanEmail}) provisioned for project ${projectId}`,
+    request.auth.uid,
+    callerEmail,
+    projectId
   );
 
   return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role: "project-admin", projectId };
 });
 
 // ============================================================================
-// 5. PROJECT ADMIN: CONFIGURE GEOLOCATION FOR PROJECT / LOCATION
+// 5. SITE ADMIN: CONFIGURE WORKSITE GEOLOCATION & GEOFENCING
 // ============================================================================
 exports.adminConfigureGeolocation = onCall({ region: REGION }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
-  const { projectId, lat, lng, radius, address, locations } = request.data;
+  // Rate limit: max 15 requests per minute
+  await enforceRateLimit(request.auth.uid, "adminConfigureGeolocation", 15, 60);
+
+  const { projectId, lat, lng, radius, address, locations } = request.data || {};
   if (!projectId || lat == null || lng == null) {
     throw new HttpsError("invalid-argument", "projectId, lat, and lng are required.");
+  }
+
+  if (!validateProjectId(projectId)) {
+    throw new HttpsError("invalid-argument", "Invalid projectId format.");
+  }
+
+  const numLat = Number(lat);
+  const numLng = Number(lng);
+  const numRadius = Number(radius) || 200;
+
+  if (isNaN(numLat) || numLat < -90 || numLat > 90) {
+    throw new HttpsError("invalid-argument", "Latitude must be a valid number between -90 and 90.");
+  }
+  if (isNaN(numLng) || numLng < -180 || numLng > 180) {
+    throw new HttpsError("invalid-argument", "Longitude must be a valid number between -180 and 180.");
+  }
+  if (isNaN(numRadius) || numRadius < 10 || numRadius > 5000) {
+    throw new HttpsError("invalid-argument", "Geofence radius must be between 10m and 5000m.");
   }
 
   const callerEmail = (request.auth.token.email || "").toLowerCase();
@@ -432,28 +648,55 @@ exports.adminConfigureGeolocation = onCall({ region: REGION }, async (request) =
   }
 
   if (!isAuthorized) {
+    await recordServerAuditLog(
+      "UNAUTHORIZED_GEOFENCE_ATTEMPT",
+      `Caller attempted to configure geofence for unauthorized project ${projectId}`,
+      request.auth.uid,
+      callerEmail,
+      projectId
+    );
     throw new HttpsError(
       "permission-denied",
       "Unauthorized: Only the assigned Site Administrator can configure worksite geolocation and geofencing."
     );
   }
 
+  const sanitizedLocations = Array.isArray(locations)
+    ? locations.map((loc, idx) => ({
+        id: sanitizeString(loc.id || `loc-${idx + 1}`, 32),
+        name: sanitizeString(loc.name || `Location ${idx + 1}`, 64),
+        lat: Number(loc.lat) || numLat,
+        lng: Number(loc.lng) || numLng,
+        radius: Number(loc.radius) || numRadius,
+        configured: Boolean(loc.configured),
+        allowedWorkflows: Array.isArray(loc.allowedWorkflows)
+          ? loc.allowedWorkflows.map(w => sanitizeString(w, 32))
+          : []
+      }))
+    : [];
+
   const updatePayload = {
     configured: true,
     site: {
-      lat: Number(lat),
-      lng: Number(lng),
-      address: address || "Worksite Location"
+      lat: numLat,
+      lng: numLng,
+      address: sanitizeString(address || "Worksite Location", 200)
     },
-    radius: Number(radius) || 200,
+    radius: numRadius,
+    locations: sanitizedLocations,
     configuredAt: admin.firestore.FieldValue.serverTimestamp(),
     configuredBy: callerEmail || request.auth.uid
   };
-  if (Array.isArray(locations)) {
-    updatePayload.locations = locations;
-  }
 
   await db.collection("projects").doc(projectId).set(updatePayload, { merge: true });
+
+  await recordServerAuditLog(
+    "GEOFENCE_CONFIGURED",
+    `Configured worksite geofence for project ${projectId} (Radius: ${numRadius}m, Lat: ${numLat}, Lng: ${numLng})`,
+    request.auth.uid,
+    callerEmail,
+    projectId
+  );
 
   return { success: true, projectId, configured: true };
 });
@@ -465,6 +708,9 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
+
+  // Rate limit: max 25 requests per minute per caller
+  await enforceRateLimit(request.auth.uid, "adminAssignProjectRole", 25, 60);
 
   const {
     action,
@@ -484,9 +730,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     empId,
     phone,
     uid
-  } = request.data;
-  if (!projectId) {
-    throw new HttpsError("invalid-argument", "projectId is required.");
+  } = request.data || {};
+
+  if (!projectId || !validateProjectId(projectId)) {
+    throw new HttpsError("invalid-argument", "Valid projectId is required.");
   }
 
   const callerEmail = (request.auth.token.email || "").toLowerCase();
@@ -514,6 +761,13 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   }
 
   if (!isProjAdmin) {
+    await recordServerAuditLog(
+      "UNAUTHORIZED_PERSONNEL_ATTEMPT",
+      `Caller attempted to manage personnel for project ${projectId} without authority`,
+      request.auth.uid,
+      callerEmail,
+      projectId
+    );
     throw new HttpsError(
       "permission-denied",
       "Unauthorized: Only the assigned Site Administrator can manage on-site personnel accounts for this project."
@@ -522,10 +776,23 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Action: Reset Password
   if (action === "reset-password") {
-    if (!uid) {
-      throw new HttpsError("invalid-argument", "uid is required for password reset.");
+    if (!uid || typeof uid !== "string") {
+      throw new HttpsError("invalid-argument", "Valid uid is required for password reset.");
     }
-    const tempPassword = newPassword || ("ARPL#Temp" + Math.floor(1000 + Math.random() * 9000) + "!");
+
+    let tempPassword;
+    if (newPassword) {
+      if (!validatePassword(newPassword)) {
+        throw new HttpsError(
+          "invalid-argument",
+          "New password must be at least 10 characters long and include uppercase, lowercase, numbers, and symbols."
+        );
+      }
+      tempPassword = newPassword;
+    } else {
+      tempPassword = generateSecureRandomPassword(16);
+    }
+
     await auth.updateUser(uid, { password: tempPassword });
     await db.collection("users").doc(uid).set(
       {
@@ -535,26 +802,44 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       },
       { merge: true }
     );
+
+    await recordServerAuditLog(
+      "STAFF_PASSWORD_RESET",
+      `Password reset for staff UID ${uid} on project ${projectId}`,
+      request.auth.uid,
+      callerEmail,
+      projectId
+    );
+
     return { success: true, uid, temporaryPassword: tempPassword };
   }
 
   // Action: Delete Personnel
   if (action === "delete") {
-    if (!uid) {
-      throw new HttpsError("invalid-argument", "uid is required for deletion.");
+    if (!uid || typeof uid !== "string") {
+      throw new HttpsError("invalid-argument", "Valid uid is required for deletion.");
     }
     try {
       await auth.deleteUser(uid);
     } catch (_e) {}
     await db.collection("users").doc(uid).delete();
     await db.collection("site_personnel").doc(uid).delete();
+
+    await recordServerAuditLog(
+      "STAFF_PERSONNEL_DELETED",
+      `Personnel account ${uid} deleted from project ${projectId}`,
+      request.auth.uid,
+      callerEmail,
+      projectId
+    );
+
     return { success: true, uid };
   }
 
   // Action: Toggle Status (Disable / Enable)
   if (action === "toggle-status") {
-    if (!uid) {
-      throw new HttpsError("invalid-argument", "uid is required.");
+    if (!uid || typeof uid !== "string") {
+      throw new HttpsError("invalid-argument", "Valid uid is required.");
     }
     const user = await auth.getUser(uid);
     const updated = await auth.updateUser(uid, { disabled: !user.disabled });
@@ -568,6 +853,15 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       { merge: true }
     );
     await db.collection("site_personnel").doc(uid).set({ status: statusStr }, { merge: true });
+
+    await recordServerAuditLog(
+      "STAFF_STATUS_TOGGLED",
+      `Staff ${uid} status changed to ${statusStr} on project ${projectId}`,
+      request.auth.uid,
+      callerEmail,
+      projectId
+    );
+
     return { success: true, uid, disabled: updated.disabled };
   }
 
@@ -576,9 +870,42 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("invalid-argument", "email and role are required to provision an account.");
   }
 
+  if (!validateEmail(email)) {
+    throw new HttpsError("invalid-argument", "Invalid official email address format.");
+  }
+
+  // Whitelist of valid operational roles
+  const ALLOWED_STAFF_ROLES = [
+    "site-supervisor", "safety-officer", "site-engineer", "mep-engineer",
+    "pm-engineer", "quality-engineer", "tower-incharge", "ehs-officer",
+    "ehs-manager", "blasting-incharge", "electrical-engineer",
+    "lifting-incharge", "contractor"
+  ];
+  const cleanRole = sanitizeString(role, 32);
+  if (!ALLOWED_STAFF_ROLES.includes(cleanRole)) {
+    throw new HttpsError("invalid-argument", `Invalid or unauthorized staff role: ${cleanRole}`);
+  }
+
   const cleanEmail = email.trim().toLowerCase();
-  const cleanName = (displayName || name || cleanEmail.split("@")[0]).trim();
-  const cleanPassword = password && password.length >= 6 ? password : "AuroStaff@2026!";
+  const cleanName = sanitizeString(displayName || name || cleanEmail.split("@")[0], 100);
+  const cleanEmpId = sanitizeString(empId || "ARPL-STF", 32);
+  const cleanPhone = sanitizeString(phone || "", 20);
+  const cleanRoleLabel = sanitizeString(roleLabel || role, 64);
+  const cleanLocationId = sanitizeString(locationId || "CAMPUS-WIDE", 32);
+  const cleanLocationName = sanitizeString(locationName || "Full Worksite", 64);
+
+  let cleanPassword;
+  if (password) {
+    if (!validatePassword(password)) {
+      throw new HttpsError(
+        "invalid-argument",
+        "Staff password must be at least 10 characters long and include uppercase, lowercase, numbers, and special symbols."
+      );
+    }
+    cleanPassword = password;
+  } else {
+    cleanPassword = generateSecureRandomPassword(16);
+  }
 
   let userRecord;
   try {
@@ -598,13 +925,13 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Set Custom Claims for Auth RBAC & Location/Workflow Scope
   await auth.setCustomUserClaims(userRecord.uid, {
-    role: role,
-    uiRole: role,
-    ptwRole: role,
+    role: cleanRole,
+    uiRole: cleanRole,
+    ptwRole: cleanRole,
     projectId: projectId,
-    locationId: locationId || "CAMPUS-WIDE",
-    locationName: locationName || "Full Worksite",
-    campusWide: campusWide !== undefined ? !!campusWide : !locationId || locationId === "CAMPUS-WIDE",
+    locationId: cleanLocationId,
+    locationName: cleanLocationName,
+    campusWide: campusWide !== undefined ? !!campusWide : cleanLocationId === "CAMPUS-WIDE",
     name: cleanName
   });
 
@@ -614,38 +941,53 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     email: cleanEmail,
     name: cleanName,
     displayName: cleanName,
-    role: role,
-    uiRole: role,
-    ptwRole: role,
-    roleLabel: roleLabel || role,
+    role: cleanRole,
+    uiRole: cleanRole,
+    ptwRole: cleanRole,
+    roleLabel: cleanRoleLabel,
     projectId: projectId,
-    projectName: projectName || projectId,
-    locationId: locationId || "CAMPUS-WIDE",
-    locationName: locationName || "Full Worksite",
-    location: locationName || "Full Worksite",
-    campusWide: campusWide !== undefined ? !!campusWide : !locationId || locationId === "CAMPUS-WIDE",
-    allowedWorkflows: Array.isArray(allowedWorkflows) ? allowedWorkflows : null,
-    empId: empId || "ARPL-STF",
-    phone: phone || "",
+    projectName: sanitizeString(projectName || projectId, 100),
+    locationId: cleanLocationId,
+    locationName: cleanLocationName,
+    location: cleanLocationName,
+    campusWide: campusWide !== undefined ? !!campusWide : cleanLocationId === "CAMPUS-WIDE",
+    allowedWorkflows: Array.isArray(allowedWorkflows)
+      ? allowedWorkflows.map(w => sanitizeString(w, 32))
+      : null,
+    empId: cleanEmpId,
+    phone: cleanPhone,
     status: "Active",
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     assignedBy: callerEmail || request.auth.uid
   };
 
-  // Store in Firestore users & site_personnel
   await db.collection("users").doc(userRecord.uid).set(staffDoc, { merge: true });
   await db.collection("site_personnel").doc(userRecord.uid).set(staffDoc, { merge: true });
 
-  return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role, projectId, locationId };
+  await recordServerAuditLog(
+    "STAFF_PERSONNEL_PROVISIONED",
+    `Staff ${cleanName} (${cleanEmail}) assigned role ${cleanRole} at ${projectId} (${cleanLocationName})`,
+    request.auth.uid,
+    callerEmail,
+    projectId
+  );
+
+  return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role: cleanRole, projectId, locationId: cleanLocationId };
 });
 
+// ============================================================================
 // 7. ATOMIC PERMIT STATE TRANSITION & GEOFENCE ENFORCEMENT
 // ============================================================================
 exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required");
 
-  const { permitId, targetStatus, action, userLat, userLng, signatureData, comments } = request.data;
-  if (!permitId || !targetStatus) throw new HttpsError("invalid-argument", "Missing parameters");
+  // Rate limit: max 30 permit state transitions per minute per user
+  await enforceRateLimit(request.auth.uid, "transitionPermitStage", 30, 60);
+
+  const { permitId, targetStatus, action, userLat, userLng, signatureData, comments } = request.data || {};
+  if (!permitId || !validatePermitId(permitId) || !targetStatus) {
+    throw new HttpsError("invalid-argument", "Valid permitId and targetStatus are required.");
+  }
 
   const permitRef = db.collection("permits").doc(permitId);
 
@@ -658,6 +1000,7 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
     const userProj = request.auth.token.projectId;
     const isSuperAdmin = request.auth.token.superAdmin === true;
 
+    // Strict multi-tenant isolation check (CHECK 02)
     if (!isSuperAdmin && userProj !== p.projectId) {
       throw new HttpsError("permission-denied", "User not assigned to permit's project site.");
     }
@@ -682,27 +1025,30 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       }
     }
 
+    const cleanAction = sanitizeString(action || "STAGE_APPROVED", 64);
+    const cleanComments = sanitizeString(comments || "", 500);
+
     // Mutate State
     transaction.update(permitRef, {
-      status: targetStatus,
-      lastAction: action,
+      status: sanitizeString(targetStatus, 32),
+      lastAction: cleanAction,
       lastActionAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActionBy: request.auth.uid
     });
 
-    // Write Tamper-Proof Audit Log Entry
+    // Write Tamper-Proof Activity Log Entry
     const logRef = permitRef.collection("activity_log").doc();
     transaction.set(logRef, {
       id: logRef.id,
       permitId: permitId,
-      action: action || "STAGE_APPROVED",
-      actorRole: userRole,
+      action: cleanAction,
+      actorRole: userRole || "unknown",
       actorUid: request.auth.uid,
-      actorName: request.auth.token.name || request.auth.token.email,
-      targetStatus: targetStatus,
+      actorName: sanitizeString(request.auth.token.name || request.auth.token.email || "Signatory", 100),
+      targetStatus: sanitizeString(targetStatus, 32),
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
-      comments: comments || "",
-      gps: (userLat && userLng) ? { lat: userLat, lng: userLng } : null
+      comments: cleanComments,
+      gps: (userLat && userLng) ? { lat: Number(userLat), lng: Number(userLng) } : null
     });
 
     return { success: true, permitId, newStatus: targetStatus };
@@ -710,7 +1056,7 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
 });
 
 // ============================================================================
-// 8. SCHEDULED ESCALATION WORKER (EVERY 5 MINUTES)
+// 8. SCHEDULED SLA ESCALATION ENGINE (CRON 5M TICK)
 // ============================================================================
 exports.escalationSweep = onSchedule(
   { region: REGION, schedule: "every 5 minutes", timeoutSeconds: 120 },

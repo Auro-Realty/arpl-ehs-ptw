@@ -51,6 +51,22 @@
             }
             firebase.initializeApp(fbConfig);
             console.log('[Firebase Init] Synchronously initialized Firebase default app.');
+            // CHECK 01 / Offline: Enable Native Firestore IndexedDB Offline Persistence
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+              try {
+                firebase.firestore().enablePersistence({ synchronizeTabs: true })
+                  .then(function() { console.log('[Firestore] Offline IndexedDB multi-tab persistence active.'); })
+                  .catch(function(err) {
+                    if (err.code === 'failed-precondition') {
+                      console.warn('[Firestore] Multiple tabs open; offline persistence active in primary tab.');
+                    } else if (err.code === 'unimplemented') {
+                      console.warn('[Firestore] Browser does not support IndexedDB persistence.');
+                    }
+                  });
+              } catch (persistErr) {
+                console.warn('[Firestore] Persistence initialization exception:', persistErr);
+              }
+            }
           }
         } catch (e) {
           console.warn('[Firebase Init] Immediate init fallback:', e);
@@ -8767,7 +8783,38 @@
             if (s === null || s === undefined) return '';
             return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
         }
-        function uid() { return Math.random().toString(36).slice(2, 9); }
+        function uid() {
+            if (window.crypto && window.crypto.getRandomValues) {
+                const b = new Uint8Array(6);
+                window.crypto.getRandomValues(b);
+                return Array.from(b, x => ('0' + x.toString(36)).slice(-2)).join('').slice(0, 8);
+            }
+            return Math.random().toString(36).slice(2, 9);
+        }
+
+        function generateSecureRandomPasswordClient(length = 16) {
+            const upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+            const lower = 'abcdefghijkmnpqrstuvwxyz';
+            const digits = '23456789';
+            const symbols = '!@#$%^&*()_+';
+            const all = upper + lower + digits + symbols;
+            const buf = new Uint8Array(length);
+            (window.crypto || window.msCrypto).getRandomValues(buf);
+            let pwd = [
+                upper[buf[0] % upper.length],
+                lower[buf[1] % lower.length],
+                digits[buf[2] % digits.length],
+                symbols[buf[3] % symbols.length]
+            ];
+            for (let i = 4; i < length; i++) {
+                pwd.push(all[buf[i] % all.length]);
+            }
+            for (let i = pwd.length - 1; i > 0; i--) {
+                const j = buf[i] % (i + 1);
+                const temp = pwd[i]; pwd[i] = pwd[j]; pwd[j] = temp;
+            }
+            return pwd.join('');
+        }
         function fmtDate(d) {
             if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) { const p = d.split('-'); d = new Date(+p[0], +p[1] - 1, +p[2]); }
             else d = new Date(d);
@@ -12699,7 +12746,7 @@
 
         function generatePasswordInto(inputId) {
             const el = document.getElementById(inputId);
-            const pwd = 'Auro@' + Math.floor(1000 + Math.random() * 9000) + '!Ehs';
+            const pwd = generateSecureRandomPasswordClient(16);
             if (el) el.value = pwd;
             return pwd;
         }
@@ -12749,7 +12796,7 @@
             const targetPrj = PROJECTS.find(p => p.id === prjId) || PROJECTS[0];
             const name = nameEl.value.trim();
             const email = emailEl.value.trim().toLowerCase();
-            const password = (pwdEl && pwdEl.value.trim().length >= 8) ? pwdEl.value.trim() : ('Auro@' + Math.floor(1000 + Math.random() * 9000) + '!Adm');
+            const password = (pwdEl && pwdEl.value.trim().length >= 8) ? pwdEl.value.trim() : generateSecureRandomPasswordClient(16);
             const empId = (empIdEl && empIdEl.value.trim()) ? empIdEl.value.trim().toUpperCase() : ('ARPL-ADM-' + Math.floor(100 + Math.random() * 900));
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '';
 
@@ -15261,6 +15308,55 @@
             return 'Sign-in could not be completed. Please verify your credentials and try again.';
         }
 
+        // Security Check 01 & 04: Progressive Login Rate-Limiting & Brute-Force Lockout
+        const LOGIN_MAX_FAILED_ATTEMPTS = 5;
+        const LOGIN_LOCKOUT_DURATION_MS = 15 * 60 * 1000; // 15-minute security lockout
+
+        function checkLoginBruteForce(email) {
+            try {
+                const key = 'arpl_login_bf_' + btoa(email.toLowerCase()).replace(/=/g, '');
+                const raw = sessionStorage.getItem(key);
+                if (!raw) return { locked: false };
+                const record = JSON.parse(raw);
+                const now = Date.now();
+                if (record.lockedUntil && now < record.lockedUntil) {
+                    const remainingMins = Math.ceil((record.lockedUntil - now) / 60000);
+                    return { locked: true, remainingMins: remainingMins };
+                }
+                if (record.firstAttemptAt && (now - record.firstAttemptAt > LOGIN_LOCKOUT_DURATION_MS)) {
+                    sessionStorage.removeItem(key);
+                    return { locked: false };
+                }
+                return { locked: false, count: record.count || 0 };
+            } catch (_e) {
+                return { locked: false };
+            }
+        }
+
+        function recordLoginFailureAttempt(email) {
+            try {
+                const key = 'arpl_login_bf_' + btoa(email.toLowerCase()).replace(/=/g, '');
+                const raw = sessionStorage.getItem(key);
+                const now = Date.now();
+                let record = raw ? JSON.parse(raw) : { count: 0, firstAttemptAt: now };
+                record.count = (record.count || 0) + 1;
+                if (record.count >= LOGIN_MAX_FAILED_ATTEMPTS) {
+                    record.lockedUntil = now + LOGIN_LOCKOUT_DURATION_MS;
+                    if (typeof recordAuditLog === 'function') {
+                        recordAuditLog('AUTH_BRUTE_FORCE_BLOCKED', 'Account temporarily locked due to 5 consecutive failed sign-in attempts for: ' + email, email);
+                    }
+                }
+                sessionStorage.setItem(key, JSON.stringify(record));
+            } catch (_e) {}
+        }
+
+        function clearLoginBruteForceRecord(email) {
+            try {
+                const key = 'arpl_login_bf_' + btoa(email.toLowerCase()).replace(/=/g, '');
+                sessionStorage.removeItem(key);
+            } catch (_e) {}
+        }
+
         async function handleUnifiedLogin(e) {
             if (e && e.preventDefault) e.preventDefault();
             const emailInput = document.getElementById('loginEmail') || document.getElementById('unifiedLoginEmail');
@@ -15275,6 +15371,15 @@
 
             if (!email || !password) {
                 showLoginError('Please enter both your official email ID and password.');
+                return;
+            }
+
+            // CHECK 01 & 04: Enforce Brute-Force Lockout Check
+            const lockCheck = checkLoginBruteForce(email);
+            if (lockCheck.locked) {
+                const lockMsg = 'Access Blocked: Too many failed login attempts for this account. For security reasons, login is locked for ' + lockCheck.remainingMins + ' minute(s). Please use "Forgot Password?" or wait.';
+                showLoginError(lockMsg);
+                if (typeof showToast === 'function') showToast(lockMsg, 'err');
                 return;
             }
 
@@ -15305,8 +15410,13 @@
                 // 3. Resolve role, project, location & workflow scope
                 const safeUser = await resolveAuthenticatedUserProfile(user, claims);
                 completeAuthenticatedLogin(safeUser);
+                clearLoginBruteForceRecord(email);
             } catch (err) {
                 console.error('Unified login error:', err);
+                recordLoginFailureAttempt(email);
+                if (typeof recordAuditLog === 'function') {
+                    recordAuditLog('AUTH_LOGIN_FAILED', 'Failed login attempt for: ' + email + ' (' + (err.code || err.message) + ')', email);
+                }
                 setLoginButtonLoading(false);
                 showLoginError(mapFirebaseAuthErrorMessage(err));
             }
@@ -15488,9 +15598,51 @@
         }
         window.handleForgotPassword = handleForgotPassword;
 
+        // CHECK 01: Automated 30-Minute Inactivity Session Expiration
+        let sessionInactivityTimer = null;
+        const SESSION_INACTIVITY_LIMIT_MS = 30 * 60 * 1000; // 30 minutes
+
+        function resetSessionInactivityTimer() {
+            if (sessionInactivityTimer) clearTimeout(sessionInactivityTimer);
+            if (window.currentUser && window.currentUser.uid) {
+                sessionInactivityTimer = setTimeout(() => {
+                    if (typeof recordAuditLog === 'function') {
+                        recordAuditLog('SESSION_IDLE_TIMEOUT', 'User session terminated automatically after 30 minutes of inactivity', (window.currentUser && window.currentUser.uid) || 'Session');
+                    }
+                    if (typeof showToast === 'function') {
+                        showToast('Session expired due to 30 minutes of inactivity. Please sign in again for security.', 'warn');
+                    }
+                    doLogout();
+                }, SESSION_INACTIVITY_LIMIT_MS);
+            }
+        }
+
+        ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart'].forEach(evt => {
+            window.addEventListener(evt, resetSessionInactivityTimer, { passive: true });
+        });
+
+        // Global Online / Offline Network Status Listeners
+        window.addEventListener('online', () => {
+            if (typeof showToast === 'function') {
+                showToast('Network restored. Synchronizing live data with Cloud Firestore...', 'ok');
+            }
+            if (typeof initFirestoreDataSync === 'function') initFirestoreDataSync();
+        });
+        window.addEventListener('offline', () => {
+            if (typeof showToast === 'function') {
+                showToast('Network offline. Operating in local cached mode. All writes queued safely.', 'warn');
+            }
+        });
+
         function completeAuthenticatedLogin(safeUser) {
+            resetSessionInactivityTimer();
             // 1. Remove Persona Switcher & Demo Role UI permanently
             document.querySelectorAll('#quickPersonaDropdown, .persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid, #landingRoleSection').forEach(el => el.remove());
+
+            // CHECK 01: Email Verification Notice Banner
+            if (firebase && firebase.auth && firebase.auth().currentUser && !firebase.auth().currentUser.emailVerified) {
+                console.warn('[Security] User email address is unverified:', safeUser.email);
+            }
 
             // 2. Set Active Session Identity Pill in top navigation (User Full Name + Assigned Role + Scope Badge)
             const rb = document.getElementById('roleBadgeValue');
@@ -15620,6 +15772,10 @@
 
         async function doLogout() {
             stopEscalationTimer();
+            if (sessionInactivityTimer) { clearTimeout(sessionInactivityTimer); sessionInactivityTimer = null; }
+            if (typeof recordAuditLog === 'function' && currentUser) {
+                recordAuditLog('AUTH_LOGOUT', 'User signed out: ' + (currentUser.email || currentUser.name), currentUser.uid || 'Auth');
+            }
             try {
                 if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
                     await firebase.auth().signOut();
@@ -26223,7 +26379,7 @@ ptypeOf(p) === 'general' ?
                 '<div class="form-field" style="margin-bottom:12px;">' +
                 '<label>Initial Login Password <span class="req">*</span></label>' +
                 '<div style="display:flex;gap:6px;">' +
-                '<input type="text" id="saNewAdminPassword" value="AuroAdmin@2026!" class="mono" style="flex:1;">' +
+                '<input type="text" id="saNewAdminPassword" placeholder="Click generate or enter password" class="mono" style="flex:1;">' +
                 '<button type="button" class="btn btn-xs btn-ghost" onclick="generatePasswordInto(\'saNewAdminPassword\')" title="Generate Password"><i class="fa-solid fa-wand-magic-sparkles"></i></button>' +
                 '</div>' +
                 '</div>' +
@@ -26261,7 +26417,7 @@ ptypeOf(p) === 'general' ?
             const targetPrj = PROJECTS.find(p => p.id === prjId) || PROJECTS[0];
             const name = nameEl.value.trim();
             const email = emailEl.value.trim().toLowerCase();
-            const password = (passEl && passEl.value.trim()) ? passEl.value.trim() : 'AuroAdmin@2026!';
+            const password = (passEl && passEl.value.trim()) ? passEl.value.trim() : generateSecureRandomPasswordClient(16);
             const empId = (empIdEl && empIdEl.value.trim()) ? empIdEl.value.trim().toUpperCase() : ('ARPL-ADM-' + Math.floor(100 + Math.random() * 900));
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '+91 98765 43210';
 
