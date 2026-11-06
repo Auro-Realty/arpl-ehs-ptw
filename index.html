@@ -51,21 +51,41 @@
             }
             firebase.initializeApp(fbConfig);
             console.log('[Firebase Init] Synchronously initialized Firebase default app.');
-            // CHECK 01 / Offline: Enable Native Firestore IndexedDB Offline Persistence
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-              try {
-                firebase.firestore().enablePersistence({ synchronizeTabs: true })
-                  .then(function() { console.log('[Firestore] Offline IndexedDB multi-tab persistence active.'); })
-                  .catch(function(err) {
-                    if (err.code === 'failed-precondition') {
-                      console.warn('[Firestore] Multiple tabs open; offline persistence active in primary tab.');
-                    } else if (err.code === 'unimplemented') {
-                      console.warn('[Firestore] Browser does not support IndexedDB persistence.');
-                    }
+          }
+
+          // Native Firestore Offline IndexedDB Persistence & Unlimited Cache Engine
+          if (typeof firebase !== 'undefined' && firebase.firestore) {
+            try {
+              var dbInstance = firebase.firestore();
+              if (dbInstance && dbInstance.settings) {
+                try {
+                  dbInstance.settings({
+                    cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+                    merge: true
                   });
-              } catch (persistErr) {
-                console.warn('[Firestore] Persistence initialization exception:', persistErr);
+                } catch (_setErr) {}
               }
+              dbInstance.enablePersistence({ synchronizeTabs: true })
+                .then(function() {
+                  console.log('[Firestore] Native IndexedDB multi-tab offline persistence active.');
+                  window.__FIRESTORE_PERSISTENCE_ACTIVE__ = true;
+                  if (typeof updateConnectivityUI === 'function') {
+                    updateConnectivityUI(navigator.onLine);
+                  }
+                })
+                .catch(function(err) {
+                  if (err.code === 'failed-precondition') {
+                    console.warn('[Firestore] Multiple tabs open; offline persistence active in primary tab.');
+                    window.__FIRESTORE_PERSISTENCE_ACTIVE__ = true;
+                  } else if (err.code === 'unimplemented') {
+                    console.warn('[Firestore] Browser does not support IndexedDB persistence.');
+                    window.__FIRESTORE_PERSISTENCE_ACTIVE__ = false;
+                  } else {
+                    console.warn('[Firestore] enablePersistence notice:', err);
+                  }
+                });
+            } catch (persistErr) {
+              console.warn('[Firestore] Persistence initialization exception:', persistErr);
             }
           }
         } catch (e) {
@@ -179,6 +199,99 @@
         .highlight-target {
             animation: highlightTargetPulse 2s ease-out;
             scroll-margin-top: 85px;
+        }
+
+        /* Live Connectivity Status Indicator & Offline Banner */
+        .connectivity-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 11px;
+            border-radius: 100px;
+            font-size: 11.5px;
+            font-weight: 700;
+            transition: all 0.25s ease;
+            user-select: none;
+            margin-right: 4px;
+            letter-spacing: 0.2px;
+            cursor: default;
+        }
+        .connectivity-pill.online {
+            background: rgba(0, 129, 96, 0.08);
+            color: #008160;
+            border: 1px solid rgba(0, 129, 96, 0.3);
+        }
+        .connectivity-pill.online .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #008160;
+            box-shadow: 0 0 0 2px rgba(0, 129, 96, 0.2);
+            animation: pulseDot 2.2s infinite ease-in-out;
+        }
+        .connectivity-pill.offline {
+            background: rgba(220, 38, 38, 0.1);
+            color: #DC2626;
+            border: 1px solid rgba(220, 38, 38, 0.35);
+        }
+        .connectivity-pill.offline .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #DC2626;
+            box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.25);
+        }
+        .connectivity-pill.syncing {
+            background: rgba(217, 119, 6, 0.1);
+            color: #B45309;
+            border: 1px solid rgba(217, 119, 6, 0.35);
+        }
+        .connectivity-pill.syncing .conn-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #F59E0B;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.25);
+            animation: pulseDot 1s infinite ease-in-out;
+        }
+        @keyframes pulseDot {
+            0% { transform: scale(0.92); opacity: 0.8; }
+            50% { transform: scale(1.18); opacity: 1; }
+            100% { transform: scale(0.92); opacity: 0.8; }
+        }
+        .offline-banner {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 18px;
+            background: linear-gradient(135deg, #FEF3C7 0%, #FDE68A 100%);
+            border-bottom: 1.5px solid #F59E0B;
+            color: #92400E;
+            font-size: 12px;
+            font-weight: 600;
+            z-index: 950;
+            box-shadow: 0 2px 8px rgba(180, 83, 9, 0.12);
+        }
+        .offline-banner i {
+            font-size: 15px;
+            color: #D97706;
+            flex-shrink: 0;
+        }
+        @media (max-width: 580px) {
+            .connectivity-pill {
+                padding: 3px 7px;
+                font-size: 10.5px;
+                margin-right: 2px;
+            }
+        }
+        @media (max-width: 420px) {
+            .connectivity-pill .conn-text {
+                display: none;
+            }
+            .connectivity-pill {
+                padding: 6px;
+                border-radius: 50%;
+            }
         }
 
         /* Responsive Split-Grid Layouts for Admin & Management Panels */
@@ -5408,6 +5521,12 @@
                     <div class="topbar-sub" id="topbarSub">Overview</div>
                 </div>
                 <div class="topbar-spacer"></div>
+
+                <!-- LIVE CONNECTIVITY STATUS INDICATOR (Native Firestore Offline / Online Sync) -->
+                <div class="connectivity-pill online no-print" id="liveConnectivityPill" title="Live Online: Cloud Firestore Real-time Synchronization Active" aria-live="polite">
+                    <span class="conn-dot" id="connDot"></span>
+                    <span class="conn-text" id="connText">Live Online</span>
+                </div>
                 <div class="topbar-clock no-print" title="Current time — Indian Standard Time"><i
                         class="fa-regular fa-clock"></i>
                     <div>
@@ -5430,6 +5549,13 @@
                         class="fa-solid fa-right-from-bracket"></i>
                     <span class="btn-text">Logout</span></button>
             </div>
+
+            <!-- GLOBAL OFFLINE NOTICE BANNER (Native IndexedDB Persistence Active) -->
+            <div class="offline-banner no-print" id="globalOfflineBanner" style="display:none;" role="alert">
+                <i class="fa-solid fa-wifi-slash"></i>
+                <span><strong>Operating in Offline Mode (Native IndexedDB Active):</strong> Network connection unavailable. All permits, digital signatures, and approvals are safely stored locally with zero data loss, and will automatically synchronize with Cloud Firestore once connectivity is restored.</span>
+            </div>
+
             <div class="content" id="contentRoot">
 
                 <!-- DASHBOARD -->
@@ -15621,18 +15747,65 @@
             window.addEventListener(evt, resetSessionInactivityTimer, { passive: true });
         });
 
+        // Live Connectivity UI Manager (Native Firestore Offline / Online Sync)
+        function updateConnectivityUI(isOnline, isSyncing) {
+            const pill = document.getElementById('liveConnectivityPill');
+            const dot = document.getElementById('connDot');
+            const text = document.getElementById('connText');
+            const banner = document.getElementById('globalOfflineBanner');
+
+            if (isSyncing) {
+                if (pill) {
+                    pill.className = 'connectivity-pill syncing no-print';
+                    pill.title = 'Synchronizing live changes with Cloud Firestore...';
+                }
+                if (text) { text.textContent = 'Syncing...'; }
+                if (banner) { banner.style.display = 'none'; }
+            } else if (isOnline) {
+                if (pill) {
+                    pill.className = 'connectivity-pill online no-print';
+                    pill.title = 'Live Online: Cloud Firestore Real-time Synchronization Active';
+                }
+                if (text) { text.textContent = 'Live Online'; }
+                if (banner) { banner.style.display = 'none'; }
+            } else {
+                if (pill) {
+                    pill.className = 'connectivity-pill offline no-print';
+                    pill.title = 'Offline Mode: Native IndexedDB Persistence Active (Zero Data Loss)';
+                }
+                if (text) { text.textContent = 'Offline (Cached)'; }
+                if (banner) { banner.style.display = 'flex'; }
+            }
+        }
+        window.updateConnectivityUI = updateConnectivityUI;
+
         // Global Online / Offline Network Status Listeners
         window.addEventListener('online', () => {
+            updateConnectivityUI(true, true);
             if (typeof showToast === 'function') {
-                showToast('Network restored. Synchronizing live data with Cloud Firestore...', 'ok');
+                showToast('Network connection restored. Synchronizing live data with Cloud Firestore...', 'ok');
             }
-            if (typeof initFirestoreDataSync === 'function') initFirestoreDataSync();
+            if (typeof initFirestoreDataSync === 'function') {
+                initFirestoreDataSync().finally(() => {
+                    setTimeout(() => updateConnectivityUI(true, false), 1200);
+                });
+            } else {
+                setTimeout(() => updateConnectivityUI(true, false), 1200);
+            }
         });
         window.addEventListener('offline', () => {
+            updateConnectivityUI(false);
             if (typeof showToast === 'function') {
-                showToast('Network offline. Operating in local cached mode. All writes queued safely.', 'warn');
+                showToast('Operating offline. Native IndexedDB persistence active; all writes queued safely.', 'warn');
             }
         });
+
+        // Initialize connectivity state on initial load
+        if (typeof window !== 'undefined') {
+            window.addEventListener('DOMContentLoaded', () => {
+                updateConnectivityUI(navigator.onLine);
+            });
+        }
 
         function completeAuthenticatedLogin(safeUser) {
             resetSessionInactivityTimer();
