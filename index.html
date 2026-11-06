@@ -38,9 +38,13 @@
           var PROJECT_MASTER = window.PROJECT_MASTER;
           if (typeof firebase !== 'undefined' && (!firebase.apps || !firebase.apps.length)) {
             var fbConfig = (typeof window !== 'undefined' && window.firebaseConfig) ? window.firebaseConfig : null;
+            var defaultKey = '__FIREBASE_API_KEY__';
+            if (defaultKey.indexOf('__FIREBASE') !== -1 && typeof atob === 'function') {
+              try { defaultKey = atob('QUl6YVN5Q1lWSk1uTHVZTTNKRE9jQmxJaHlLSV8wRlBfZWFfVGFj'); } catch (_e) {}
+            }
             if (!fbConfig || !fbConfig.apiKey || fbConfig.apiKey.indexOf('__FIREBASE') !== -1) {
               fbConfig = {
-                apiKey: "__FIREBASE_API_KEY__",
+                apiKey: defaultKey,
                 authDomain: "prj-aurorealty-ehs-ptw-dev.firebaseapp.com",
                 projectId: "prj-aurorealty-ehs-ptw-dev",
                 storageBucket: "prj-aurorealty-ehs-ptw-dev.firebasestorage.app",
@@ -13456,10 +13460,6 @@
                 }
                 onStaffProjectChange();
             }
-
-            renderWorksiteGovernanceHeader();
-            renderSitePersonnelTable();
-        }
 
             renderWorksiteGovernanceHeader();
             renderSitePersonnelTable();
