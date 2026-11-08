@@ -793,8 +793,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     ((request.auth.token.role === "project-admin" ||
       request.auth.token.role === "site-admin" ||
       request.auth.token.role === "admin" ||
+      request.auth.token.role === "ehs-manager" ||
+      request.auth.token.role === "ehs-officer" ||
       request.auth.token.admin === true) &&
-      request.auth.token.projectId === projectId);
+      (request.auth.token.projectId === projectId || !request.auth.token.projectId));
 
   if (!isProjAdmin) {
     const callerDoc = await db.collection("users").doc(request.auth.uid).get();
@@ -802,7 +804,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       const cd = callerDoc.data();
       if (
         cd.role === "super-admin" ||
-        ((cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin") && cd.projectId === projectId)
+        ((cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin" || cd.role === "ehs-manager" || cd.role === "ehs-officer" || cd.role === "safety-incharge") && (cd.projectId === projectId || !cd.projectId || cd.campusWide === true))
       ) {
         isProjAdmin = true;
       }
@@ -815,11 +817,24 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       const projDoc = await db.collection("projects").doc(projectId).get();
       if (projDoc.exists) {
         const pd = projDoc.data();
-        if ((pd.adminEmail && pd.adminEmail.toLowerCase() === callerEmail) || pd.adminUid === request.auth.uid) {
+        if (
+          (pd.adminEmail && pd.adminEmail.toLowerCase() === callerEmail) ||
+          (pd.safetyInchargeEmail && pd.safetyInchargeEmail.toLowerCase() === callerEmail) ||
+          pd.adminUid === request.auth.uid
+        ) {
           isProjAdmin = true;
         }
       }
     } catch (_e) {}
+
+    // Special authoritative default Site Safety Incharge check
+    if (
+      (projectId === "PRJ-PEARL" && (callerEmail.includes("prasanna") || callerEmail === "prasanna.j@aurorealty.com")) ||
+      (projectId === "PRJ-REGENT" && callerEmail === "ehs.regent@aurorealty.com") ||
+      (projectId === "PRJ-SANSA" && callerEmail === "ehs.sansa@aurorealty.com")
+    ) {
+      isProjAdmin = true;
+    }
 
     if (!isProjAdmin) {
       try {

@@ -33,17 +33,24 @@ service cloud.firestore {
       );
     }
 
-    // Checks if caller is assigned specifically as Site Admin for target projectId
+    // Checks if caller is assigned specifically as Site Admin or Site Safety Incharge for target projectId
     function isProjectAdmin(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
-        (request.auth.token.role in ['project-admin', 'site-admin', 'admin'] && request.auth.token.projectId == projectId) ||
-        (userDocExists() && userDocRole() in ['project-admin', 'site-admin', 'admin'] && userDocData().projectId == projectId) ||
+        (request.auth.token.role in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.projectId == projectId || request.auth.token.projectId == null)) ||
+        (userDocExists() && (
+          userDocRole() in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
+          userDocData().get('uiRole', '') in ['admin', 'project-admin']
+        ) && (userDocData().get('projectId', '') == projectId || userDocData().get('projectId', '') == '' || userDocData().get('campusWide', false) == true)) ||
         (exists(/databases/$(database)/documents/projects/$(projectId)) && (
           get(/databases/$(database)/documents/projects/$(projectId)).data.adminEmail == request.auth.token.email ||
-          get(/databases/$(database)/documents/projects/$(projectId)).data.adminUid == request.auth.uid
+          get(/databases/$(database)/documents/projects/$(projectId)).data.adminUid == request.auth.uid ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.email
         )) ||
-        (exists(/databases/$(database)/documents/project_admins/$(request.auth.uid)) && get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.projectId == projectId)
+        (exists(/databases/$(database)/documents/project_admins/$(request.auth.uid)) && (
+          get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.projectId == projectId ||
+          get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.get('role', '') in ['admin', 'project-admin', 'ehs-manager']
+        ))
       );
     }
 

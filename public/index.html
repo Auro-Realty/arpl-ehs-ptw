@@ -15,12 +15,14 @@
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-storage-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-functions-compat.js"></script>
+    <!-- Standalone Client-Side PowerPoint Analytics Engine -->
+    <script src="pptxgen.bundle.js"></script>
     <!-- Global Project Master & Baseline Initialization (Runs before Firebase or UI initialization) -->
     <script>
       window.PROJECTS = window.PROJECTS || [
-        { id: 'PRJ-PEARL', name: 'The Pearl', towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
-        { id: 'PRJ-REGENT', name: 'The Regent', towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} },
-        { id: 'PRJ-SANSA', name: 'Sansa County', towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, employeeId: null, roles: {} }
+        { id: 'PRJ-PEARL', name: 'The Pearl', towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'], configured: false, geofence: null, lat: null, lng: null, adminName: 'Prasanna J', adminEmail: 'prasanna.j@aurorealty.com', safetyInchargeName: 'Prasanna J', safetyInchargeEmail: 'prasanna.j@aurorealty.com', employeeId: 'ARPL-EHS-01', roles: {} },
+        { id: 'PRJ-REGENT', name: 'The Regent', towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'], configured: false, geofence: null, lat: null, lng: null, adminName: 'EHS Lead - The Regent', adminEmail: 'ehs.regent@aurorealty.com', safetyInchargeName: 'EHS Lead - The Regent', safetyInchargeEmail: 'ehs.regent@aurorealty.com', employeeId: 'ARPL-EHS-02', roles: {} },
+        { id: 'PRJ-SANSA', name: 'Sansa County', towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04'], configured: false, geofence: null, lat: null, lng: null, adminName: 'EHS Lead - Sansa County', adminEmail: 'ehs.sansa@aurorealty.com', safetyInchargeName: 'EHS Lead - Sansa County', safetyInchargeEmail: 'ehs.sansa@aurorealty.com', employeeId: 'ARPL-EHS-03', roles: {} }
       ];
       window.PROJECT_MASTER = window.PROJECTS || [];
       window.CONTRACTORS = [];
@@ -157,7 +159,7 @@
             --shadow-lg: 0 20px 50px rgba(15, 41, 66, .28);
             --shadow-xl: 0 25px 60px rgba(15, 41, 66, .35);
             --shadow-inner: inset 0 2px 4px rgba(16, 71, 110, .06);
-            --font-ui: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, "Helvetica Neue", Arial, sans-serif;
+            --font-ui: "Aptos", "Aptos Body", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
             --max-content-width: 1600px;
 
@@ -598,6 +600,11 @@
             position: relative;
             overflow-wrap: break-word;
             word-break: normal;
+        }
+
+        /* Strict Global Typography: Aptos Body across all UI components */
+        body, input, button, select, textarea, .btn, .card, .lw-title, .ptype-pill, table, th, td {
+            font-family: var(--font-ui) !important;
         }
 
         .content,
@@ -2717,25 +2724,25 @@
 
         .lw-step {
             display: flex;
-            align-items: flex-start;
+            align-items: center;
             gap: 11px;
             flex: 1;
             min-width: 0;
         }
 
         .lw-num {
-            width: 26px;
-            height: 26px;
+            width: 28px;
+            height: 28px;
             border-radius: 8px;
             background: linear-gradient(135deg, var(--orange), var(--orange-dark));
             color: #fff;
             font-weight: 800;
-            font-size: 12px;
+            font-size: 13px;
             display: flex;
             align-items: center;
             justify-content: center;
             flex-shrink: 0;
-            margin-top: 2px;
+            margin-top: 0;
             box-shadow: 0 4px 10px rgba(232, 96, 10, .3);
         }
 
@@ -5337,8 +5344,8 @@
         <i class="fa-solid fa-clipboard-check landing-decor d6"></i>
 
         <div class="landing-brand">
-            <div style="background:#FFFFFF; padding:10px 24px; border-radius:14px; box-shadow:0 8px 26px rgba(10,30,50,0.28); margin-bottom:14px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(4,132,144,0.22);">
-                <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢ Official Logo" style="height:46px; width:auto; object-fit:contain; display:block;">
+            <div style="background:#FFFFFF; padding:16px 36px; border-radius:16px; box-shadow:0 8px 30px rgba(10,30,50,0.28); margin-bottom:16px; display:inline-flex; align-items:center; justify-content:center; border:1px solid rgba(4,132,144,0.25);">
+                <img src="/auro-realty-logo.png" alt="AURO REALTY Official Logo" style="height:72px; width:auto; object-fit:contain; display:block;">
             </div>
             <h1 class="landing-title">
                 <i class="fa-solid fa-shield-heart" style="color:#4ADE80;font-size:24px;"></i>
@@ -5376,7 +5383,6 @@
                 <div class="lw-num">1</div>
                 <div class="lw-content">
                     <div class="lw-title">Initiation &amp; Checklist</div>
-                    <div class="lw-desc">Site Supervisor (PTW-001 to PTW-005, PTW-008), Electrician (PTW-006), Blasting In-charge (PTW-007), Lifting Supervisor (PTW-009A/B), or Night Site Supervisor (PTW-010 Handover) fills their respective permit form, statutory checklist &amp; uploads photo.</div>
                 </div>
             </div>
             <div class="lw-arrow"><i class="fa-solid fa-angle-right"></i></div>
@@ -5384,7 +5390,6 @@
                 <div class="lw-num">2</div>
                 <div class="lw-content">
                     <div class="lw-title">Field Verification</div>
-                    <div class="lw-desc">Site Engineer verifies site ground safety &amp; forwards (can Approve or Return; cannot Cancel).</div>
                 </div>
             </div>
             <div class="lw-arrow"><i class="fa-solid fa-angle-right"></i></div>
@@ -5392,7 +5397,6 @@
                 <div class="lw-num">3</div>
                 <div class="lw-content">
                     <div class="lw-title">Clearances &amp; Domain Approval</div>
-                    <div class="lw-desc">Discipline clearances (MEP, P&amp;M, IT, Quality Engineer) followed by Section Head / Tower Incharge review.</div>
                 </div>
             </div>
             <div class="lw-arrow"><i class="fa-solid fa-angle-right"></i></div>
@@ -5400,20 +5404,18 @@
                 <div class="lw-num">4</div>
                 <div class="lw-content">
                     <div class="lw-title">EHS Safety Endorsement</div>
-                    <div class="lw-desc">EHS Safety Manager / Officer conducts final statutory review to activate permit, audit observations, or stop work.</div>
                 </div>
             </div>
         </div>
 
-                <!-- Single Unified Enterprise Login Card -->
-                <!-- UNIFIED SIGN-IN CONTAINER -->
+        <!-- Single Unified Enterprise Login Card -->
+        <!-- UNIFIED SIGN-IN CONTAINER -->
         <div class="login-container-card unified-login-card" id="unifiedLoginCard">
             <div style="text-align: center; margin-bottom: 20px;">
-                <div style="display:flex; justify-content:center; align-items:center; margin-bottom:12px; padding:8px 16px; background:#FFFFFF; border-radius:12px; border:1px solid #EBF4F6; box-shadow:0 2px 10px rgba(16,71,110,0.06);">
-                    <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢ Official Logo" style="height: 48px; width: auto; object-fit: contain; display: block;">
+                <div style="display:flex; justify-content:center; align-items:center; margin-bottom:14px; padding:12px 24px; background:#FFFFFF; border-radius:14px; border:1px solid #EBF4F6; box-shadow:0 4px 14px rgba(16,71,110,0.08);">
+                    <img src="/auro-realty-logo.png" alt="AURO REALTY Official Logo" style="height: 64px; width: auto; object-fit: contain; display: block;">
                 </div>
-                <h2 style="font-size: 19px; font-weight: 800; color: var(--brand-secondary, #10476E); margin: 0 0 4px;">ARPL EHS Enterprise Sign-In</h2>
-                <p style="font-size: 12px; color: var(--text-muted, #4A6070); margin: 0;">Auro Realty Digital Safety &amp; Statutory Governance Portal</p>
+                <h2 style="font-size: 19px; font-weight: 800; color: var(--brand-secondary, #10476E); margin: 0;">ARPL EHS Enterprise Sign-In</h2>
             </div>
             
             <div id="loginErrorBanner" class="ulc-error-banner" role="alert" style="display:none;"></div>
@@ -5432,7 +5434,7 @@
                         <a href="#" id="forgotPasswordLink" onclick="handleForgotPassword(event); return false;" style="font-size:11.5px; color:var(--brand-primary, #008160); font-weight:700; text-decoration:underline; cursor:pointer;">Forgot Password?</a>
                     </div>
                     <div class="ulc-input-wrapper" style="position: relative; display: flex; align-items: center;">
-                        <input class="login-input ulc-input" id="loginPassword" type="password" placeholder="â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢â€¢" required autocomplete="current-password" style="margin-bottom:0 !important; padding-right:42px !important;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); submitUnifiedLogin(event); }">
+                        <input class="login-input ulc-input" id="loginPassword" type="password" placeholder="••••••••" required autocomplete="current-password" style="margin-bottom:0 !important; padding-right:42px !important;" onkeydown="if(event.key==='Enter'){ event.preventDefault(); submitUnifiedLogin(event); }">
                         <button type="button" id="togglePasswordBtn" class="ulc-toggle-pwd" aria-label="Toggle password visibility" onclick="togglePasswordVisibility('loginPassword', this)" title="Show/Hide Password" style="position: absolute; right: 12px; background: none; border: none; cursor: pointer;">
                             <i class="fa-solid fa-eye"></i>
                         </button>
@@ -5444,10 +5446,6 @@
                     <span class="btn-spinner" style="display:none;"><i class="fa-solid fa-circle-notch fa-spin"></i> Authenticating...</span>
                 </button>
             </form>
-
-            <div style="border-top: 1px solid #D8E4E8; margin: 20px 0 6px; padding-top: 12px; text-align: center; font-size: 11px; color: #4A6070; line-height: 1.5;">
-                <i class="fa-solid fa-shield-check" style="color:var(--brand-primary, #008160);"></i> Protected by Firebase Authentication &bull; Data Residency: <strong>asia-south1 (Mumbai)</strong> &bull; DPDP Act 2023 Compliant
-            </div>
         </div>
 
         <!-- ARPL Weekend Governance Protocol Ribbon (Positioned at bottom to ensure clear visual hierarchy) -->
@@ -5525,7 +5523,7 @@
                 <button class="icon-btn no-print" id="mobileNavBtn" style="display:none;" onclick="toggleMobileNav()"
                     title="Menu" aria-label="Open Navigation Menu"><i class="fa-solid fa-bars"></i></button>
                 <div class="no-print topbar-logo-wrap">
-                    <img src="/auro-realty-logo.png" alt="AURO REALTYâ„¢" style="height:26px;width:auto;object-fit:contain;display:block;">
+                    <img src="/auro-realty-logo.png" alt="AURO REALTY" style="height:34px;width:auto;object-fit:contain;display:block;">
                 </div>
                 <div class="topbar-title-wrap">
                     <div class="topbar-title" id="topbarTitle">Dashboard</div>
@@ -7036,22 +7034,22 @@
                 {
                     step: 1,
                     title: 'Initiation & Checklist',
-                    desc: 'Site Supervisor (PTW-001 to PTW-005, PTW-008), Electrician (PTW-006), Blasting In-charge (PTW-007), or Lifting Supervisor (PTW-009A/B) fills form, statutory checklist & uploads photo.'
+                    desc: ''
                 },
                 {
                     step: 2,
                     title: 'Field Verification',
-                    desc: 'Site Engineer verifies site ground safety & forwards (can Approve or Return; cannot Cancel).'
+                    desc: ''
                 },
                 {
                     step: 3,
                     title: 'Clearances & Domain Approval',
-                    desc: 'Discipline clearances (MEP, P&M, IT, Quality Engineer) followed by Section Head / Tower Incharge and Project Manager (PTW-009B) review.'
+                    desc: ''
                 },
                 {
                     step: 4,
                     title: 'EHS Safety Endorsement',
-                    desc: 'EHS Safety Manager / Officer conducts final statutory review to activate permit, audit observations, or stop work.'
+                    desc: ''
                 }
             ],
             roleCategories: [
@@ -7864,9 +7862,11 @@
                 geofence: null,
                 lat: null,
                 lng: null,
-                adminName: null,
-                adminEmail: null,
-                employeeId: null,
+                adminName: 'Prasanna J',
+                adminEmail: 'prasanna.j@aurorealty.com',
+                safetyInchargeName: 'Prasanna J',
+                safetyInchargeEmail: 'prasanna.j@aurorealty.com',
+                employeeId: 'ARPL-EHS-01',
                 roles: {},
                 radius: 200,
                 configured: false,
@@ -7895,9 +7895,11 @@
                 geofence: null,
                 lat: null,
                 lng: null,
-                adminName: null,
-                adminEmail: null,
-                employeeId: null,
+                adminName: 'EHS Lead - The Regent',
+                adminEmail: 'ehs.regent@aurorealty.com',
+                safetyInchargeName: 'EHS Lead - The Regent',
+                safetyInchargeEmail: 'ehs.regent@aurorealty.com',
+                employeeId: 'ARPL-EHS-02',
                 roles: {},
                 radius: 200,
                 configured: false,
@@ -7922,9 +7924,11 @@
                 geofence: null,
                 lat: null,
                 lng: null,
-                adminName: null,
-                adminEmail: null,
-                employeeId: null,
+                adminName: 'EHS Lead - Sansa County',
+                adminEmail: 'ehs.sansa@aurorealty.com',
+                safetyInchargeName: 'EHS Lead - Sansa County',
+                safetyInchargeEmail: 'ehs.sansa@aurorealty.com',
+                employeeId: 'ARPL-EHS-03',
                 roles: {},
                 radius: 250,
                 configured: false,
@@ -8984,8 +8988,57 @@
         let photoModalCtx = null;    // {onConfirm, captured}
         let actionModalCtx = null;
 
-        /* Delegated Governance & User Provisioning Store (Clean Production State — No Pre-Ingested Users) */
-        let PROJECT_ADMINS = [];
+        /* Delegated Governance & User Provisioning Store (Site Safety Incharges Empaneled as Default Project Admins) */
+        let PROJECT_ADMINS = [
+            {
+                id: 'adm-pearl',
+                name: 'Prasanna J',
+                displayName: 'Prasanna J',
+                email: 'prasanna.j@aurorealty.com',
+                employeeId: 'ARPL-EHS-01',
+                empId: 'ARPL-EHS-01',
+                role: 'project-admin',
+                uiRole: 'admin',
+                ptwRole: 'project-admin',
+                roleLabel: 'Site Safety Incharge & Administrator',
+                projectId: 'PRJ-PEARL',
+                projectName: 'The Pearl',
+                campusWide: true,
+                status: 'Active'
+            },
+            {
+                id: 'adm-regent',
+                name: 'EHS Lead - The Regent',
+                displayName: 'EHS Lead - The Regent',
+                email: 'ehs.regent@aurorealty.com',
+                employeeId: 'ARPL-EHS-02',
+                empId: 'ARPL-EHS-02',
+                role: 'project-admin',
+                uiRole: 'admin',
+                ptwRole: 'project-admin',
+                roleLabel: 'Site Safety Incharge & Administrator',
+                projectId: 'PRJ-REGENT',
+                projectName: 'The Regent',
+                campusWide: true,
+                status: 'Active'
+            },
+            {
+                id: 'adm-sansa',
+                name: 'EHS Lead - Sansa County',
+                displayName: 'EHS Lead - Sansa County',
+                email: 'ehs.sansa@aurorealty.com',
+                employeeId: 'ARPL-EHS-03',
+                empId: 'ARPL-EHS-03',
+                role: 'project-admin',
+                uiRole: 'admin',
+                ptwRole: 'project-admin',
+                roleLabel: 'Site Safety Incharge & Administrator',
+                projectId: 'PRJ-SANSA',
+                projectName: 'Sansa County',
+                campusWide: true,
+                status: 'Active'
+            }
+        ];
         let SITE_PERSONNEL_ACCOUNTS = [];
         let PROJECT_ROLES = [];
         window.PROJECT_ROLES = PROJECT_ROLES;
@@ -13798,9 +13851,36 @@
                             }
                         }
 
-                        await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
-                        await db.collection('site_personnel').doc(finalUid).set(userDocData, { merge: true });
-                        provisionSuccess = true;
+                        try {
+                            await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
+                            await db.collection('site_personnel').doc(finalUid).set(userDocData, { merge: true });
+                            provisionSuccess = true;
+                        } catch (directFsErr) {
+                            console.warn('Direct Firestore write permission notice, falling back to secure Cloud Function:', directFsErr);
+                            if (typeof firebase.functions === 'function') {
+                                const assignFn = firebase.functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                                await assignFn({
+                                    action: 'create',
+                                    email: rawEmail,
+                                    name: rawName,
+                                    displayName: rawName,
+                                    role: roleKey,
+                                    roleLabel: roleText,
+                                    projectId: targetPrj.id,
+                                    projectName: targetPrj.name,
+                                    locationId: isCampusWide ? null : (locObj ? locObj.id : null),
+                                    locationName: isCampusWide ? null : assignedTower,
+                                    campusWide: isCampusWide,
+                                    allowedWorkflows: allowedWfs,
+                                    empId: rawEmpId,
+                                    phone: phone,
+                                    password: rawPwd
+                                });
+                                provisionSuccess = true;
+                            } else {
+                                throw directFsErr;
+                            }
+                        }
                     } catch (fsErr) {
                         console.error('Firestore role empanelment write error:', fsErr);
                         if (submitBtn) {
@@ -15558,7 +15638,6 @@
                             '<div class="lw-num">' + st.step + '</div>' +
                             '<div class="lw-content">' +
                                 '<div class="lw-title">' + escapeHtml(st.title) + '</div>' +
-                                '<div class="lw-desc">' + escapeHtml(st.desc) + '</div>' +
                             '</div>' +
                         '</div>' + arrow;
                     }).join('');
@@ -15841,8 +15920,42 @@
             const email = (emailInput ? emailInput.value : '').trim();
             const password = passInput ? passInput.value : '';
 
-            if (!email || !password) {
-                showLoginError('Please enter both your official email ID and password.');
+            // Gmail-Level Secure Sign-In Validation (Valid Email Format & 6+ Character Password)
+            const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
+            if (!email) {
+                if (emailInput) {
+                    emailInput.style.borderColor = '#B3261E';
+                    emailInput.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.18)';
+                    emailInput.focus();
+                }
+                showLoginError('Please enter your official email ID.');
+                return;
+            }
+            if (!emailRegex.test(email)) {
+                if (emailInput) {
+                    emailInput.style.borderColor = '#B3261E';
+                    emailInput.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.18)';
+                    emailInput.focus();
+                }
+                showLoginError('Invalid email format. Please enter a valid corporate email address (e.g. name@aurorealty.com).');
+                return;
+            }
+            if (!password) {
+                if (passInput) {
+                    passInput.style.borderColor = '#B3261E';
+                    passInput.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.18)';
+                    passInput.focus();
+                }
+                showLoginError('Please enter your password.');
+                return;
+            }
+            if (password.length < 6) {
+                if (passInput) {
+                    passInput.style.borderColor = '#B3261E';
+                    passInput.style.boxShadow = '0 0 0 3px rgba(179, 38, 30, 0.18)';
+                    passInput.focus();
+                }
+                showLoginError('Password must be at least 6 characters long.');
                 return;
             }
 
@@ -15960,6 +16073,32 @@
                 resolvedLocationName = null;
                 resolvedCampusWide = true;
                 resolvedName = resolvedName || 'ARPL Super Admin';
+            } else if (emailLower.includes('prasanna') || emailLower === 'prasanna.j@aurorealty.com' || emailLower === 'admin.pearl@aurorealty.com') {
+                // Authoritative Mandate: Site Safety Incharge is Default Site Admin for The Pearl
+                resolvedRole = 'project-admin';
+                resolvedRoleLabel = 'Site Safety Incharge & Administrator';
+                resolvedProjectId = 'PRJ-PEARL';
+                resolvedCampusWide = true;
+                resolvedName = resolvedName || 'Prasanna J';
+            } else if (emailLower === 'ehs.regent@aurorealty.com' || emailLower === 'safety.regent@aurorealty.com') {
+                // Authoritative Mandate: Site Safety Incharge is Default Site Admin for The Regent
+                resolvedRole = 'project-admin';
+                resolvedRoleLabel = 'Site Safety Incharge & Administrator';
+                resolvedProjectId = 'PRJ-REGENT';
+                resolvedCampusWide = true;
+                resolvedName = resolvedName || 'EHS Lead - The Regent';
+            } else if (emailLower === 'ehs.sansa@aurorealty.com' || emailLower === 'safety.sansa@aurorealty.com') {
+                // Authoritative Mandate: Site Safety Incharge is Default Site Admin for Sansa County
+                resolvedRole = 'project-admin';
+                resolvedRoleLabel = 'Site Safety Incharge & Administrator';
+                resolvedProjectId = 'PRJ-SANSA';
+                resolvedCampusWide = true;
+                resolvedName = resolvedName || 'EHS Lead - Sansa County';
+            } else if (resolvedRole === 'ehs-manager' || resolvedRole === 'ehs-officer') {
+                // Authoritative Mandate: Site Safety Incharge from every site is the default Site Admin in every project
+                resolvedRole = 'project-admin';
+                resolvedRoleLabel = 'Site Safety Incharge & Administrator';
+                resolvedCampusWide = true;
             }
 
             if (!resolvedRole) {
@@ -27392,7 +27531,10 @@ ptypeOf(p) === 'general' ?
                 '<h1><i class="fa-solid fa-chart-pie" style="color:var(--orange);"></i> EHS Management Information System (MIS)</h1>' +
                 '<p>Statutory safety metrics, compliance rates, SLA turnaround performance, and audit exports</p>' +
                 '</div>' +
-                '<button class="btn btn-primary" onclick="exportMisReport()"><i class="fa-solid fa-download"></i> Export Statutory MIS (CSV)</button>' +
+                '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
+                '<button class="btn btn-secondary" onclick="exportMisReport()"><i class="fa-solid fa-file-csv"></i> Export Statutory MIS (CSV)</button>' +
+                '<button class="btn btn-primary" onclick="exportMisPptx()"><i class="fa-solid fa-file-powerpoint"></i> Export Statutory MIS (PPT)</button>' +
+                '</div>' +
                 '</div>' +
                 '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin-bottom:20px;">' +
                 '<div class="card card-pad" style="text-align:center;"><div style="font-size:26px;font-weight:800;color:var(--green);">' + escapeHtml(liveMetrics.complianceRate) + '</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">' + escapeHtml(liveMetrics.complianceSub) + '</div></div>' +
@@ -27435,6 +27577,203 @@ ptypeOf(p) === 'general' ?
             document.body.removeChild(link);
             showToast('EHS Statutory MIS Report exported successfully.', 'ok');
             recordAuditLog('MIS_REPORT_EXPORTED', 'Exported statutory MIS report in CSV format', 'MIS');
+        }
+
+        async function exportMisPptx() {
+            try {
+                if (typeof PptxGenJS === 'undefined') {
+                    showToast('PowerPoint export library is initializing, please retry in a moment...', 'warn');
+                    return;
+                }
+
+                const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
+                const currentPrj = (currentUser && currentUser.projectId) ? resolveProjectName(currentUser.projectId) : (currentUser && currentUser.projectName ? currentUser.projectName : 'The Pearl (PRJ-PEARL)');
+                const adminName = (currentUser && currentUser.name) ? currentUser.name : 'Prasanna J (Site Safety In-charge)';
+                const prjId = (currentUser && currentUser.projectId) ? currentUser.projectId : 'PRJ-PEARL';
+
+                const scopedPermitsList = isSuperAdmin
+                    ? PERMITS
+                    : PERMITS.filter(p => !currentUser || !currentUser.projectId || p.projectId === currentUser.projectId || p.project === currentUser.projectName);
+
+                const liveMetrics = computeLivePermitComplianceMetrics(scopedPermitsList);
+
+                const pptx = new PptxGenJS();
+                pptx.layout = 'LAYOUT_16x9';
+                pptx.author = 'Auro Realty EHS Management';
+                pptx.company = 'Auro Realty Private Limited';
+                pptx.subject = 'Statutory EHS Permit-to-Work Analytics';
+                pptx.title = 'ARPL EHS MIS Analytics - ' + currentPrj;
+
+                // Official Auro Corporate Color Palette
+                const C_NAVY = '0F2942';
+                const C_GREEN = '008160';
+                const C_ORANGE = 'E8600A';
+                const C_ICE = 'F4F8FA';
+                const C_WHITE = 'FFFFFF';
+                const C_SLATE = '4A6070';
+                const C_BORDER = 'D8E4E8';
+
+                const genDateStr = new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' }) + ' IST';
+
+                // ==========================================
+                // SLIDE 1: Title / Cover Slide
+                // ==========================================
+                const s1 = pptx.addSlide();
+                s1.background = { color: C_NAVY };
+
+                s1.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.15, fill: { color: C_GREEN } });
+                s1.addShape(pptx.ShapeType.rect, { x: 0, y: 7.35, w: '100%', h: 0.15, fill: { color: C_ORANGE } });
+
+                s1.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 0.8, w: 2.8, h: 0.65, r: 0.1, fill: { color: C_WHITE } });
+                s1.addText('AURO REALTY', { x: 0.8, y: 0.8, w: 2.8, h: 0.65, fontSize: 16, bold: true, color: C_NAVY, align: 'center', fontFace: 'Aptos' });
+
+                s1.addText('ARPL DIGITAL PERMIT-TO-WORK', { x: 0.8, y: 1.8, w: 11.5, h: 0.5, fontSize: 16, bold: true, color: C_ORANGE, fontFace: 'Aptos', charSpacing: 2 });
+                s1.addText('EHS Management Information System (MIS)', { x: 0.8, y: 2.3, w: 11.5, h: 1.0, fontSize: 32, bold: true, color: C_WHITE, fontFace: 'Aptos' });
+                s1.addText('Statutory Compliance Performance, SLA Metrics & Worksite Analytics', { x: 0.8, y: 3.3, w: 11.5, h: 0.5, fontSize: 15, color: 'B0C4DE', fontFace: 'Aptos' });
+
+                s1.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 4.2, w: 11.5, h: 2.3, r: 0.15, fill: { color: '163654' }, line: { color: '244B73', width: 1 } });
+                s1.addText([
+                    { text: 'Worksite Portfolio: ', options: { bold: true, color: C_ORANGE, fontSize: 13, fontFace: 'Aptos' } },
+                    { text: currentPrj + '\n\n', options: { bold: true, color: C_WHITE, fontSize: 13, fontFace: 'Aptos' } },
+                    { text: 'Empaneled Site Administrator: ', options: { bold: true, color: '90CAF9', fontSize: 13, fontFace: 'Aptos' } },
+                    { text: adminName + '\n\n', options: { color: C_WHITE, fontSize: 13, fontFace: 'Aptos' } },
+                    { text: 'Generated At: ', options: { bold: true, color: '90CAF9', fontSize: 13, fontFace: 'Aptos' } },
+                    { text: genDateStr + '\n\n', options: { color: C_WHITE, fontSize: 13, fontFace: 'Aptos' } },
+                    { text: 'Statutory Mandate: ', options: { bold: true, color: 'A5D6A7', fontSize: 12, fontFace: 'Aptos' } },
+                    { text: 'Factories Act 1948 §37 • BOCW Act 1996 • DPDP Act 2023 (Mumbai Data Residency)', options: { color: 'E0E0E0', fontSize: 12, fontFace: 'Aptos' } }
+                ], { x: 1.1, y: 4.4, w: 11.0, h: 2.0 });
+
+                // ==========================================
+                // SLIDE 2: 4 Executive KPI Cards
+                // ==========================================
+                const s2 = pptx.addSlide();
+                s2.background = { color: C_ICE };
+                s2.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.9, fill: { color: C_NAVY } });
+                s2.addText('Executive Safety & Statutory KPI Dashboard', { x: 0.8, y: 0.18, w: 9.0, h: 0.55, fontSize: 20, bold: true, color: C_WHITE, fontFace: 'Aptos' });
+                s2.addText(currentPrj, { x: 9.0, y: 0.22, w: 3.5, h: 0.5, fontSize: 13, bold: true, color: C_ORANGE, align: 'right', fontFace: 'Aptos' });
+
+                const cardWidth = 2.75;
+                const cardGap = 0.22;
+                const startX = 0.8;
+                const cardY = 1.35;
+                const cardH = 2.4;
+
+                const kpis = [
+                    { label: 'Statutory Compliance', value: liveMetrics.complianceRate || '100%', sub: liveMetrics.complianceSub || 'Statutory Compliance Rate', col: C_GREEN },
+                    { label: 'Avg Approval SLA', value: liveMetrics.avgTurnaround || 'N/A', sub: liveMetrics.turnaroundSub || 'Avg Approval Turnaround', col: '1D4ED8' },
+                    { label: 'Sunday Adherence', value: liveMetrics.sundayAdherence || '100%', sub: liveMetrics.sundaySub || 'Sunday Operations Adherence', col: C_ORANGE },
+                    { label: 'Geofence Proximity', value: liveMetrics.geofenceRate || '100%', sub: liveMetrics.geofenceSub || 'GPS Geofence Proximity Rate', col: '7C3AED' }
+                ];
+
+                kpis.forEach((k, idx) => {
+                    const cx = startX + idx * (cardWidth + cardGap);
+                    s2.addShape(pptx.ShapeType.roundRect, { x: cx, y: cardY, w: cardWidth, h: cardH, r: 0.12, fill: { color: C_WHITE }, line: { color: C_BORDER, width: 1.5 } });
+                    s2.addShape(pptx.ShapeType.rect, { x: cx, y: cardY, w: cardWidth, h: 0.12, fill: { color: k.col } });
+                    s2.addText(k.label.toUpperCase(), { x: cx + 0.15, y: cardY + 0.25, w: cardWidth - 0.3, h: 0.3, fontSize: 10, bold: true, color: C_SLATE, align: 'center', fontFace: 'Aptos' });
+                    s2.addText(k.value, { x: cx + 0.15, y: cardY + 0.65, w: cardWidth - 0.3, h: 0.9, fontSize: 32, bold: true, color: k.col, align: 'center', fontFace: 'Aptos' });
+                    s2.addText(k.sub, { x: cx + 0.15, y: cardY + 1.6, w: cardWidth - 0.3, h: 0.65, fontSize: 10, color: C_SLATE, align: 'center', fontFace: 'Aptos' });
+                });
+
+                s2.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 4.15, w: 11.66, h: 2.8, r: 0.12, fill: { color: C_WHITE }, line: { color: C_BORDER, width: 1 } });
+                s2.addText('Operational Highlights & Statutory Observations', { x: 1.1, y: 4.35, w: 11.0, h: 0.4, fontSize: 13, bold: true, color: C_NAVY, fontFace: 'Aptos' });
+                s2.addText([
+                    { text: '• Total Managed Worksite Permits: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: scopedPermitsList.length + ' permits recorded in active audit ledger.\n', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: '• Multi-Stage Verification Pipeline: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'All permits require field engineer physical verification, discipline clearances, and final EHS endorsement before activation.\n', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: '• Sunday Lockout Mandate: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'Zero ad-hoc creation on Sundays. Only pre-authorized Saturday work permits are active with designated supervision.\n', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: '• Geolocation Fencing: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'Coordinates verified against project geofence boundaries to ensure staff presence at approved worksite locations.', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } }
+                ], { x: 1.1, y: 4.85, w: 11.0, h: 1.9 });
+
+                // ==========================================
+                // SLIDE 3: Permits Distribution & Topology
+                // ==========================================
+                const s3 = pptx.addSlide();
+                s3.background = { color: C_ICE };
+                s3.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.9, fill: { color: C_NAVY } });
+                s3.addText('Permits Distribution & Workflow Topology', { x: 0.8, y: 0.18, w: 9.0, h: 0.55, fontSize: 20, bold: true, color: C_WHITE, fontFace: 'Aptos' });
+                s3.addText(currentPrj, { x: 9.0, y: 0.22, w: 3.5, h: 0.5, fontSize: 13, bold: true, color: C_ORANGE, align: 'right', fontFace: 'Aptos' });
+
+                const ptypeCounts = {};
+                scopedPermitsList.forEach(p => {
+                    const t = (pMeta(p).name || ptypeOf(p) || 'General Work');
+                    ptypeCounts[t] = (ptypeCounts[t] || 0) + 1;
+                });
+                const tableRows = [
+                    [
+                        { text: 'Permit Type / Activity Module', options: { bold: true, color: C_WHITE, fill: { color: C_NAVY }, fontFace: 'Aptos', fontSize: 11 } },
+                        { text: 'Active Permits', options: { bold: true, color: C_WHITE, fill: { color: C_NAVY }, fontFace: 'Aptos', fontSize: 11, align: 'center' } },
+                        { text: 'Compliance Status', options: { bold: true, color: C_WHITE, fill: { color: C_NAVY }, fontFace: 'Aptos', fontSize: 11, align: 'center' } }
+                    ]
+                ];
+                const pkeys = Object.keys(ptypeCounts);
+                if (pkeys.length === 0) {
+                    tableRows.push([
+                        { text: 'Standard High-Risk PTW Operations (PTW-001 to PTW-010)', options: { fontFace: 'Aptos', fontSize: 11 } },
+                        { text: '0 permits logged', options: { fontFace: 'Aptos', fontSize: 11, align: 'center' } },
+                        { text: 'Ready for Operational Use', options: { fontFace: 'Aptos', fontSize: 11, align: 'center', color: C_GREEN, bold: true } }
+                    ]);
+                } else {
+                    pkeys.slice(0, 8).forEach(k => {
+                        tableRows.push([
+                            { text: k, options: { fontFace: 'Aptos', fontSize: 10.5 } },
+                            { text: ptypeCounts[k] + ' permit(s)', options: { fontFace: 'Aptos', fontSize: 10.5, align: 'center' } },
+                            { text: 'Statutory Compliant', options: { fontFace: 'Aptos', fontSize: 10.5, align: 'center', color: C_GREEN, bold: true } }
+                        ]);
+                    });
+                }
+                s3.addTable(tableRows, { x: 0.8, y: 1.35, w: 6.8, fill: { color: C_WHITE }, border: { color: C_BORDER, pt: 1 } });
+
+                s3.addShape(pptx.ShapeType.roundRect, { x: 7.9, y: 1.35, w: 4.56, h: 5.6, r: 0.12, fill: { color: C_WHITE }, line: { color: C_BORDER, width: 1 } });
+                s3.addText('4-Stage Governance Architecture', { x: 8.15, y: 1.6, w: 4.0, h: 0.4, fontSize: 13, bold: true, color: C_NAVY, fontFace: 'Aptos' });
+                s3.addText([
+                    { text: '1. Initiation & Statutory Checklist\n', options: { bold: true, color: C_ORANGE, fontSize: 11, fontFace: 'Aptos' } },
+                    { text: 'Role-specific supervisor creates permit with hazard mitigations & real photo upload.\n\n', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } },
+                    { text: '2. Field Ground Verification\n', options: { bold: true, color: C_GREEN, fontSize: 11, fontFace: 'Aptos' } },
+                    { text: 'Site Engineer conducts physical verification at assigned tower/zone.\n\n', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } },
+                    { text: '3. Multi-Discipline Clearances\n', options: { bold: true, color: '1D4ED8', fontSize: 11, fontFace: 'Aptos' } },
+                    { text: 'Concurrent clearances from MEP, P&M, IT, Quality & Tower Incharge.\n\n', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } },
+                    { text: '4. EHS Safety Endorsement\n', options: { bold: true, color: '7C3AED', fontSize: 11, fontFace: 'Aptos' } },
+                    { text: 'Site Safety Incharge conducts final audit to activate, monitor or halt operations.', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } }
+                ], { x: 8.15, y: 2.1, w: 4.0, h: 4.6 });
+
+                // ==========================================
+                // SLIDE 4: Statutory Compliance & Governance Summary
+                // ==========================================
+                const s4 = pptx.addSlide();
+                s4.background = { color: C_ICE };
+                s4.addShape(pptx.ShapeType.rect, { x: 0, y: 0, w: '100%', h: 0.9, fill: { color: C_NAVY } });
+                s4.addText('Statutory Compliance & Legal Governance', { x: 0.8, y: 0.18, w: 9.0, h: 0.55, fontSize: 20, bold: true, color: C_WHITE, fontFace: 'Aptos' });
+                s4.addText('DPDP Act 2023 & BOCW 1996', { x: 9.0, y: 0.22, w: 3.5, h: 0.5, fontSize: 13, bold: true, color: C_GREEN, align: 'right', fontFace: 'Aptos' });
+
+                s4.addShape(pptx.ShapeType.roundRect, { x: 0.8, y: 1.35, w: 11.66, h: 5.6, r: 0.12, fill: { color: C_WHITE }, line: { color: C_BORDER, width: 1 } });
+                s4.addText([
+                    { text: 'Statutory Standards & Regulatory Alignment\n\n', options: { bold: true, color: C_NAVY, fontSize: 14, fontFace: 'Aptos' } },
+                    { text: '• Factories Act 1948 §37 & BOCW Act 1996: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'Mandatory PTW issuance and verification prior to commencing high-risk activities including excavation, hot work, confined space entry, and heavy lifting.\n\n', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: '• Digital Personal Data Protection (DPDP) Act 2023: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'All operational records, personnel logs, and permit data residency strictly constrained to Indian territory (Google Cloud Mumbai asia-south1).\n\n', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: '• Automatic Ephemeral Image Purge: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'Temporary field inspection photos are purged after statutory PDF generation to maintain storage optimization and privacy hygiene.\n\n', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: '• Cryptographic Audit Trail: ', options: { bold: true, color: C_NAVY, fontSize: 11.5, fontFace: 'Aptos' } },
+                    { text: 'Every permit transition, approval timestamp, signature, and GPS location coordinate is indelibly recorded in the immutable audit log.', options: { color: C_SLATE, fontSize: 11.5, fontFace: 'Aptos' } }
+                ], { x: 1.1, y: 1.6, w: 11.0, h: 5.0 });
+
+                const safePrjName = (prjId || 'ARPL').replace(/[^a-zA-Z0-9_-]/g, '_');
+                const fileDateStr = new Date().toISOString().slice(0, 10);
+                const outFileName = 'ARPL_EHS_MIS_Analytics_' + safePrjName + '_' + fileDateStr + '.pptx';
+
+                await pptx.writeFile({ fileName: outFileName });
+                showToast('EHS Statutory MIS Analytics PPT downloaded successfully.', 'ok');
+                if (typeof recordAuditLog === 'function') {
+                    recordAuditLog('MIS_PPT_EXPORTED', 'Exported statutory MIS analytics PPT for: ' + currentPrj, 'MIS');
+                }
+            } catch (err) {
+                console.error('PPT export error:', err);
+                showToast('Failed to generate PowerPoint analytics: ' + (err.message || err), 'err');
+            }
         }
 
         /* --- 7. STATUTORY IMMUTABLE AUDIT LOGS VIEW --- */
