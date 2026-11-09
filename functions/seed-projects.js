@@ -25,40 +25,41 @@ async function seed() {
   }
 
   // Create Initial Super Admin in Auth if not exists
-  const superAdminEmails = ["aic1176@aurogroup.com", "ehs.superadmin@aurorealty.com"];
-  for (const superAdminEmail of superAdminEmails) {
+  const superAdminEmail = "aic1176@aurogroup.com";
+  try {
+    let user;
     try {
-      let user;
-      try {
-        user = await admin.auth().getUserByEmail(superAdminEmail);
-        console.log(`Super Admin user already exists (${superAdminEmail}): ${user.uid}`);
-      } catch (e) {
-        user = await admin.auth().createUser({
-          email: superAdminEmail,
-          password: "AuroSuperAdmin2026!",
-          displayName: superAdminEmail === "aic1176@aurogroup.com" ? "ARPL Super Administrator (AIC1176)" : "ARPL EHS Super Administrator"
-        });
-        console.log(`Created Super Admin user (${superAdminEmail}): ${user.uid}`);
-      }
-
-      await admin.auth().setCustomUserClaims(user.uid, {
-        superAdmin: true,
-        role: "super-admin"
+      user = await admin.auth().getUserByEmail(superAdminEmail);
+      console.log(`Super Admin user already exists (${superAdminEmail}): ${user.uid}`);
+      await admin.auth().updateUser(user.uid, {
+        password: "Auro@12345"
       });
-
-      await db.collection("users").doc(user.uid).set({
-        uid: user.uid,
+    } catch (e) {
+      user = await admin.auth().createUser({
         email: superAdminEmail,
-        displayName: superAdminEmail === "aic1176@aurogroup.com" ? "ARPL Super Administrator (AIC1176)" : "ARPL EHS Super Administrator",
-        role: "super-admin",
-        superAdmin: true,
-        createdAt: admin.firestore.FieldValue.serverTimestamp()
-      }, { merge: true });
-
-      console.log(`✓ Super Admin ${superAdminEmail} custom claims and profile seeded successfully.`);
-    } catch (err) {
-      console.error(`Super Admin seeding error for ${superAdminEmail}:`, err);
+        password: "Auro@12345",
+        displayName: "ARPL Super Administrator (AIC1176)"
+      });
+      console.log(`Created Super Admin user (${superAdminEmail}): ${user.uid}`);
     }
+
+    await admin.auth().setCustomUserClaims(user.uid, {
+      superAdmin: true,
+      role: "super-admin"
+    });
+
+    await db.collection("users").doc(user.uid).set({
+      uid: user.uid,
+      email: superAdminEmail,
+      displayName: "ARPL Super Administrator (AIC1176)",
+      role: "super-admin",
+      superAdmin: true,
+      createdAt: admin.firestore.FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    console.log(`✓ Super Admin ${superAdminEmail} custom claims and profile seeded successfully.`);
+  } catch (err) {
+    console.error(`Super Admin seeding error for ${superAdminEmail}:`, err);
   }
 
   console.log("Seeding complete!");

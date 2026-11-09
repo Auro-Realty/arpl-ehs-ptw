@@ -130,7 +130,7 @@ The application implements full operational lifecycles for all **10 High-Hazard 
 The system enforces a **strict, multi-tenant governance model** with defense-in-depth authorization checks across the client UI, Cloud Functions, and Firestore security rules:
 
 ```
-[Enterprise Super Admin] (ehs.superadmin@aurorealty.com)
+[Enterprise Super Admin] (aic1176@aurogroup.com)
   ├── Global Governance, System Settings & Master Projects
   ├── Provisions Site Administrators in Firestore /users
   └── Inspects Immutable Pan-India Statutory Audit Logs

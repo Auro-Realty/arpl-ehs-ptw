@@ -15968,7 +15968,7 @@
                 if (localStf) applyDoc(localStf);
             }
 
-            if (emailLower === 'aic1176@aurogroup.com' || emailLower === 'ehs.superadmin@aurorealty.com' || resolvedRole === 'super-admin') {
+            if (emailLower === 'aic1176@aurogroup.com' || resolvedRole === 'super-admin') {
                 resolvedRole = 'super-admin';
                 resolvedRoleLabel = 'Enterprise Super Admin';
                 resolvedProjectId = null;
@@ -26705,7 +26705,7 @@ ptypeOf(p) === 'general' ?
                             if (!u || DEMO_SYNTHETIC_NAMES.includes(u.name) || DEMO_SYNTHETIC_NAMES.includes(u.displayName)) return;
                             const r = String(u.role || u.uiRole || '').toLowerCase();
                             const key = (u.email || doc.id).toLowerCase();
-                            if (r === 'super-admin' || key === 'aic1176@aurogroup.com' || key === 'ehs.superadmin@aurorealty.com') return;
+                            if (r === 'super-admin' || key === 'aic1176@aurogroup.com') return;
                             if (['prasanna.j@aurorealty.com', 'ehs.regent@aurorealty.com', 'ehs.sansa@aurorealty.com'].includes(key)) return;
                             if (r === 'project-admin' || r === 'site-admin' || r === 'admin') {
                                 if (!admsMap.has(key)) {
@@ -26772,7 +26772,7 @@ ptypeOf(p) === 'general' ?
                     audSnap.forEach(doc => {
                         const d = doc.data();
                         if (d && !['aud-001', 'aud-002', 'aud-003', 'aud-004', 'aud-005'].includes(d.id)) {
-                            if ((d.actorRole === 'super-admin' || d.actorEmail === 'aic1176@aurogroup.com' || d.actorEmail === 'ehs.superadmin@aurorealty.com') && d.action === 'AUTH_LOGIN_SUCCESS') {
+                            if ((d.actorRole === 'super-admin' || d.actorEmail === 'aic1176@aurogroup.com') && d.action === 'AUTH_LOGIN_SUCCESS') {
                                 d.projectId = null;
                             }
                             logs.push(d);
