@@ -21,14 +21,14 @@ service cloud.firestore {
     }
 
     function userDocRole() {
-      return userDocExists() ? userDocData().role : null;
+      return userDocExists() ? userDocData().get('role', '') : '';
     }
 
     function isSuperAdmin() {
       return isAuthenticated() && (
         request.auth.token.superAdmin == true ||
         request.auth.token.role == 'super-admin' ||
-        request.auth.token.email == 'ehs.superadmin@aurorealty.com' ||
+        request.auth.token.email in ['aic1176@aurogroup.com', 'ehs.superadmin@aurorealty.com'] ||
         (userDocExists() && userDocRole() == 'super-admin')
       );
     }
@@ -43,12 +43,12 @@ service cloud.firestore {
           userDocData().get('uiRole', '') in ['admin', 'project-admin']
         ) && (userDocData().get('projectId', '') == projectId || userDocData().get('projectId', '') == '' || userDocData().get('campusWide', false) == true)) ||
         (exists(/databases/$(database)/documents/projects/$(projectId)) && (
-          get(/databases/$(database)/documents/projects/$(projectId)).data.adminEmail == request.auth.token.email ||
-          get(/databases/$(database)/documents/projects/$(projectId)).data.adminUid == request.auth.uid ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.email ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
           get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.email
         )) ||
         (exists(/databases/$(database)/documents/project_admins/$(request.auth.uid)) && (
-          get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.projectId == projectId ||
+          get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.get('projectId', '') == projectId ||
           get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.get('role', '') in ['admin', 'project-admin', 'ehs-manager']
         ))
       );
@@ -60,19 +60,20 @@ service cloud.firestore {
         isSuperAdmin() ||
         request.auth.token.projectId == projectId ||
         (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds) ||
-        (userDocExists() && userDocData().projectId == projectId) ||
+        (userDocExists() && (userDocData().get('projectId', '') == projectId || userDocData().get('campusWide', false) == true)) ||
         (exists(/databases/$(database)/documents/projects/$(projectId)) && (
-          get(/databases/$(database)/documents/projects/$(projectId)).data.adminEmail == request.auth.token.email ||
-          get(/databases/$(database)/documents/projects/$(projectId)).data.adminUid == request.auth.uid
+          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.email ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
+          get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.email
         )) ||
-        (exists(/databases/$(database)/documents/site_personnel/$(request.auth.uid)) && get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.projectId == projectId)
+        (exists(/databases/$(database)/documents/site_personnel/$(request.auth.uid)) && get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.get('projectId', '') == projectId)
       );
     }
 
     function isEhsRole(projectId) {
       return hasProjectAccess(projectId) && (
-        request.auth.token.role in ['ehs-manager', 'ehs-officer'] ||
-        (userDocExists() && userDocRole() in ['ehs-manager', 'ehs-officer'])
+        request.auth.token.role in ['ehs-manager', 'ehs-officer', 'safety-incharge'] ||
+        (userDocExists() && userDocRole() in ['ehs-manager', 'ehs-officer', 'safety-incharge'])
       );
     }
 
@@ -97,19 +98,16 @@ service cloud.firestore {
       
       // Super Admin can provision anyone; Site Admin can provision users for their assigned projectId; Any user can create/sync their own profile
       allow create: if isSuperAdmin() || (
-        request.resource.data.projectId != null &&
+        request.resource.data.get('projectId', '') != '' &&
         isProjectAdmin(request.resource.data.projectId) &&
-        request.resource.data.role != 'super-admin'
+        request.resource.data.get('role', '') != 'super-admin'
       ) || (
         isAuthenticated() && request.auth.uid == userId
       );
 
       // Updates strictly bound to project ownership or user updating their own profile
       allow update: if isSuperAdmin() || (
-        resource.data.projectId != null &&
-        request.resource.data.projectId != null &&
-        resource.data.projectId == request.resource.data.projectId &&
-        isProjectAdmin(resource.data.projectId) &&
+        isProjectAdmin(request.resource.data.get('projectId', resource.data.get('projectId', ''))) &&
         resource.data.get('role', '') != 'super-admin'
       ) || (
         isAuthenticated() && request.auth.uid == userId
@@ -117,8 +115,7 @@ service cloud.firestore {
 
       // Deletion strictly restricted to Super Admin or the assigned Site Admin for that user's project
       allow delete: if isSuperAdmin() || (
-        resource.data.projectId != null &&
-        isProjectAdmin(resource.data.projectId) &&
+        isProjectAdmin(resource.data.get('projectId', '')) &&
         resource.data.get('role', '') != 'super-admin'
       );
     }
@@ -132,7 +129,7 @@ service cloud.firestore {
       allow create, update: if isSuperAdmin() || (
         isAuthenticated() && (
           request.auth.uid == adminId ||
-          (request.resource.data.projectId != null && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.adminEmail == request.auth.token.email)
+          (request.resource.data.get('projectId', '') != '' && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.get('adminEmail', '') == request.auth.token.email)
         )
       );
       allow delete: if isSuperAdmin();
@@ -144,22 +141,18 @@ service cloud.firestore {
     match /site_personnel/{staffId} {
       allow read: if isAuthenticated();
       allow create: if isSuperAdmin() || (
-        request.resource.data.projectId != null &&
+        request.resource.data.get('projectId', '') != '' &&
         isProjectAdmin(request.resource.data.projectId)
       ) || (
         isAuthenticated() && request.auth.uid == staffId
       );
       allow update: if isSuperAdmin() || (
-        resource.data.projectId != null &&
-        request.resource.data.projectId != null &&
-        resource.data.projectId == request.resource.data.projectId &&
-        isProjectAdmin(resource.data.projectId)
+        isProjectAdmin(request.resource.data.get('projectId', resource.data.get('projectId', '')))
       ) || (
         isAuthenticated() && request.auth.uid == staffId
       );
       allow delete: if isSuperAdmin() || (
-        resource.data.projectId != null &&
-        isProjectAdmin(resource.data.projectId)
+        isProjectAdmin(resource.data.get('projectId', ''))
       );
     }
 

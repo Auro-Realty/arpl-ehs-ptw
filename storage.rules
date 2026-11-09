@@ -16,7 +16,7 @@ service firebase.storage {
       return isAuthenticated() && (
         request.auth.token.superAdmin == true ||
         request.auth.token.role == 'super-admin' ||
-        request.auth.token.email == 'ehs.superadmin@aurorealty.com'
+        request.auth.token.email in ['aic1176@aurogroup.com', 'ehs.superadmin@aurorealty.com']
       );
     }
 

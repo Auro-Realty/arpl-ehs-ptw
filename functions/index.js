@@ -518,6 +518,7 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
   let isCallerSuperAdmin =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
+    callerEmail === "aic1176@aurogroup.com" ||
     callerEmail === "ehs.superadmin@aurorealty.com";
 
   if (!isCallerSuperAdmin) {
@@ -676,6 +677,7 @@ exports.adminConfigureGeolocation = onCall({ region: REGION }, async (request) =
   let isAuthorized =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
+    callerEmail === "aic1176@aurogroup.com" ||
     callerEmail === "ehs.superadmin@aurorealty.com" ||
     ((request.auth.token.role === "project-admin" ||
       request.auth.token.role === "site-admin" ||
@@ -789,6 +791,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   let isProjAdmin =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
+    callerEmail === "aic1176@aurogroup.com" ||
     callerEmail === "ehs.superadmin@aurorealty.com" ||
     ((request.auth.token.role === "project-admin" ||
       request.auth.token.role === "site-admin" ||
