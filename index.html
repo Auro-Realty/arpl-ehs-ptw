@@ -6108,6 +6108,26 @@
                                             </div>
                                         </div>
 
+                                        <!-- 7B. Staff Specimen Digital Signature (Upload Image or Draw) -->
+                                        <div class="form-field" style="margin-bottom:14px;">
+                                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                                <label style="font-weight:700;font-size:12px;color:#1E293B;margin:0;">Staff Specimen Digital Signature <span style="font-size:11px;font-weight:normal;color:#64748B;">(Upload or Draw)</span></label>
+                                                <span style="font-size:11px;color:var(--text-muted);"><i class="fa-solid fa-pen-nib"></i> Optional specimen on record</span>
+                                            </div>
+                                            <div class="sig-wrap" id="empanelSigPad-wrap" data-label="Sign above or upload signature image">
+                                                <div class="sig-canvas-box" style="background:#FFF;border:1.5px dashed #CBD5E1;border-radius:8px;padding:4px;text-align:center;">
+                                                    <canvas id="empanelSigPad" width="340" height="90" style="touch-action:none;background:#FFF;display:block;margin:0 auto;max-width:100%;height:90px;"></canvas>
+                                                </div>
+                                                <div class="sig-actions" style="margin-top:6px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
+                                                    <div style="display:flex;gap:6px;">
+                                                        <button type="button" class="btn btn-xs btn-ghost" onclick="clearSigPad('empanelSigPad');window.empanelStaffSig=null;"><i class="fa-solid fa-eraser"></i> Clear</button>
+                                                        <button type="button" class="btn btn-xs btn-ghost" onclick="triggerSigUpload('empanelSigPad')"><i class="fa-solid fa-upload"></i> Upload Signature Image</button>
+                                                    </div>
+                                                    <span class="sig-status pending" id="empanelSigPad-status" style="font-size:10.5px;color:var(--text-muted);"><i class="fa-solid fa-signature"></i> Specimen signature</span>
+                                                </div>
+                                            </div>
+                                        </div>
+
                                         <!-- 8. Submit Button -->
                                         <button id="empanelSubmitBtn" type="submit" style="width:100%;background:#E8600A;color:#FFFFFF;border:none;border-radius:8px;padding:11px 16px;font-size:13.5px;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;box-shadow:0 2px 6px rgba(232,96,10,0.28);">
                                             <i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login
@@ -8053,15 +8073,23 @@
 
         function getLocationGps(projIdOrName, locNameOrId) {
             const p = getProject(projIdOrName);
-            if (!p) return { lat: 17.4239, lng: 78.4738, address: 'Worksite', radius: 75, configured: false };
+            if (!p) return { lat: 17.43523, lng: 78.37613, address: 'Worksite', radius: 150, configured: false };
             const locs = ensureProjectLocations(p);
-            const found = locs.find(l => l.id === locNameOrId || l.name === locNameOrId || l.code === locNameOrId);
+            const cleanTarget = String(locNameOrId || '').trim().toLowerCase();
+            const found = locs.find(l => {
+                if (!l) return false;
+                const idMatch = l.id && String(l.id).trim().toLowerCase() === cleanTarget;
+                const nameMatch = l.name && String(l.name).trim().toLowerCase() === cleanTarget;
+                const codeMatch = l.code && String(l.code).trim().toLowerCase() === cleanTarget;
+                const normMatch = l.name && cleanTarget && (cleanTarget.includes(l.name.toLowerCase()) || l.name.toLowerCase().includes(cleanTarget));
+                return idMatch || nameMatch || codeMatch || normMatch;
+            });
             if (found && found.site && found.site.lat !== null && !isNaN(found.site.lat)) {
                 return {
-                    lat: found.site.lat,
-                    lng: found.site.lng,
+                    lat: Number(found.site.lat),
+                    lng: Number(found.site.lng),
                     address: found.site.address || found.name,
-                    radius: found.radius || 75,
+                    radius: Number(found.radius) || Number(p.radius) || 150,
                     configured: !!found.configured,
                     configuredAt: found.configuredAt,
                     configuredBy: found.configuredBy,
@@ -8070,12 +8098,17 @@
                     id: found.id
                 };
             }
+            // Resilient fallback: Check if any location in this project has been configured
+            const anyCfg = locs.find(l => l && l.configured && l.site && l.site.lat !== null && !isNaN(l.site.lat));
+            const baseLat = anyCfg ? Number(anyCfg.site.lat) : ((p.site && p.site.lat !== null && p.site.lat !== undefined && !isNaN(p.site.lat)) ? Number(p.site.lat) : (p.lat !== null && p.lat !== undefined && !isNaN(p.lat) ? Number(p.lat) : 17.43523));
+            const baseLng = anyCfg ? Number(anyCfg.site.lng) : ((p.site && p.site.lng !== null && p.site.lng !== undefined && !isNaN(p.site.lng)) ? Number(p.site.lng) : (p.lng !== null && p.lng !== undefined && !isNaN(p.lng) ? Number(p.lng) : 78.37613));
+            const baseRadius = (anyCfg && anyCfg.radius) ? Number(anyCfg.radius) : (Number(p.radius) || 150);
             return {
-                lat: (p.site && p.site.lat) ? p.site.lat : 17.4239,
-                lng: (p.site && p.site.lng) ? p.site.lng : 78.4738,
-                address: (p.site && p.site.address) ? p.site.address : p.name,
-                radius: p.radius || 75,
-                configured: !!p.configured,
+                lat: baseLat,
+                lng: baseLng,
+                address: (p.site && p.site.address) ? p.site.address : (p.name || 'Worksite'),
+                radius: baseRadius,
+                configured: !!(anyCfg || p.configured),
                 configuredAt: p.configuredAt,
                 configuredBy: p.configuredBy,
                 name: locNameOrId || p.name,
@@ -8287,8 +8320,23 @@
             }
             return ['site-supervisor', 'site-engineer', 'mep', 'pm', 'it', 'excavation-head', 'ehs-manager', 'ehs-officer'];
         }
-                function isPermitVisibleToRole(p, roleKey) {
+        function isPermitVisibleToRole(p, roleKey) {
             if (!roleKey || roleKey === 'admin' || roleKey === 'super-admin') return true;
+            // Draft Visibility: Author or permittee roles must always see their own drafts
+            if (p && p.status === 'Draft') {
+                if (currentUser && (
+                    p.createdBy === currentUser.name ||
+                    p.createdByEmail === currentUser.email ||
+                    p.creatorEmail === currentUser.email ||
+                    p.createdByUid === currentUser.uid ||
+                    roleKey === 'site-supervisor' ||
+                    roleKey === 'electrician' ||
+                    roleKey === 'blasting-incharge' ||
+                    roleKey === 'lift-supervisor'
+                )) {
+                    return true;
+                }
+            }
             // Location Scoping: If user is assigned to a specific tower/location and is not campus-wide
             if (currentUser && currentUser.locationName && !currentUser.campusWide && roleKey !== 'super-admin' && roleKey !== 'admin') {
                 const pLoc = p.tower || p.locationName || p.location || '';
@@ -9006,43 +9054,79 @@
             if (!nameOrId) return null;
             return PROJECTS.find(p => p.name === nameOrId || p.id === nameOrId) || null;
         }
-                function getProjectSiteCoord(pOrProj) {
-            if (!pOrProj) return { lat: 17.4239, lng: 78.4738, address: 'Hyderabad, Telangana' };
-            const locName = (typeof pOrProj === 'object' && pOrProj) ? (pOrProj.tower || pOrProj.locationName || pOrProj.location) : null;
-            const projName = typeof pOrProj === 'string' ? pOrProj : (pOrProj.project || pOrProj.name);
+        function getProjectSiteCoord(pOrProj) {
+            if (!pOrProj) return { lat: 17.43523, lng: 78.37613, address: 'Worksite Center', radius: 150 };
+            const locName = (typeof pOrProj === 'object' && pOrProj) ? (pOrProj.tower || pOrProj.locationName || pOrProj.locationId || pOrProj.location) : null;
+            const projName = typeof pOrProj === 'string' ? pOrProj : (pOrProj.project || pOrProj.name || pOrProj.projectId);
             if (locName && projName) {
                 const locGps = getLocationGps(projName, locName);
-                if (locGps && locGps.lat !== null && !isNaN(locGps.lat)) {
+                if (locGps && locGps.lat !== null && locGps.lat !== undefined && !isNaN(locGps.lat)) {
                     return locGps;
                 }
             }
-            const prj = typeof pOrProj === 'string' ? projectByName(pOrProj) : (projectByName(pOrProj.project) || projectByName(pOrProj.name) || pOrProj);
-            if (prj && prj.site && prj.site.lat !== null && prj.site.lat !== undefined && !isNaN(prj.site.lat)) {
-                return prj.site;
+            const prj = typeof pOrProj === 'string' ? projectByName(pOrProj) : (projectByName(pOrProj.project) || projectByName(pOrProj.name) || projectByName(pOrProj.projectId) || pOrProj);
+            if (prj) {
+                if (Array.isArray(prj.locations)) {
+                    const cfgLoc = prj.locations.find(l => l && l.configured && l.site && l.site.lat !== null && !isNaN(l.site.lat));
+                    if (cfgLoc) {
+                        return {
+                            lat: Number(cfgLoc.site.lat),
+                            lng: Number(cfgLoc.site.lng),
+                            address: cfgLoc.site.address || cfgLoc.name || prj.name,
+                            radius: Number(cfgLoc.radius) || Number(prj.radius) || 150
+                        };
+                    }
+                }
+                if (prj.site && prj.site.lat !== null && prj.site.lat !== undefined && !isNaN(prj.site.lat)) {
+                    return {
+                        lat: Number(prj.site.lat),
+                        lng: Number(prj.site.lng),
+                        address: prj.site.address || prj.name,
+                        radius: Number(prj.radius) || 150
+                    };
+                }
+                if (prj.lat !== null && prj.lat !== undefined && !isNaN(prj.lat)) {
+                    return {
+                        lat: Number(prj.lat),
+                        lng: Number(prj.lng),
+                        address: (prj.site && prj.site.address) || prj.location || prj.name,
+                        radius: Number(prj.radius) || 150
+                    };
+                }
             }
-            if (pOrProj.gps && pOrProj.gps.lat !== null && pOrProj.gps.lat !== undefined && !isNaN(pOrProj.gps.lat)) {
+            if (pOrProj && pOrProj.gps && pOrProj.gps.lat !== null && pOrProj.gps.lat !== undefined && !isNaN(pOrProj.gps.lat)) {
                 return pOrProj.gps;
             }
-            return { lat: 17.4239, lng: 78.4738, address: 'Hyderabad, Telangana' };
+            return { lat: 17.43523, lng: 78.37613, address: 'Worksite Center', radius: 150 };
         }
 
         function getProjectRadius(pOrName) {
-            if (!pOrName) return GPS_RADIUS_M || 75;
-            const locName = (typeof pOrName === 'object' && pOrName) ? (pOrName.tower || pOrName.locationName || pOrName.location) : null;
-            const projName = typeof pOrName === 'string' ? pOrName : (pOrName.project || pOrName.name);
+            if (!pOrName) return GPS_RADIUS_M || 150;
+            const locName = (typeof pOrName === 'object' && pOrName) ? (pOrName.tower || pOrName.locationName || pOrName.locationId || pOrName.location) : null;
+            const projName = typeof pOrName === 'string' ? pOrName : (pOrName.project || pOrName.name || pOrName.projectId);
             if (locName && projName) {
                 const locGps = getLocationGps(projName, locName);
                 if (locGps && locGps.radius && !isNaN(locGps.radius)) {
-                    return locGps.radius;
+                    return Number(locGps.radius);
                 }
             }
             const prj = projectByName(projName);
-            return (prj && prj.radius && !isNaN(prj.radius)) ? prj.radius : (GPS_RADIUS_M || 75);
+            if (prj) {
+                if (Array.isArray(prj.locations)) {
+                    const cfgLoc = prj.locations.find(l => l && l.configured && l.radius);
+                    if (cfgLoc) return Number(cfgLoc.radius);
+                }
+                if (prj.radius && !isNaN(prj.radius)) return Number(prj.radius);
+            }
+            return GPS_RADIUS_M || 150;
         }
 
         function isProjectConfigured(name) {
             const prj = projectByName(name);
-            return !!(prj && prj.configured);
+            if (!prj) return false;
+            if (prj.configured) return true;
+            if (Array.isArray(prj.locations) && prj.locations.some(l => l && l.configured)) return true;
+            return false;
         }
 
         function showToast(msg, type, icon) {
@@ -9120,6 +9204,9 @@
             if (typeof actionModalCtx !== 'undefined' && actionModalCtx && id === 'apprSigPad') {
                 actionModalCtx.sig = dataUrl;
             }
+            if (id === 'empanelSigPad') {
+                window.empanelStaffSig = dataUrl;
+            }
             if (typeof draft !== 'undefined' && draft && id === 'seSigPad' && draft.signerVerified) {
                 draft.signature = { dataUrl: dataUrl, at: nowTime(), by: draft.signerName, consent: true };
                 if (ptypeOf(draft) === 'electrical' && draft.signerName) {
@@ -9144,6 +9231,9 @@
             if (SIG_PADS[id]) SIG_PADS[id].inked = false;
             if (typeof actionModalCtx !== 'undefined' && actionModalCtx && id === 'apprSigPad') {
                 actionModalCtx.sig = null;
+            }
+            if (id === 'empanelSigPad') {
+                window.empanelStaffSig = null;
             }
             if (typeof draft !== 'undefined' && draft && id === 'seSigPad') {
                 draft.signature = null;
@@ -9394,6 +9484,34 @@
                     });
                     localStorage.setItem(STORAGE_KEY, JSON.stringify(slim));
                 } catch (e2) { /* storage unavailable — session continues in memory */ }
+            }
+        }
+
+        function cleanPermitForFirestore(p) {
+            if (!p || typeof p !== 'object') return null;
+            const copy = JSON.parse(JSON.stringify(p, (k, v) => {
+                if (v === undefined) return null;
+                if (v instanceof Date) return v.toISOString();
+                return v;
+            }));
+            const resolvedPrj = projectByName(copy.project) || projectByName(copy.projectId);
+            copy.projectId = copy.projectId || (resolvedPrj ? resolvedPrj.id : (copy.project === 'Sansa County' ? 'PRJ-SANSA' : (copy.project === 'The Regent' ? 'PRJ-REGENT' : 'PRJ-PEARL')));
+            copy.projectName = copy.projectName || (resolvedPrj ? resolvedPrj.name : (copy.project || 'Sansa County'));
+            copy.updatedAt = new Date().toISOString();
+            return copy;
+        }
+
+        function persistPermitToFirestore(p) {
+            if (!p || !p.id) return;
+            if (typeof firebase === 'undefined' || !firebase.firestore) return;
+            try {
+                const clean = cleanPermitForFirestore(p);
+                if (!clean || !clean.projectId) return;
+                firebase.firestore().collection('permits').doc(p.id).set(clean, { merge: true })
+                    .then(() => console.log('[Firestore] Permit synced:', p.id))
+                    .catch(e => console.warn('[Firestore] Permit sync warning (' + p.id + '):', e));
+            } catch (err) {
+                console.warn('[Firestore] Permit serialization warning:', err);
             }
         }
         function loadState() {
@@ -10161,6 +10279,7 @@
             p.escalation = { stage1: false, stage2: false };
             const creator = p.createdBy || (currentUser && currentUser.name) || roleInfo('site-supervisor').label;
             p.status = 'Pending Site Engineer Acknowledgment';
+            persistPermitToFirestore(p);
             if (p.parentNightShiftId) {
                 const parent = PERMITS.find(x => x.id === p.parentNightShiftId);
                 if (parent) {
@@ -12735,12 +12854,8 @@
                 '<div style="font-size:11px;color:var(--green);font-weight:600;margin-top:2px;"><i class="fa-solid fa-circle-check"></i> DPDP Statutory Consent Verified &amp; Granted</div>' +
                 '</div>' +
                 '</div>' +
-                '<div class="sig-pad-wrapper" style="margin-top:10px;">' +
-                '<canvas id="apprSigPad" width="460" height="150" class="sig-canvas" style="touch-action:none;border:1.5px dashed #CBD5E1;border-radius:8px;background:#FFF;"></canvas>' +
-                '</div>' +
-                '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;">' +
-                '<button type="button" class="btn btn-xs btn-ghost" onclick="clearSigPad(\'apprSigPad\')"><i class="fa-solid fa-eraser"></i> Clear Pad</button>' +
-                '<span style="font-size:11px;color:var(--text-muted);"><i class="fa-solid fa-pen-nib"></i> Sign with finger or mouse</span>' +
+                '<div style="margin-top:10px;">' +
+                sigPadHtml('apprSigPad', 'Sign with finger or mouse, or upload digital signature image') +
                 '</div>' +
                 '</div>' +
                 '</div>';
@@ -12773,7 +12888,7 @@
                 }
             }
             if (!ctx.sig) {
-                showToast('Administrator digital signature is mandatory. Please draw your signature on the pad.', 'warn');
+                showToast('Administrator digital signature is mandatory. Please draw your signature on the pad or upload a signature image.', 'warn');
                 return;
             }
 
@@ -12799,6 +12914,10 @@
             prj.radius = ctx.radius;
             prj.lat = ctx.lat;
             prj.lng = ctx.lng;
+            prj.site = prj.site || {};
+            prj.site.lat = ctx.lat;
+            prj.site.lng = ctx.lng;
+            prj.site.address = ctx.address;
             prj.geofence = {
                 lat: ctx.lat,
                 lng: ctx.lng,
@@ -12818,6 +12937,7 @@
                     configured: prj.configured,
                     lat: ctx.lat,
                     lng: ctx.lng,
+                    site: prj.site,
                     radius: ctx.radius,
                     geofence: prj.geofence,
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -13701,6 +13821,13 @@
 
                 finalUid = authUid || ('stf-' + uid());
 
+                let staffSig = window.empanelStaffSig || null;
+                if (!staffSig) {
+                    const cv = document.getElementById('empanelSigPad');
+                    const st = (typeof SIG_PADS !== 'undefined') ? SIG_PADS['empanelSigPad'] : null;
+                    if (st && st.inked && cv) staffSig = cv.toDataURL('image/png');
+                }
+
                 // Persist to Cloud Firestore with strict asynchronous confirmation
                 if (typeof firebase !== 'undefined' && firebase.firestore) {
                     const db = firebase.firestore();
@@ -13725,6 +13852,7 @@
                         campusWide: isCampusWide,
                         allowedWorkflows: allowedWfs,
                         phone: phone,
+                        signature: staffSig || null,
                         createdBy: (currentUser && currentUser.email) || 'site-admin',
                         createdByRole: 'project-admin',
                         status: 'Active',
@@ -13821,6 +13949,7 @@
                 campusWide: isCampusWide,
                 allowedWorkflows: allowedWfs,
                 phone: phone,
+                signature: staffSig || null,
                 status: 'Active',
                 isRealFirestoreUser: true,
                 createdBy: (currentUser && currentUser.email) || 'site-admin',
@@ -13879,6 +14008,8 @@
             if (emailEl) emailEl.value = '';
             if (empIdEl) empIdEl.value = '';
             if (customTitleEl) customTitleEl.value = '';
+            if (typeof clearSigPad === 'function') clearSigPad('empanelSigPad');
+            window.empanelStaffSig = null;
 
             if (submitBtn) {
                 submitBtn.disabled = false;
@@ -17674,7 +17805,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 if (currentUser && currentUser.key !== 'super-admin') {
                     const userProj = (currentUser.projectName || currentUser.projectId || '').toLowerCase();
                     const permitProj = (p.project || p.projectId || '').toLowerCase();
-                    if (userProj && permitProj && !permitProj.includes(userProj) && !userProj.includes(permitProj)) {
+                    if (p.status === 'Draft' && !permitProj) {
+                        // Drafts with pending project selection belong to current user's workspace
+                    } else if (userProj && permitProj && !permitProj.includes(userProj) && !userProj.includes(permitProj)) {
                         return false;
                     }
                 }
@@ -17690,10 +17823,10 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     }
                 }
                 if (sf && p.status !== sf && !(sf === 'Pending Section Head' && (p.status === 'Pending Tower Incharge' || p.status === 'Pending Excavation Head'))) return false;
-                if (pf && p.project !== pf) return false;
+                if (pf && p.project !== pf && !(p.status === 'Draft' && (!p.project || p.projectId === pf || (currentUser && (currentUser.projectName === pf || currentUser.projectId === pf))))) return false;
                 if (q && !((p.id || '').toLowerCase().includes(q) || (p.project || '').toLowerCase().includes(q) || (p.location || '').toLowerCase().includes(q) || (p.tower || '').toLowerCase().includes(q) || (pMeta(p).name || '').toLowerCase().includes(q) || (pMeta(p).code || '').toLowerCase().includes(q) || (p.contractor || '').toLowerCase().includes(q))) return false;
                 return true;
-            }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+            }).sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
             const tbody = document.getElementById('registerTbody');
             if (!rows.length) { tbody.innerHTML = '<tr><td colspan="9">' + renderEmptyState('noFilterMatch') + '</td></tr>'; return; }
             tbody.innerHTML = rows.map(p => {
@@ -18064,11 +18197,36 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             }
         }
         function saveDraftAndExit() {
+            if (!draft) return;
             draft.status = 'Draft';
-            if (!PERMITS.find(p => p.id === draft.id)) PERMITS.push(draft);
+            draft.createdBy = draft.createdBy || (currentUser && currentUser.name) || 'Permittee';
+            draft.createdByEmail = draft.createdByEmail || (currentUser && currentUser.email) || '';
+            draft.creatorEmail = draft.creatorEmail || (currentUser && currentUser.email) || '';
+            draft.createdByUid = draft.createdByUid || (currentUser && currentUser.uid) || '';
+            draft.createdRoleKey = draft.createdRoleKey || (currentUser && currentUser.key) || 'site-supervisor';
+            draft.project = draft.project || (currentUser && (currentUser.projectName || currentUser.projectId)) || 'Sansa County';
+            const prjObj = projectByName(draft.project);
+            draft.projectId = draft.projectId || (prjObj ? prjObj.id : (currentUser && currentUser.projectId) || 'PRJ-SANSA');
+            draft.projectName = draft.projectName || (prjObj ? prjObj.name : draft.project);
+            draft.tower = draft.tower || (currentUser && !currentUser.campusWide ? currentUser.locationName : '') || '';
+            draft.location = draft.location || draft.tower || 'Draft Worksite';
+            draft.updatedAt = new Date().toISOString();
+            draft.lastSaved = nowTime();
+
+            const existingIdx = PERMITS.findIndex(p => p.id === draft.id);
+            if (existingIdx >= 0) {
+                PERMITS[existingIdx] = Object.assign({}, PERMITS[existingIdx], draft);
+            } else {
+                PERMITS.unshift(draft);
+            }
             saveState();
+
+            // Persist draft to Cloud Firestore
+            persistPermitToFirestore(draft);
+
+            const savedId = draft.id;
             draft = null;
-            showToast('Draft saved. You can resume it from My Permits.', 'ok');
+            showToast('Draft ' + savedId + ' saved successfully. Visible under My Permits.', 'ok');
             goTo('register');
         }
         function renderWizStep(preserveScrollAndFocus) {
@@ -19672,17 +19830,18 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
         }
         function gpsFieldBoxHtml() {
             const prj = projectByName(draft.project);
-            const isConfigured = !!(prj && prj.configured);
+            const isConfigured = isProjectConfigured(draft.project);
             if (draft.project && !isConfigured) {
                 return '<div class="gps-box" style="border-color:#FFCDD2;background:#FFEBEE;"><div class="gps-row"><div class="gps-info" style="color:#C62828;"><i class="fa-solid fa-lock"></i> GPS capture locked: The selected project has not been configured by an Administrator yet.</div></div></div>';
             }
             if (draft.gps) {
-                const site = (prj && prj.site) ? prj.site : { lat: 17.4239, lng: 78.4738 };
-                const radius = (prj && prj.radius) || 150;
+                const site = getProjectSiteCoord(draft);
+                const radius = getProjectRadius(draft);
                 const dist = haversine(draft.gps.lat, draft.gps.lng, site.lat, site.lng);
-                const isWithin = dist <= radius;
+                const accuracyTol = Math.min((draft.gps && draft.gps.accuracy) || 15, 50);
+                const isWithin = dist <= (radius + accuracyTol);
                 const badgeHtml = isWithin
-                    ? '<span class="gps-status-pill in" style="margin-left:auto;"><i class="fa-solid fa-circle-check"></i> Within ' + radius + 'm Geofence (' + Math.round(dist) + 'm from site pin)</span>'
+                    ? '<span class="gps-status-pill in" style="margin-left:auto;"><i class="fa-solid fa-circle-check"></i> Within ' + radius + 'm Geofence (' + Math.round(dist) + 'm from ' + escapeHtml(draft.tower || 'location') + ' pin)</span>'
                     : '<span class="gps-status-pill out" style="margin-left:auto;"><i class="fa-solid fa-triangle-exclamation"></i> Outside Geofence (' + Math.round(dist) + 'm away &bull; Threshold: ' + radius + 'm)</span>';
 
                 return '<div class="gps-box captured" style="' + (isWithin ? '' : 'border-color:#EF5350;background:#FFEBEE;') + '">' +
@@ -19691,24 +19850,24 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     badgeHtml +
                     '</div>' +
                     (!isWithin
-                        ? '<div class="form-error" style="display:flex;margin:8px 0 6px 0;"><i class="fa-solid fa-circle-exclamation"></i> <b>Geofence Violation:</b> Captured coordinates are ' + Math.round(dist) + 'm away from the configured worksite center (allowed radius: ' + radius + 'm).</div>'
+                        ? '<div class="form-error" style="display:flex;margin:8px 0 6px 0;"><i class="fa-solid fa-circle-exclamation"></i> <b>Geofence Violation:</b> Captured coordinates are ' + Math.round(dist) + 'm away from ' + escapeHtml(draft.tower || 'the configured location') + ' (allowed radius: ' + radius + 'm).</div>'
                         : '') +
                     '<div class="map-preview"><iframe loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=' + (draft.gps.lng - 0.006) + '%2C' + (draft.gps.lat - 0.006) + '%2C' + (draft.gps.lng + 0.006) + '%2C' + (draft.gps.lat + 0.006) + '&layer=mapnik&marker=' + draft.gps.lat + '%2C' + draft.gps.lng + '"></iframe></div>' +
                     '</div>';
             }
-            return '<div class="gps-box" style="background:#F8FAFC;border:1px solid #E2E8F0;"><div class="gps-row"><div class="gps-info" style="color:var(--text);"><i class="fa-solid fa-location-crosshairs" style="color:var(--orange);"></i> <b>Worksite GPS Capture:</b> Worksite GPS coordinates will be captured and verified against the geofence radius (' + ((prj && prj.radius) || 150) + 'm) when submitting the final form.</div></div></div>';
+            return '<div class="gps-box" style="background:#F8FAFC;border:1px solid #E2E8F0;"><div class="gps-row"><div class="gps-info" style="color:var(--text);"><i class="fa-solid fa-location-crosshairs" style="color:var(--orange);"></i> <b>Worksite GPS Capture:</b> Worksite GPS coordinates will be captured and verified against the location geofence radius (' + getProjectRadius(draft) + 'm) when submitting the final form.</div></div></div>';
         }
         function captureLocationForStep1() {
             const prj = projectByName(draft.project);
-            if (!prj || !prj.configured) {
+            if (!prj || !isProjectConfigured(draft.project)) {
                 showToast('Cannot capture location — this project worksite GPS has not been configured by Admin yet.', 'err');
                 return;
             }
-            const site = prj.site || { lat: 17.4239, lng: 78.4738, address: 'Hyderabad, Telangana' };
-            const radius = prj.radius || 150;
+            const site = getProjectSiteCoord(draft);
+            const radius = getProjectRadius(draft);
             openGPSModal({
                 siteCoord: site, radius: radius, gateEnabled: true, onConfirm: function (cap) {
-                    draft.gps = { lat: cap.lat, lng: cap.lng, address: site.address || cap.address, distance: cap.distance, within: cap.within, radius: radius };
+                    draft.gps = { lat: cap.lat, lng: cap.lng, address: site.address || cap.address, distance: cap.distance, within: cap.within, radius: radius, accuracy: cap.accuracy };
                     document.getElementById('gpsFieldBox').innerHTML = gpsFieldBoxHtml();
                     validateWizStep(1);
                 }
@@ -20467,9 +20626,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             });
         }
         function captureChecklistGPS(i) {
-            const prj = projectByName(draft.project);
-            const site = prj ? prj.site : (draft.gps || null);
-            const radius = prj ? prj.radius : 150;
+            const site = getProjectSiteCoord(draft);
+            const radius = getProjectRadius(draft);
             openGPSModal({
                 siteCoord: site, radius: radius, gateEnabled: true,
                 onConfirm: function (cap) {
@@ -20617,9 +20775,11 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     ? (draft.hotworkTypes && draft.hotworkTypes.length && draft.welderName && draft.welderName.trim().length >= 2 && (draft.welderAffiliation !== 'Subcontractor' || (draft.welderContractor && draft.welderContractor.trim())))
                     : (draft.depth && draft.slope && draft.equipment.length && (!draft.equipment.includes('Others') || (draft.equipmentOther && draft.equipmentOther.trim())))
             ));
-            const radius = (prj && prj.radius) || 150;
-            const dist = (draft.gps && prj && prj.site) ? haversine(draft.gps.lat, draft.gps.lng, prj.site.lat, prj.site.lng) : Infinity;
-            const gpsOk = isElecBatching ? !!draft.gps : !!(draft.gps && draft.gps.within && dist <= radius);
+            const site = getProjectSiteCoord(draft);
+            const radius = getProjectRadius(draft);
+            const accuracyTol = Math.min((draft.gps && draft.gps.accuracy) || 15, 50);
+            const dist = (draft.gps && site && site.lat !== null && site.lat !== undefined && !isNaN(site.lat)) ? haversine(draft.gps.lat, draft.gps.lng, site.lat, site.lng) : Infinity;
+            const gpsOk = isElecBatching ? !!draft.gps : !!(draft.gps && (draft.gps.within || dist <= (radius + accuracyTol)));
             const checklistOk = draft.checklist.every(checklistItemComplete);
             const attachOk = isNightShift ? true : !!draft.sitePhoto;
             const durOk = isNightShift
@@ -21765,9 +21925,11 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     const radius = getProjectRadius(p);
                     const dist = haversine(p.gps.lat, p.gps.lng, site.lat, site.lng);
                     const accuracyTol = Math.min(p.gps.accuracy || 15, 50);
-                    if (dist > (radius + accuracyTol) && !p.gps.within) {
+                    if (dist <= (radius + accuracyTol)) {
+                        p.gps.within = true;
+                    } else if (!p.gps.within) {
                         overlay.classList.remove('show');
-                        showToast('Geofence Violation: Live GPS coordinates are outside the permitted project radius (' + Math.round(dist) + 'm away, limit ' + radius + 'm).', 'err');
+                        showToast('Geofence Violation: Live GPS coordinates (' + Math.round(dist) + 'm away) exceed the permitted location radius (' + radius + 'm).', 'err');
                         return;
                     }
 
@@ -26779,6 +26941,29 @@ ptypeOf(p) === 'general' ?
                         }
                     });
                     window.AUDIT_LOGS = logs;
+                }
+
+                // 6. Permits Collection Synchronization (Persisted Cloud PTW & Drafts)
+                try {
+                    const pSnap = await db.collection('permits').get();
+                    if (!pSnap.empty) {
+                        pSnap.forEach(doc => {
+                            const data = doc.data();
+                            if (data && data.id) {
+                                const existingIdx = PERMITS.findIndex(x => x.id === data.id);
+                                if (existingIdx >= 0) {
+                                    PERMITS[existingIdx] = Object.assign({}, PERMITS[existingIdx], data);
+                                } else {
+                                    PERMITS.unshift(data);
+                                }
+                            }
+                        });
+                        if (typeof buildRegisterTable === 'function' && document.getElementById('view-register') && document.getElementById('view-register').classList.contains('active')) {
+                            buildRegisterTable();
+                        }
+                    }
+                } catch (e) {
+                    console.warn('[Firestore Sync] Permits remote collection sync notice:', e);
                 }
 
                 saveState();
