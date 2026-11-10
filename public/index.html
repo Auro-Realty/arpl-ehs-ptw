@@ -5961,20 +5961,21 @@
                                         <div class="form-field" style="margin-bottom:12px;">
                                             <label for="empanelRoleSelect" style="font-weight:700;font-size:12px;color:#1E293B;">Operational Role <span class="req">*</span></label>
                                             <select id="empanelRoleSelect" required onchange="onEmpanelRoleSelectChange()">
-                                                <option value="site-supervisor">Site Supervisor (Permit Initiator / Permittee)</option>
+                                                <option value="site-supervisor">Permittee (PTW-001 to PTW-005, PTW-008 Initiator)</option>
                                                 <option value="site-engineer">Site Engineer (Field Verification / Approver)</option>
-                                                <option value="section-head">Tower In-Charge / Section Head (Stage 2 Reviewer)</option>
-                                                <option value="excavation-head">Excavation Execution Head (Conditional Reviewer)</option>
-                                                <option value="mep">MEP Engineer (Parallel Technical Reviewer)</option>
-                                                <option value="pm">Plant &amp; Machinery / P&amp;M Head (Parallel Reviewer)</option>
+                                                <option value="mep">MEP (Technical Clearance)</option>
+                                                <option value="pm">P&amp;M (Plant &amp; Machinery Clearance)</option>
+                                                <option value="lift-supervisor">Lifting Supervisor (PTW-009A/B Initiator)</option>
+                                                <option value="blasting-incharge">Blasting Incharge (PTW-007 Initiator)</option>
+                                                <option value="it">IT in charge (Technical Clearance)</option>
+                                                <option value="electrician">Electrician (PTW-006 Initiator)</option>
+                                                <option value="section-head">Tower In charge (Tower &amp; Structure Approver)</option>
+                                                <option value="excavation-head">Section Head (Civil &amp; Earthwork Approver)</option>
+                                                <option value="ehs-officer">EHS supervisor (Field Surveillance &amp; Endorsement)</option>
+                                                <option value="ehs-manager">EHS Head (Statutory Endorsement &amp; Stop-Work)</option>
+                                                <option value="project-manager">Project Manager (Executive Approver &amp; Escalation)</option>
+                                                <option value="project-admin">Site admin (Worksite Geofence &amp; Staff Empanelment)</option>
                                                 <option value="quality-engineer">Quality Engineer (Parallel Reviewer)</option>
-                                                <option value="it">IT / Systems Engineer (Parallel Reviewer)</option>
-                                                <option value="ehs-officer">Site EHS Officer (Stage 3 Safety Approver &amp; PDF Custody)</option>
-                                                <option value="ehs-manager">Project EHS Manager (Stage 3 Final Approver &amp; PDF Custody)</option>
-                                                <option value="project-manager">Project Head / Project Manager (Escalation &amp; Oversight)</option>
-                                                <option value="electrician">Permittee Electrician (PTW-006 Electrical Initiator)</option>
-                                                <option value="blasting-incharge">Blasting In-charge (PTW-007 Drilling &amp; Blasting Initiator)</option>
-                                                <option value="lift-supervisor">Lifting Supervisor (PTW-009A/B Lifting Initiator)</option>
                                                 <option value="night-supervisor">Night Site Supervisor (PTW-010 Night Shift Handover)</option>
                                             </select>
                                             <select id="newStaffRole" onchange="onNewStaffRoleChange()" style="display:none;"></select>
@@ -8957,7 +8958,7 @@
             },
             {
                 key: 'ehs-manager',
-                label: 'EHS Safety Manager',
+                label: 'EHS Head',
                 sub: 'Statutory Endorsement & Stop-Work Authority',
                 icon: 'fa-shield-halved',
                 tier: 'Tier 4 · Statutory Endorsement',
@@ -8968,7 +8969,7 @@
             },
             {
                 key: 'ehs-officer',
-                label: 'EHS Safety Officer',
+                label: 'EHS supervisor',
                 sub: 'Statutory Endorsement & Field Surveillance',
                 icon: 'fa-user-shield',
                 tier: 'Tier 4 · Statutory Endorsement',
@@ -8979,7 +8980,7 @@
             },
             {
                 key: 'super-admin',
-                label: 'Super Administrator',
+                label: 'Super admin',
                 sub: 'Enterprise Master, Sites & Admin Provisioning',
                 icon: 'fa-crown',
                 tier: 'Tier 0 · Enterprise Super Admin',
@@ -8990,7 +8991,7 @@
             },
             {
                 key: 'admin',
-                label: 'Site Administrator',
+                label: 'Site admin',
                 sub: 'Worksite Geofence & On-Site Personnel Accounts',
                 icon: 'fa-user-gear',
                 tier: 'Tier 5 · Site Administration',
@@ -9056,8 +9057,15 @@
         function roleInfo(key) {
             if (!key) return { key: '', label: 'Authorized Signatory', sub: '', icon: 'fa-user' };
             if (key === 'section-head') return ROLES.find(r => r.key === 'hw-section-head') || { key: 'hw-section-head', label: 'Tower Incharge', sub: 'Approving Authority', icon: 'fa-user-tie' };
+            if (key === 'admin' || key === 'project-admin' || key === 'site-admin') return { key: 'admin', label: 'Site admin', sub: 'Worksite Geofence & On-Site Personnel Accounts', icon: 'fa-user-gear' };
+            if (key === 'super-admin') return { key: 'super-admin', label: 'Super admin', sub: 'Enterprise Master, Sites & Admin Provisioning', icon: 'fa-crown' };
+            if (key === 'permittee') return { key: 'site-supervisor', label: 'Permittee', sub: 'Field Initiator & Permittee', icon: 'fa-user-pen' };
+            if (key === 'ehs-head') return { key: 'ehs-manager', label: 'EHS Head', sub: 'Statutory Endorsement & Stop-Work Authority', icon: 'fa-shield-halved' };
+            if (key === 'ehs-supervisor') return { key: 'ehs-officer', label: 'EHS supervisor', sub: 'Statutory Endorsement & Field Surveillance', icon: 'fa-user-shield' };
+            if (key === 'it-in-charge') return { key: 'it', label: 'IT in charge', sub: 'Technical Clearance (IT & Telecom Infrastructure)', icon: 'fa-network-wired' };
+            if (key === 'p&m') return { key: 'pm', label: 'P&M', sub: 'Technical Clearance (Plant & Machinery)', icon: 'fa-gears' };
             const r = ROLES.find(r => r.key === key);
-            return r || { key: key, label: (key === 'super-admin' ? 'Super Administrator' : (key === 'admin' ? 'Site Administrator' : 'Authorized Signatory')), sub: '', icon: (key === 'super-admin' ? 'fa-crown' : (key === 'admin' ? 'fa-user-gear' : 'fa-user')) };
+            return r || { key: key, label: (key === 'super-admin' ? 'Super admin' : (key === 'admin' ? 'Site admin' : 'Authorized Signatory')), sub: '', icon: (key === 'super-admin' ? 'fa-crown' : (key === 'admin' ? 'fa-user-gear' : 'fa-user')) };
         }
 
         /* ---------------- DATA ACCESS LAYER (STORAGE SERVICE) ---------------- */
@@ -13351,16 +13359,10 @@
             renderSuperAdminAdminsTab();
         }
 
-        function superAdminRemoveAdmin(idx) {
-            if (!confirm('Remove this administrator access permanently?')) return;
-            const removed = PROJECT_ADMINS.splice(idx, 1);
-            saveState();
-            if (removed[0] && typeof firebase !== 'undefined' && firebase.firestore) {
-                if (removed[0].id) firebase.firestore().collection('project_admins').doc(removed[0].id).delete().catch(() => {});
-                if (removed[0].uid) firebase.firestore().collection('users').doc(removed[0].uid).delete().catch(() => {});
-            }
-            showToast('Administrator ' + (removed[0] ? removed[0].name : '') + ' removed.', 'ok');
-            renderSuperAdminAdminsTab();
+        async function superAdminRemoveAdmin(idx) {
+            const adm = (PROJECT_ADMINS || [])[idx];
+            if (!adm) return false;
+            return await unifiedDeleteUser(adm);
         }
 
         /* --- Site Admin: Project Role Definitions & Location/Workflow Tagging --- */
@@ -13548,6 +13550,15 @@
             const worksiteReadonly = document.getElementById('empanelWorksiteReadonly');
             const roleLocSel = document.getElementById('customRoleLocationSelect');
             const isSiteAdmin = currentUser && currentUser.key === 'admin';
+            const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
+            const empanelRoleSel = document.getElementById('empanelRoleSelect');
+            if (empanelRoleSel) {
+                const siteAdminOpt = empanelRoleSel.querySelector('option[value="project-admin"]');
+                if (siteAdminOpt) {
+                    siteAdminOpt.style.display = isSuperAdmin ? 'block' : 'none';
+                    siteAdminOpt.disabled = !isSuperAdmin;
+                }
+            }
             const lockedPrjId = (isSiteAdmin && currentUser.projectId) ? currentUser.projectId : (prjSel ? prjSel.value : (PROJECTS[0] ? PROJECTS[0].id : 'PRJ-PEARL'));
             const prj = PROJECTS.find(p => p.id === lockedPrjId) || PROJECTS[0];
             const locs = ensureProjectLocations(prj);
@@ -14213,80 +14224,167 @@
             }
         }
 
-        async function siteAdminRemoveStaff(staffId) {
-            const idx = SITE_PERSONNEL_ACCOUNTS.findIndex(s => s && s.id === staffId);
-            if (idx === -1) return;
-            const stf = SITE_PERSONNEL_ACCOUNTS[idx];
-
-            if (!confirm('Are you sure you want to revoke and delete the account for ' + stf.name + ' (' + stf.email + ')? This will delete their Firebase credentials and remove their site role.')) {
-                return;
+        async function unifiedDeleteUser(userOrIdOrEmail) {
+            let target = null;
+            if (userOrIdOrEmail && typeof userOrIdOrEmail === 'object') {
+                target = Object.assign({}, userOrIdOrEmail);
+            } else if (typeof userOrIdOrEmail === 'string') {
+                const key = userOrIdOrEmail.trim();
+                const keyLower = key.toLowerCase();
+                target = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && (s.id === key || s.uid === key || (s.email && s.email.toLowerCase() === keyLower))) ||
+                         (PROJECT_ADMINS || []).find(a => a && (a.id === key || a.uid === key || (a.email && a.email.toLowerCase() === keyLower)));
+                if (!target) {
+                    for (const p of (PROJECTS || [])) {
+                        if (p.staffRoles && p.staffRoles[key]) {
+                            target = Object.assign({ id: key, projectId: p.id }, p.staffRoles[key]);
+                            break;
+                        }
+                    }
+                }
+                if (!target) {
+                    target = { id: key, uid: key, email: key.includes('@') ? key : '' };
+                }
             }
 
-            let backendRemoved = false;
-            // 1. Try backend Cloud Function deletion
+            if (!target) {
+                showToast('User record not found for deletion.', 'err');
+                return false;
+            }
+
+            const targetName = target.name || target.displayName || target.email || 'User';
+            const targetEmail = (target.email || '').toLowerCase().trim();
+            const targetUid = target.uid || target.id;
+            const targetProjectId = target.projectId || (currentUser && currentUser.projectId) || null;
+
+            const confirmed = confirm(
+                'PERMANENT ACCOUNT DELETION\n\n' +
+                'Are you sure you want to permanently delete the account for:\n' +
+                targetName + (targetEmail ? ' (' + targetEmail + ')' : '') + '?\n\n' +
+                'This action will permanently delete their Firebase Authentication credentials, revoke all worksite access, remove them from the User Directory, and clear all role assignments.'
+            );
+            if (!confirmed) return false;
+
+            // 1. Backend Cloud Function Deletion (Permanently deletes from Firebase Authentication + Firestore)
+            let backendSuccess = false;
             if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
                 try {
                     const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
                     const res = await assignFn({
                         action: 'delete',
-                        uid: stf.uid || stf.id,
-                        projectId: stf.projectId
+                        uid: targetUid,
+                        email: targetEmail,
+                        projectId: targetProjectId || 'PRJ-SANSA'
                     });
                     if (res && res.data && res.data.success) {
-                        backendRemoved = true;
+                        backendSuccess = true;
                     }
                 } catch (cfErr) {
-                    console.warn('Backend delete staff attempt noticed:', cfErr);
+                    console.warn('[unifiedDeleteUser] adminAssignProjectRole delete notice:', cfErr);
+                    try {
+                        const delFn = firebase.app().functions('asia-south1').httpsCallable('adminDeleteUser');
+                        const res2 = await delFn({
+                            uid: targetUid,
+                            email: targetEmail,
+                            projectId: targetProjectId
+                        });
+                        if (res2 && res2.data && res2.data.success) {
+                            backendSuccess = true;
+                        }
+                    } catch (_dErr) {}
                 }
             }
 
-            // 2. Direct Firestore fallback
-            if (!backendRemoved && typeof firebase !== 'undefined' && firebase.firestore) {
+            // 2. Direct Firestore fallback deletions
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
                 const db = firebase.firestore();
                 try {
-                    if (stf.uid) await db.collection('users').doc(stf.uid).delete();
-                    if (stf.id && stf.id !== stf.uid) await db.collection('users').doc(stf.id).delete();
-                    await db.collection('site_personnel').doc(stf.id || stf.uid).delete();
-                } catch (e) {
-                    console.warn('Firestore direct staff deletion notice:', e);
+                    if (targetUid) {
+                        await db.collection('users').doc(targetUid).delete().catch(() => {});
+                        await db.collection('site_personnel').doc(targetUid).delete().catch(() => {});
+                        await db.collection('project_admins').doc(targetUid).delete().catch(() => {});
+                    }
+                    if (target.id && target.id !== targetUid) {
+                        await db.collection('users').doc(target.id).delete().catch(() => {});
+                        await db.collection('site_personnel').doc(target.id).delete().catch(() => {});
+                        await db.collection('project_admins').doc(target.id).delete().catch(() => {});
+                    }
+                    if (targetEmail) {
+                        const uSnap = await db.collection('users').where('email', '==', targetEmail).get().catch(() => null);
+                        if (uSnap && !uSnap.empty) {
+                            for (const d of uSnap.docs) await d.ref.delete().catch(() => {});
+                        }
+                        const spSnap = await db.collection('site_personnel').where('email', '==', targetEmail).get().catch(() => null);
+                        if (spSnap && !spSnap.empty) {
+                            for (const d of spSnap.docs) await d.ref.delete().catch(() => {});
+                        }
+                        const paSnap = await db.collection('project_admins').where('email', '==', targetEmail).get().catch(() => null);
+                        if (paSnap && !paSnap.empty) {
+                            for (const d of paSnap.docs) await d.ref.delete().catch(() => {});
+                        }
+                    }
+                } catch (fsErr) {
+                    console.warn('[unifiedDeleteUser] Firestore direct cleanup notice:', fsErr);
                 }
             }
 
-            // 3. Remove safely from targetPrj staffRoles without deleting other users sharing the same role
-            const targetPrj = PROJECTS.find(p => p.id === stf.projectId);
-            if (targetPrj && targetPrj.staffRoles && targetPrj.staffRoles[staffId]) {
-                delete targetPrj.staffRoles[staffId];
-            }
-            if (targetPrj && targetPrj.roles && targetPrj.roles[stf.role] && targetPrj.roles[stf.role].uid === staffId) {
-                const another = SITE_PERSONNEL_ACCOUNTS.find(s => s && s.id !== staffId && s.projectId === stf.projectId && s.role === stf.role);
-                if (another) {
-                    targetPrj.roles[stf.role] = {
-                        uid: another.id || another.uid,
-                        name: another.name,
-                        email: another.email,
-                        employeeId: another.employeeId || another.empId,
-                        role: another.role,
-                        assignedTower: another.assignedTower || another.location
-                    };
-                } else {
-                    delete targetPrj.roles[stf.role];
+            // 3. Remove from client local memory state
+            const emailMatch = (e) => targetEmail && e && e.toLowerCase() === targetEmail;
+            const idMatch = (id) => id && (id === targetUid || id === target.id);
+
+            for (let i = SITE_PERSONNEL_ACCOUNTS.length - 1; i >= 0; i--) {
+                const s = SITE_PERSONNEL_ACCOUNTS[i];
+                if (s && (idMatch(s.id) || idMatch(s.uid) || emailMatch(s.email))) {
+                    SITE_PERSONNEL_ACCOUNTS.splice(i, 1);
                 }
             }
 
-            // Remove from local list
-            SITE_PERSONNEL_ACCOUNTS.splice(idx, 1);
+            for (let i = PROJECT_ADMINS.length - 1; i >= 0; i--) {
+                const a = PROJECT_ADMINS[i];
+                if (a && (idMatch(a.id) || idMatch(a.uid) || emailMatch(a.email))) {
+                    PROJECT_ADMINS.splice(i, 1);
+                }
+            }
+
+            (PROJECTS || []).forEach(prj => {
+                if (prj.staffRoles) {
+                    for (const sKey of Object.keys(prj.staffRoles)) {
+                        const stf = prj.staffRoles[sKey];
+                        if (sKey === targetUid || sKey === target.id || (stf && (idMatch(stf.id) || idMatch(stf.uid) || emailMatch(stf.email)))) {
+                            delete prj.staffRoles[sKey];
+                        }
+                    }
+                }
+                if (prj.roles && target.role && prj.roles[target.role]) {
+                    const rObj = prj.roles[target.role];
+                    if (idMatch(rObj.uid) || emailMatch(rObj.email)) {
+                        delete prj.roles[target.role];
+                    }
+                }
+                if (prj.adminEmail && emailMatch(prj.adminEmail)) {
+                    prj.adminEmail = null;
+                    prj.adminUid = null;
+                    prj.adminName = null;
+                }
+            });
+
             saveState();
-            renderSitePersonnelTable();
-            renderWorksiteGovernanceHeader();
 
             if (typeof recordAuditLog === 'function') {
-                recordAuditLog('REVOKE_SITE_STAFF', 'Revoked site role for ' + stf.name + ' (' + stf.email + ') on ' + (targetPrj ? targetPrj.name : stf.projectId), staffId);
+                recordAuditLog('DELETE_USER_PERMANENT', 'Permanently deleted user account ' + targetName + ' (' + (targetEmail || targetUid) + ') from Firebase and directory.');
             }
-            showEmpanelFeedbackBanner(
-                'ok',
-                '<i class="fa-solid fa-user-xmark"></i> <b>Role Revoked:</b> Removed <b>' + escapeHtml(stf.name) + '</b> (' + escapeHtml(stf.email) + ') from <b>' + escapeHtml(stf.projectName || stf.projectId) + '</b>.'
-            );
-            showToast('Revoked and removed ' + stf.name + ' from worksite directory.', 'ok');
+
+            if (typeof renderSitePersonnelTable === 'function') renderSitePersonnelTable();
+            if (typeof renderSuperAdminAdminsTab === 'function') renderSuperAdminAdminsTab();
+            if (typeof renderProjectAdminsView === 'function') renderProjectAdminsView();
+            if (typeof renderUsersDirectoryView === 'function') renderUsersDirectoryView();
+            if (typeof renderWorksiteGovernanceHeader === 'function') renderWorksiteGovernanceHeader();
+
+            showToast('Account for ' + targetName + ' permanently deleted from Firebase & system.', 'ok');
+            return true;
+        }
+
+        async function siteAdminRemoveStaff(staffId) {
+            return await unifiedDeleteUser(staffId);
         }
 
         /* --- Super Admin: Projects & Structural Hierarchies (Modify Sites) --- */
@@ -16242,11 +16340,16 @@
                 resolvedLocationName = null;
                 resolvedCampusWide = true;
                 resolvedName = resolvedName || 'ARPL Super Admin';
-            } else if (resolvedRole === 'ehs-manager' || resolvedRole === 'ehs-officer' || resolvedRole === 'safety-incharge') {
-                // Authoritative Mandate: Site Safety Incharge from every site is the default Site Admin in every project
+            } else if (resolvedRole === 'admin' || resolvedRole === 'project-admin' || resolvedRole === 'site-admin') {
                 resolvedRole = 'project-admin';
-                resolvedRoleLabel = 'Site Safety Incharge & Administrator';
+                resolvedRoleLabel = 'Site admin';
                 resolvedCampusWide = true;
+            } else if (resolvedRole === 'ehs-manager' || resolvedRole === 'ehs-head') {
+                resolvedRole = 'ehs-manager';
+                resolvedRoleLabel = 'EHS Head';
+            } else if (resolvedRole === 'ehs-officer' || resolvedRole === 'ehs-supervisor') {
+                resolvedRole = 'ehs-officer';
+                resolvedRoleLabel = 'EHS supervisor';
             }
 
             if (!resolvedRole) {
@@ -27718,15 +27821,18 @@ ptypeOf(p) === 'general' ?
                 const rInfo = roleInfo(u.role);
                 let actionBtns = '';
                 const editBtn = '<button type="button" class="btn btn-xs btn-ghost" onclick="startEditUser(\'' + u.id + '\')" style="color:var(--orange);padding:2px 8px;font-size:11px;margin-right:6px;" title="Edit User Profile & Assignments"><i class="fa-solid fa-pen-to-square"></i> Edit</button>';
+                const userDelKey = u.id || u.uid || u.email;
+                const delBtnHtml = '<button class="btn btn-xs btn-ghost" onclick="unifiedDeleteUser(\'' + escapeHtml(userDelKey) + '\');" style="color:var(--red);padding:2px 6px;" title="Delete Account Permanently"><i class="fa-solid fa-trash-can"></i></button>';
                 if (isSiteAdmin) {
                     actionBtns = editBtn +
                         '<button class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + u.id + '\'); renderUsersDirectoryView();" style="color:var(--blue);padding:2px 8px;font-size:11px;margin-right:6px;" title="Reset Login Password"><i class="fa-solid fa-key"></i> Reset</button>' +
                         '<button class="btn btn-xs ' + (isAct ? 'btn-ghost' : 'btn-primary') + '" onclick="siteAdminToggleStaffStatus(\'' + u.id + '\'); renderUsersDirectoryView();" style="padding:2px 8px;font-size:11px;margin-right:6px;">' + (isAct ? 'Deactivate' : 'Activate') + '</button>' +
-                        '<button class="btn btn-xs btn-ghost" onclick="siteAdminRemoveStaff(\'' + u.id + '\'); renderUsersDirectoryView();" style="color:var(--red);padding:2px 6px;" title="Delete Account"><i class="fa-solid fa-trash-can"></i></button>';
+                        delBtnHtml;
                 } else if (isSuperAdmin) {
                     actionBtns = editBtn +
                         '<button class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + u.id + '\'); renderUsersDirectoryView();" style="color:var(--blue);padding:2px 8px;font-size:11px;margin-right:6px;" title="Reset Login Password"><i class="fa-solid fa-key"></i> Reset</button>' +
-                        '<button class="btn btn-xs ' + (isAct ? 'btn-ghost' : 'btn-primary') + '" onclick="siteAdminToggleStaffStatus(\'' + u.id + '\'); renderUsersDirectoryView();" style="padding:2px 8px;font-size:11px;margin-right:6px;">' + (isAct ? 'Deactivate' : 'Activate') + '</button>';
+                        '<button class="btn btn-xs ' + (isAct ? 'btn-ghost' : 'btn-primary') + '" onclick="siteAdminToggleStaffStatus(\'' + u.id + '\'); renderUsersDirectoryView();" style="padding:2px 8px;font-size:11px;margin-right:6px;">' + (isAct ? 'Deactivate' : 'Activate') + '</button>' +
+                        delBtnHtml;
                 } else {
                     actionBtns = '<span class="badge" style="background:#F0FDF4;color:#166534;font-size:10px;"><i class="fa-solid fa-shield-check"></i> Statutory Verified</span>';
                 }
@@ -28148,7 +28254,7 @@ ptypeOf(p) === 'general' ?
                     { text: '3. Multi-Discipline Clearances\n', options: { bold: true, color: '1D4ED8', fontSize: 11, fontFace: 'Aptos' } },
                     { text: 'Concurrent clearances from MEP, P&M, IT, Quality & Tower Incharge.\n\n', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } },
                     { text: '4. EHS Safety Endorsement\n', options: { bold: true, color: '7C3AED', fontSize: 11, fontFace: 'Aptos' } },
-                    { text: 'Site Safety Incharge conducts final audit to activate, monitor or halt operations.', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } }
+                    { text: 'EHS Head / EHS Supervisor conducts final audit to activate, monitor or halt operations.', options: { color: C_SLATE, fontSize: 10, fontFace: 'Aptos' } }
                 ], { x: 8.15, y: 2.1, w: 4.0, h: 4.6 });
 
                 // ==========================================

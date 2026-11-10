@@ -944,30 +944,44 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     uid
   } = request.data || {};
 
-  if (!projectId || !validateProjectId(projectId)) {
-    throw new HttpsError("invalid-argument", "Valid projectId is required.");
-  }
+  let effectiveProjectId = projectId;
+  if (effectiveProjectId === "The Pearl" || effectiveProjectId === "PRJ-PEARL") effectiveProjectId = "PRJ-PEARL";
+  else if (effectiveProjectId === "The Regent" || effectiveProjectId === "PRJ-REGENT") effectiveProjectId = "PRJ-REGENT";
+  else if (effectiveProjectId === "Sansa County" || effectiveProjectId === "PRJ-SANSA") effectiveProjectId = "PRJ-SANSA";
 
   const callerEmail = (request.auth.token.email || "").toLowerCase();
-  let isProjAdmin =
+  const isSuperAdminCaller =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
-    callerEmail === "aic1176@aurogroup.com" ||
+    callerEmail === "aic1176@aurogroup.com";
+
+  if (action !== "delete") {
+    if (!effectiveProjectId || !validateProjectId(effectiveProjectId)) {
+      throw new HttpsError("invalid-argument", "Valid projectId is required.");
+    }
+  } else {
+    if (!isSuperAdminCaller && (!effectiveProjectId || !validateProjectId(effectiveProjectId))) {
+      effectiveProjectId = request.auth.token.projectId || effectiveProjectId;
+    }
+  }
+
+  let isProjAdmin =
+    isSuperAdminCaller ||
     ((request.auth.token.role === "project-admin" ||
       request.auth.token.role === "site-admin" ||
       request.auth.token.role === "admin" ||
       request.auth.token.role === "ehs-manager" ||
       request.auth.token.role === "ehs-officer" ||
       request.auth.token.admin === true) &&
-      (request.auth.token.projectId === projectId || !request.auth.token.projectId));
+      (!effectiveProjectId || request.auth.token.projectId === effectiveProjectId || !request.auth.token.projectId));
 
-  if (!isProjAdmin) {
+  if (!isProjAdmin && effectiveProjectId) {
     const callerDoc = await db.collection("users").doc(request.auth.uid).get();
     if (callerDoc.exists) {
       const cd = callerDoc.data();
       if (
         cd.role === "super-admin" ||
-        ((cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin" || cd.role === "ehs-manager" || cd.role === "ehs-officer" || cd.role === "safety-incharge") && (cd.projectId === projectId || !cd.projectId || cd.campusWide === true))
+        ((cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin" || cd.role === "ehs-manager" || cd.role === "ehs-officer" || cd.role === "safety-incharge") && (cd.projectId === effectiveProjectId || !cd.projectId || cd.campusWide === true))
       ) {
         isProjAdmin = true;
       }
@@ -1105,26 +1119,147 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     return { success: true, uid, temporaryPassword: tempPassword };
   }
 
-  // Action: Delete Personnel
+  // Action: Permanent User & Credential Deletion
   if (action === "delete") {
-    if (!uid || typeof uid !== "string") {
-      throw new HttpsError("invalid-argument", "Valid uid is required for deletion.");
+    const targetUid = uid;
+    const targetEmail = (email || "").toLowerCase().trim();
+    if (!targetUid && !targetEmail) {
+      throw new HttpsError("invalid-argument", "Valid uid or email is required for deletion.");
     }
+
+    let realAuthUid = null;
+    let resolvedEmail = targetEmail;
+
+    // 1. Resolve Auth user record by UID
+    if (targetUid) {
+      try {
+        const uRec = await auth.getUser(targetUid);
+        if (uRec) {
+          realAuthUid = uRec.uid;
+          if (!resolvedEmail && uRec.email) resolvedEmail = uRec.email.toLowerCase().trim();
+        }
+      } catch (_uErr) {
+        // targetUid might be client synthetic ID like stf-...
+      }
+    }
+
+    // 2. Resolve Auth user record by Email fallback
+    if (!realAuthUid && resolvedEmail) {
+      try {
+        const uRec = await auth.getUserByEmail(resolvedEmail);
+        if (uRec) {
+          realAuthUid = uRec.uid;
+        }
+      } catch (_eErr) {
+        // Not found by email in Auth
+      }
+    }
+
+    // 3. Permanently delete from Firebase Authentication
+    if (realAuthUid) {
+      try {
+        await auth.deleteUser(realAuthUid);
+        console.log(`[adminAssignProjectRole] Permanently deleted Auth user: ${realAuthUid} (${resolvedEmail})`);
+      } catch (delAuthErr) {
+        console.warn(`[adminAssignProjectRole] Notice deleting Auth user ${realAuthUid}:`, delAuthErr);
+      }
+    }
+
+    // 4. Delete from Firestore collections: users, site_personnel, project_admins
+    const batchOps = [];
+    if (realAuthUid) {
+      batchOps.push(db.collection("users").doc(realAuthUid).delete().catch(() => {}));
+      batchOps.push(db.collection("site_personnel").doc(realAuthUid).delete().catch(() => {}));
+      batchOps.push(db.collection("project_admins").doc(realAuthUid).delete().catch(() => {}));
+    }
+    if (targetUid && targetUid !== realAuthUid) {
+      batchOps.push(db.collection("users").doc(targetUid).delete().catch(() => {}));
+      batchOps.push(db.collection("site_personnel").doc(targetUid).delete().catch(() => {}));
+      batchOps.push(db.collection("project_admins").doc(targetUid).delete().catch(() => {}));
+    }
+    if (resolvedEmail) {
+      try {
+        const uSnap = await db.collection("users").where("email", "==", resolvedEmail).get();
+        uSnap.forEach(d => batchOps.push(d.ref.delete().catch(() => {})));
+      } catch (_e) {}
+      try {
+        const spSnap = await db.collection("site_personnel").where("email", "==", resolvedEmail).get();
+        spSnap.forEach(d => batchOps.push(d.ref.delete().catch(() => {})));
+      } catch (_e) {}
+      try {
+        const paSnap = await db.collection("project_admins").where("email", "==", resolvedEmail).get();
+        paSnap.forEach(d => batchOps.push(d.ref.delete().catch(() => {})));
+      } catch (_e) {}
+    }
+    await Promise.all(batchOps);
+
+    // 5. Clean up references in projects collection
     try {
-      await auth.deleteUser(uid);
-    } catch (_e) {}
-    await db.collection("users").doc(uid).delete();
-    await db.collection("site_personnel").doc(uid).delete();
+      const pSnap = await db.collection("projects").get();
+      for (const pDoc of pSnap.docs) {
+        const pData = pDoc.data();
+        let needsUpdate = false;
+        const pUpdates = {};
+
+        if (
+          (resolvedEmail && pData.adminEmail && pData.adminEmail.toLowerCase() === resolvedEmail) ||
+          (realAuthUid && pData.adminUid === realAuthUid) ||
+          (targetUid && pData.adminUid === targetUid)
+        ) {
+          pUpdates.adminEmail = null;
+          pUpdates.adminUid = null;
+          pUpdates.adminName = null;
+          needsUpdate = true;
+        }
+
+        if (resolvedEmail && pData.safetyInchargeEmail && pData.safetyInchargeEmail.toLowerCase() === resolvedEmail) {
+          pUpdates.safetyInchargeEmail = null;
+          needsUpdate = true;
+        }
+
+        if (pData.staffRoles) {
+          const newStaffRoles = Object.assign({}, pData.staffRoles);
+          let staffRemoved = false;
+          for (const [sKey, sVal] of Object.entries(newStaffRoles)) {
+            if (
+              sKey === targetUid ||
+              sKey === realAuthUid ||
+              (sVal && sVal.email && sVal.email.toLowerCase() === resolvedEmail) ||
+              (sVal && sVal.uid && (sVal.uid === realAuthUid || sVal.uid === targetUid))
+            ) {
+              delete newStaffRoles[sKey];
+              staffRemoved = true;
+            }
+          }
+          if (staffRemoved) {
+            pUpdates.staffRoles = newStaffRoles;
+            needsUpdate = true;
+          }
+        }
+
+        if (needsUpdate) {
+          pUpdates.updatedAt = FieldValue.serverTimestamp();
+          await pDoc.ref.set(pUpdates, { merge: true });
+        }
+      }
+    } catch (_pErr) {
+      console.warn("[adminAssignProjectRole] Projects reference cleanup notice:", _pErr);
+    }
 
     await recordServerAuditLog(
       "STAFF_PERSONNEL_DELETED",
-      `Personnel account ${uid} deleted from project ${projectId}`,
+      `User account ${realAuthUid || targetUid} (${resolvedEmail || "no-email"}) permanently deleted from Firebase Auth & Firestore`,
       request.auth.uid,
       callerEmail,
-      projectId
+      effectiveProjectId || "GLOBAL"
     );
 
-    return { success: true, uid };
+    return {
+      success: true,
+      deleted: true,
+      uid: realAuthUid || targetUid,
+      email: resolvedEmail
+    };
   }
 
   // Action: Toggle Status (Disable / Enable)
@@ -1167,23 +1302,24 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Whitelist of valid operational roles (standardized per project architecture & README.md)
   const ALLOWED_STAFF_ROLES = [
-    "site-supervisor", "supervisor",
-    "site-engineer", "engineer",
+    "permittee", "site-supervisor", "supervisor",
+    "site engineer", "site-engineer", "engineer",
     "mep", "mep-engineer",
-    "pm", "pm-engineer", "pnm",
-    "it", "it-engineer",
+    "p&m", "pm", "pm-engineer", "pnm",
+    "it in charge", "it-in-charge", "it", "it-engineer",
     "quality-engineer",
-    "excavation-head",
-    "hw-section-head", "tower-incharge", "section-head",
-    "project-manager",
-    "ehs-officer", "ehs", "safety-officer",
-    "ehs-manager",
+    "excavation-head", "section head", "section-head",
+    "tower in charge", "tower-incharge", "hw-section-head",
+    "project manager", "project-manager",
+    "ehs supervisor", "ehs-supervisor", "ehs-officer", "ehs", "safety-officer",
+    "ehs head", "ehs-head", "ehs-manager", "safety-incharge",
     "electrician", "electrical-engineer",
-    "blasting-incharge",
-    "lift-supervisor", "lifting-incharge",
+    "blasting incharge", "blasting-incharge", "blasting-in-charge",
+    "lifting supervisor", "lifting-supervisor", "lift-supervisor", "lifting-incharge",
     "night-supervisor",
     "contractor",
-    "admin", "project-admin"
+    "site admin", "site-admin", "admin", "project-admin",
+    "super admin", "super-admin"
   ];
   const cleanRole = sanitizeString(role, 32).toLowerCase();
   if (!ALLOWED_STAFF_ROLES.includes(cleanRole)) {
@@ -1192,19 +1328,31 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Canonical role normalizer to eliminate technical naming divergences
   const ROLE_CANONICAL_MAP = {
+    "permittee": "site-supervisor",
     "supervisor": "site-supervisor",
+    "site engineer": "site-engineer",
     "engineer": "site-engineer",
     "mep-engineer": "mep",
+    "p&m": "pm",
     "pm-engineer": "pm",
     "pnm": "pm",
+    "it in charge": "it",
+    "it-in-charge": "it",
     "it-engineer": "it",
-    "tower-incharge": "section-head",
-    "hw-section-head": "section-head",
-    "electrical-engineer": "electrician",
-    "lifting-incharge": "lift-supervisor",
+    "tower in charge": "hw-section-head",
+    "tower-incharge": "hw-section-head",
+    "section head": "section-head",
+    "ehs supervisor": "ehs-officer",
+    "ehs-supervisor": "ehs-officer",
     "safety-officer": "ehs-officer",
     "ehs": "ehs-officer",
-    "admin": "project-admin"
+    "ehs head": "ehs-manager",
+    "ehs-head": "ehs-manager",
+    "project manager": "project-manager",
+    "site admin": "project-admin",
+    "site-admin": "project-admin",
+    "admin": "project-admin",
+    "super admin": "super-admin"
   };
   const canonicalRole = ROLE_CANONICAL_MAP[cleanRole] || cleanRole;
 
