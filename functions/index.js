@@ -968,7 +968,11 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     request.auth.token.role === "super-admin" ||
     callerEmail === "aic1176@aurogroup.com";
 
-  if (action !== "delete") {
+  const isPurgeAction =
+    action === "purge_orphan_auth_users" ||
+    action === "adminSyncAndPurgeOrphanAuthUsers";
+
+  if (action !== "delete" && !isPurgeAction) {
     if (!effectiveProjectId || !validateProjectId(effectiveProjectId)) {
       throw new HttpsError("invalid-argument", "Valid projectId is required.");
     }
@@ -1051,8 +1055,8 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  // Auto self-heal caller's claims and users document on backend if confirmed
-  if (isProjAdmin && request.auth.uid) {
+  // Auto self-heal caller's claims and users document on backend if confirmed (Site Admin only, never Super Admin)
+  if (isProjAdmin && request.auth.uid && !isSuperAdminCaller) {
     try {
       if (!request.auth.token.role || request.auth.token.role !== "project-admin") {
         await auth.setCustomUserClaims(request.auth.uid, {
@@ -1280,6 +1284,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     if (!isSuperAdminCaller) {
       throw new HttpsError("permission-denied", "Only Super Administrators can scan and purge orphaned Auth accounts.");
     }
+    try {
     const protectedEmails = new Set([
       "aic1176@aurogroup.com",
       "ehs.superadmin@aurorealty.com"
@@ -1313,30 +1318,38 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     let purgedCount = 0;
     const purgedUsers = [];
 
-    const listResult = await auth.listUsers(1000);
-    const authUsers = listResult.users || [];
-    totalAuthScanned = authUsers.length;
+    let listPageToken = undefined;
+    do {
+      const listResult = listPageToken ? await auth.listUsers(1000, listPageToken) : await auth.listUsers(1000);
+      const authUsers = listResult.users || [];
+      totalAuthScanned += authUsers.length;
 
-    for (const authUser of authUsers) {
-      const aUid = authUser.uid;
-      const aEmail = (authUser.email || "").toLowerCase().trim();
+      for (const authUser of authUsers) {
+        const aUid = authUser.uid;
+        const aEmail = (authUser.email || "").toLowerCase().trim();
 
-      if (aEmail && protectedEmails.has(aEmail)) continue;
+        if ((aEmail && protectedEmails.has(aEmail)) || authUser.customClaims?.superAdmin === true || aUid === request.auth.uid) {
+          continue;
+        }
 
-      const hasDocByUid = activeFirestoreUids.has(aUid);
-      const hasDocByEmail = aEmail ? activeFirestoreEmails.has(aEmail) : false;
+        const hasDocByUid = activeFirestoreUids.has(aUid);
+        const hasDocByEmail = aEmail ? activeFirestoreEmails.has(aEmail) : false;
 
-      if (!hasDocByUid && !hasDocByEmail) {
-        try {
-          await auth.deleteUser(aUid);
-          purgedCount++;
-          purgedUsers.push({ uid: aUid, email: aEmail });
-          console.log(`[adminAssignProjectRole.purge] Purged orphaned Auth user: ${aUid} (${aEmail})`);
-        } catch (delErr) {
-          console.warn(`[adminAssignProjectRole.purge] Notice deleting orphan ${aUid}:`, delErr);
+        if (!hasDocByUid && !hasDocByEmail) {
+          try {
+            await auth.deleteUser(aUid);
+            purgedCount++;
+            purgedUsers.push({ uid: aUid, email: aEmail });
+            console.log(`[adminAssignProjectRole.purge] Purged orphaned Auth user: ${aUid} (${aEmail})`);
+          } catch (delErr) {
+            if (delErr.code !== "auth/user-not-found") {
+              console.warn(`[adminAssignProjectRole.purge] Notice deleting orphan ${aUid}:`, delErr);
+            }
+          }
         }
       }
-    }
+      listPageToken = listResult.pageToken;
+    } while (listPageToken);
 
     await recordServerAuditLog(
       "ORPHAN_AUTH_USERS_PURGED",
@@ -1353,6 +1366,11 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       totalScanned: totalAuthScanned,
       purgedUsers: purgedUsers
     };
+    } catch (purgeErr) {
+      console.error("[adminAssignProjectRole.purge] Error:", purgeErr);
+      if (purgeErr instanceof HttpsError) throw purgeErr;
+      throw new HttpsError("internal", "Purge execution failed: " + (purgeErr.message || String(purgeErr)));
+    }
   }
 
   // Action: Toggle Status (Disable / Enable)
@@ -1877,7 +1895,8 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
-  await enforceRateLimit(request.auth.uid, "adminSyncAndPurgeOrphanAuthUsers", 10, 60);
+  try {
+    await enforceRateLimit(request.auth.uid, "adminSyncAndPurgeOrphanAuthUsers", 10, 60);
 
   const callerEmail = (request.auth.token.email || "").toLowerCase().trim();
   let isCallerSuperAdmin =
@@ -1937,7 +1956,7 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
   let pageToken = undefined;
 
   do {
-    const listUsersResult = await auth.listUsers(1000, pageToken);
+    const listUsersResult = pageToken ? await auth.listUsers(1000, pageToken) : await auth.listUsers(1000);
     const authUsers = listUsersResult.users || [];
     totalAuthScanned += authUsers.length;
 
@@ -1979,6 +1998,11 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
     purgedUsers: purged,
     totalScanned: totalAuthScanned
   };
+  } catch (err) {
+    console.error("[adminSyncAndPurgeOrphanAuthUsers] Critical error:", err);
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", "Orphaned accounts scan failed: " + (err.message || String(err)));
+  }
 });
 
 // ============================================================================

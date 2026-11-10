@@ -5609,9 +5609,9 @@
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">
                                         <div>
                                             <h3 style="font-size:15px;font-weight:700;margin:0;color:var(--navy);display:flex;align-items:center;gap:8px;">
-                                                <i class="fa-solid fa-user-shield" style="color:var(--orange);"></i> Empaneled Project &amp; Site Administrators
+                                                <i class="fa-solid fa-user-shield" style="color:var(--orange);"></i> Empaneled Project Admins
                                             </h3>
-                                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Site Administrators authorized to configure worksite locations, GPS geofences, workflow tags, and provision on-site roles &amp; personnel.</p>
+                                            <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Project Admins authorized to configure worksite locations, GPS geofences, workflow tags, and provision on-site roles &amp; personnel.</p>
                                         </div>
                                         <span class="dpdp-tag" style="background:#EBF5FB;color:#1B4F72;border-color:#AED6F1;"><i class="fa-solid fa-crown"></i> Super Admin Managed</span>
                                     </div>
@@ -5635,9 +5635,9 @@
                             <div>
                                 <div class="card" style="padding:20px;">
                                     <h3 style="font-size:14px;font-weight:700;margin:0 0 12px;color:var(--navy);display:flex;align-items:center;gap:8px;">
-                                        <i class="fa-solid fa-user-plus" style="color:var(--green);"></i> Provision Site Administrator
+                                        <i class="fa-solid fa-user-plus" style="color:var(--green);"></i> Provision Project Admin
                                     </h3>
-                                    <p style="font-size:11.8px;color:var(--text-muted);margin:0 0 14px;">Create a real Firebase Auth account for a Site-Level Administrator with project authority.</p>
+                                    <p style="font-size:11.8px;color:var(--text-muted);margin:0 0 14px;">Create a real Firebase Auth account for a Project Admin with project authority.</p>
                                     <div class="form-field" style="margin-bottom:12px;">
                                         <label>Target Project Site <span class="req">*</span></label>
                                         <select id="superAdminNewAdminProject"></select>
@@ -17028,7 +17028,7 @@
                 return [
                     { id: 'dashboard', label: 'Executive Dashboard', icon: 'fa-gauge-high' },
                     { id: 'projects', label: 'Projects Master', icon: 'fa-building' },
-                    { id: 'project-admins', label: 'Site Admins Provisioning', icon: 'fa-user-shield' },
+                    { id: 'project-admins', label: 'Project Admins Provisioning', icon: 'fa-user-shield' },
                     { id: 'users', label: 'Users Directory', icon: 'fa-users' },
                     { id: 'roles-permissions', label: 'Roles & Permissions', icon: 'fa-shield-halved' },
                     { id: 'approval-workflows', label: 'Approval Workflows', icon: 'fa-diagram-project' },
@@ -27650,15 +27650,15 @@ ptypeOf(p) === 'general' ?
 
             container.innerHTML = '<div class="view-header">' +
                 '<div>' +
-                '<h1><i class="fa-solid fa-user-shield" style="color:var(--orange);"></i> Site Administrators Provisioning</h1>' +
-                '<p>Super Admin Authority: Empanel and assign Site Administrators with real Firebase Auth accounts over worksite GPS, locations, workflows, and staff</p>' +
+                '<h1><i class="fa-solid fa-user-shield" style="color:var(--orange);"></i> Project Admins Provisioning</h1>' +
+                '<p>Super Admin Authority: Empanel and assign Project Admins with real Firebase Auth accounts over worksite GPS, locations, workflows, and staff</p>' +
                 '</div>' +
                 '</div>' +
                 '<div class="responsive-split-grid">' +
                 '<div>' +
                 '<div class="card card-pad">' +
                 '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px;">' +
-                '<h3 style="font-size:14px;font-weight:700;margin:0;color:var(--navy);">Empaneled Site Administrators (' + (PROJECT_ADMINS ? PROJECT_ADMINS.length : 0) + ')</h3>' +
+                '<h3 style="font-size:14px;font-weight:700;margin:0;color:var(--navy);">Empaneled Project Admins (' + (PROJECT_ADMINS ? PROJECT_ADMINS.length : 0) + ')</h3>' +
                 '<span class="dpdp-tag" style="background:#EBF5FB;color:#1B4F72;border-color:#AED6F1;"><i class="fa-solid fa-crown"></i> Super Admin Scope</span>' +
                 '</div>' +
                 '<div style="overflow-x:auto;">' +
@@ -27671,15 +27671,15 @@ ptypeOf(p) === 'general' ?
                 '<th style="padding:10px 12px;">Status</th>' +
                 '<th style="padding:10px 12px;">Action</th>' +
                 '</tr></thead>' +
-                '<tbody>' + (tableRows || '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted);">No Site Administrators empaneled yet. Provision a live Firebase Auth administrator on the right.</td></tr>') + '</tbody>' +
+                '<tbody>' + (tableRows || '<tr><td colspan="6" style="padding:16px;text-align:center;color:var(--text-muted);">No Project Admins empaneled yet. Provision a live Firebase Auth administrator on the right.</td></tr>') + '</tbody>' +
                 '</table>' +
                 '</div>' +
                 '</div>' +
                 '</div>' +
                 '<div>' +
                 '<div class="card card-pad">' +
-                '<h3 style="font-size:14px;font-weight:700;margin:0 0 12px;color:var(--navy);display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-user-plus" style="color:var(--green);"></i> Provision Site Administrator</h3>' +
-                '<p style="font-size:11.8px;color:var(--text-muted);margin:0 0 14px;">Creates a live Firebase Authentication account so the Site Admin can log in and configure locations, GPS geofences, workflow tags, and site roles.</p>' +
+                '<h3 style="font-size:14px;font-weight:700;margin:0 0 12px;color:var(--navy);display:flex;align-items:center;gap:8px;"><i class="fa-solid fa-user-plus" style="color:var(--green);"></i> Provision Project Admin</h3>' +
+                '<p style="font-size:11.8px;color:var(--text-muted);margin:0 0 14px;">Creates a live Firebase Authentication account so the Project Admin can log in and configure locations, GPS geofences, workflow tags, and site roles.</p>' +
                 '<div class="form-field" style="margin-bottom:12px;">' +
                 '<label>Target Project Site <span class="req">*</span></label>' +
                 '<select id="saNewAdminProject">' + prjOptions + '</select>' +
@@ -27760,7 +27760,7 @@ ptypeOf(p) === 'general' ?
                 }
             } catch (authErr) {
                 if (authErr && authErr.code === 'auth/email-already-in-use') {
-                    showToast('Email exists in Firebase Auth; linking Site Admin profile to project.', 'info');
+                    showToast('Email exists in Firebase Auth; linking Project Admin profile to project.', 'info');
                 } else {
                     if (btn) {
                         btn.disabled = false;
@@ -27796,7 +27796,7 @@ ptypeOf(p) === 'general' ?
             PROJECT_ADMINS = PROJECT_ADMINS.filter(a => a.email.toLowerCase() !== email);
             PROJECT_ADMINS.unshift(newAdm);
             saveState();
-            recordAuditLog('ADMIN_PROVISIONED', 'Site Administrator ' + name + ' (' + email + ') provisioned for ' + targetPrj.name + ' (' + targetPrj.id + ')', targetPrj.id);
+            recordAuditLog('ADMIN_PROVISIONED', 'Project Admin ' + name + ' (' + email + ') provisioned for ' + targetPrj.name + ' (' + targetPrj.id + ')', targetPrj.id);
 
             try {
                 if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -27819,10 +27819,10 @@ ptypeOf(p) === 'general' ?
                 btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Provision Live Admin Account';
             }
 
-            showToast('Site Administrator "' + name + '" provisioned with live Firebase Auth login!', 'ok');
+            showToast('Project Admin "' + name + '" provisioned with live Firebase Auth login!', 'ok');
             renderProjectAdminsView();
             showConfirmModal(
-                'Site Administrator Provisioned',
+                'Project Admin Provisioned',
                 'Live Firebase Auth account created for ' + name + ' (' + targetPrj.name + ').\n\nLogin Email: ' + email + '\nPassword: ' + password + '\nAssigned Worksite: ' + targetPrj.name + ' (' + targetPrj.id + ')\n\nThey can now sign in and configure locations, GPS geofences, workflows, and site roles.',
                 function () {}
             );
@@ -27953,7 +27953,7 @@ ptypeOf(p) === 'general' ?
                     name: a.name,
                     email: a.email,
                     role: 'admin',
-                    roleLabel: 'Site Administrator',
+                    roleLabel: 'Project Admin',
                     projectId: a.projectId,
                     projectName: a.projectName,
                     location: 'Site HQ',
@@ -28020,9 +28020,13 @@ ptypeOf(p) === 'general' ?
                     actionBtns = '<span class="badge" style="background:#F0FDF4;color:#166534;font-size:10px;"><i class="fa-solid fa-shield-check"></i> Statutory Verified</span>';
                 }
 
+                let displayRole = u.roleLabel || u.role;
+                if (u.role === 'admin' || u.role === 'project-admin' || (typeof displayRole === 'string' && (displayRole.toLowerCase().includes('site admin') || displayRole.toLowerCase().includes('site administrator')))) {
+                    displayRole = 'Project Admin';
+                }
                 return '<tr style="border-bottom:1px solid var(--border);">' +
                     '<td style="padding:10px 12px;"><div style="font-weight:700;color:var(--navy);">' + escapeHtml(u.name) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(u.email) + ' &bull; ' + escapeHtml(u.phone || '') + '</div></td>' +
-                    '<td style="padding:10px 12px;"><span class="badge" style="background:rgba(232,96,10,0.1);color:var(--orange);font-size:11px;font-weight:600;"><i class="fa-solid ' + (rInfo.icon || 'fa-user') + '"></i> ' + escapeHtml(u.roleLabel) + '</span></td>' +
+                    '<td style="padding:10px 12px;"><span class="badge" style="background:rgba(232,96,10,0.1);color:var(--orange);font-size:11px;font-weight:600;"><i class="fa-solid ' + (rInfo.icon || 'fa-user-gear') + '"></i> ' + escapeHtml(displayRole) + '</span></td>' +
                     '<td style="padding:10px 12px;"><div style="font-weight:600;color:var(--navy);font-size:12px;">' + escapeHtml(u.projectName || u.projectId) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(u.location) + '</div></td>' +
                     '<td style="padding:10px 12px;" class="mono">' + escapeHtml(u.empId || 'N/A') + '</td>' +
                     '<td style="padding:10px 12px;"><span class="badge ' + (isAct ? 'st-active' : 'st-draft') + '" style="font-size:10.5px;"><i class="fa-solid ' + (isAct ? 'fa-circle-check' : 'fa-ban') + '"></i> ' + u.status + '</span></td>' +
@@ -28045,7 +28049,7 @@ ptypeOf(p) === 'general' ?
             let noticeBanner = isSuperAdmin ?
                 '<div style="background:#EFF6FF;border:1px solid #BFDBFE;color:#1E40AF;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;display:flex;align-items:center;gap:10px;">' +
                 '<i class="fa-solid fa-circle-info" style="font-size:16px;flex-shrink:0;"></i>' +
-                '<div><b>Statutory Least-Privilege Architecture:</b> Super Administrator holds cross-site read oversight. Individual site personnel accounts (creation, deletion, password reset) are delegated exclusively to the assigned Site Administrator.</div>' +
+                '<div><b>Statutory Least-Privilege Architecture:</b> Super Administrator holds cross-site read oversight. Individual site personnel accounts (creation, deletion, password reset) are delegated exclusively to the assigned Project Admin.</div>' +
                 '</div>' :
                 '<div style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;border-radius:8px;padding:12px 16px;margin-bottom:16px;font-size:12.5px;display:flex;align-items:center;gap:10px;">' +
                 '<i class="fa-solid fa-shield-check" style="font-size:16px;flex-shrink:0;"></i>' +
@@ -28117,7 +28121,7 @@ ptypeOf(p) === 'general' ?
                 } catch (fnErr) {
                     console.warn('[handlePurgeGhostUsers] direct endpoint failed, using adminAssignProjectRole fallback:', fnErr);
                     const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
-                    res = await assignFn({ action: 'purge_orphan_auth_users' });
+                    res = await assignFn({ action: 'purge_orphan_auth_users', projectId: 'PRJ-SANSA' });
                 }
                 const count = (res && res.data && typeof res.data.purgedCount === 'number') ? res.data.purgedCount : 0;
                 const total = (res && res.data && typeof res.data.totalScanned === 'number') ? res.data.totalScanned : 0;
@@ -28130,7 +28134,11 @@ ptypeOf(p) === 'general' ?
                 }
             } catch (err) {
                 console.error('[handlePurgeGhostUsers] Purge error:', err);
-                showToast('Purge failed: ' + (err.message || err), 'err');
+                let errText = err.message || String(err);
+                if (errText === 'internal' || errText.includes('internal')) {
+                    errText = 'Server execution error. Check Cloud Functions logs or verify network connectivity.';
+                }
+                showToast('Purge failed: ' + errText, 'err');
             } finally {
                 if (btn) {
                     btn.disabled = false;
