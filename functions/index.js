@@ -1444,6 +1444,8 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "project manager": "project-manager",
     "site admin": "project-admin",
     "site-admin": "project-admin",
+    "project admin": "project-admin",
+    "project-admin": "project-admin",
     "admin": "project-admin",
     "super admin": "super-admin"
   };
@@ -1453,7 +1455,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   const cleanName = sanitizeString(displayName || name || cleanEmail.split("@")[0], 100);
   const cleanEmpId = sanitizeString(empId || "ARPL-STF", 32);
   const cleanPhone = sanitizeString(phone || "", 20);
-  const cleanRoleLabel = sanitizeString(roleLabel || role, 64);
+  let cleanRoleLabel = sanitizeString(roleLabel || role, 64);
+  if (canonicalRole === "project-admin" && (!roleLabel || roleLabel.toLowerCase().includes("site admin") || roleLabel.toLowerCase().includes("safety incharge") || roleLabel.toLowerCase().includes("site administrator"))) {
+    cleanRoleLabel = "Project Admin (Worksite Administrator)";
+  }
   const cleanLocationId = sanitizeString(locationId || "CAMPUS-WIDE", 32);
   const cleanLocationName = sanitizeString(locationName || "Full Worksite", 64);
 
@@ -1465,7 +1470,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     );
   }
 
-  let cleanPassword;
+  let cleanPassword = null;
   if (password) {
     if (typeof password !== "string" || password.length < 6 || password.length > 128) {
       throw new HttpsError(
@@ -1474,33 +1479,39 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       );
     }
     cleanPassword = password;
-  } else {
-    cleanPassword = generateSecureRandomPassword(16);
   }
 
   let userRecord;
   try {
     userRecord = await auth.getUserByEmail(cleanEmail);
-    userRecord = await auth.updateUser(userRecord.uid, {
-      password: cleanPassword,
+    const updatePayload = {
       displayName: cleanName,
       disabled: false
-    });
+    };
+    // Only update password if an explicit new password was supplied (do not overwrite existing credentials on edit)
+    if (cleanPassword) {
+      updatePayload.password = cleanPassword;
+    }
+    userRecord = await auth.updateUser(userRecord.uid, updatePayload);
   } catch (_err) {
+    const initialPassword = cleanPassword || generateSecureRandomPassword(16);
     try {
       userRecord = await auth.createUser({
         email: cleanEmail,
-        password: cleanPassword,
+        password: initialPassword,
         displayName: cleanName
       });
     } catch (createErr) {
       if (createErr.code === "auth/email-already-in-use") {
         userRecord = await auth.getUserByEmail(cleanEmail);
-        userRecord = await auth.updateUser(userRecord.uid, {
-          password: cleanPassword,
+        const updatePayload = {
           displayName: cleanName,
           disabled: false
-        });
+        };
+        if (cleanPassword) {
+          updatePayload.password = cleanPassword;
+        }
+        userRecord = await auth.updateUser(userRecord.uid, updatePayload);
       } else {
         throw createErr;
       }
@@ -1541,7 +1552,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   const aggregatedRoles = Array.from(new Set(existingAssignments.map(a => a.role)));
   const aggregatedProjects = Array.from(new Set(existingAssignments.map(a => a.projectId)));
 
-  // Set Custom Claims for Auth RBAC & Location/Workflow Scope
+  // Set Custom Claims for Auth RBAC & Location/Workflow Scope (<1000 bytes token guard)
   await auth.setCustomUserClaims(userRecord.uid, {
     role: canonicalRole,
     roles: aggregatedRoles,
@@ -1552,8 +1563,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     locationId: cleanLocationId,
     locationName: cleanLocationName,
     campusWide: campusWide !== undefined ? !!campusWide : cleanLocationId === "CAMPUS-WIDE",
-    name: cleanName,
-    assignments: existingAssignments
+    name: cleanName
   });
 
   const staffDoc = {
@@ -1921,36 +1931,43 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
     "ehs.superadmin@aurorealty.com"
   ]);
 
-  // 2. Scan Firebase Authentication accounts (up to 1000)
-  const listUsersResult = await auth.listUsers(1000);
-  const authUsers = listUsersResult.users;
+  // 2. Scan Firebase Authentication accounts with full pageToken pagination
+  let totalAuthScanned = 0;
   const purged = [];
+  let pageToken = undefined;
 
-  for (const userRecord of authUsers) {
-    const uEmail = (userRecord.email || "").toLowerCase().trim();
+  do {
+    const listUsersResult = await auth.listUsers(1000, pageToken);
+    const authUsers = listUsersResult.users || [];
+    totalAuthScanned += authUsers.length;
 
-    if (PROTECTED_EMAILS.has(uEmail) || userRecord.customClaims?.superAdmin === true || userRecord.uid === request.auth.uid) {
-      continue;
-    }
+    for (const userRecord of authUsers) {
+      const uEmail = (userRecord.email || "").toLowerCase().trim();
 
-    const hasFirestoreMatch = firestoreUids.has(userRecord.uid) || (uEmail && firestoreEmails.has(uEmail));
-    if (!hasFirestoreMatch) {
-      try {
-        await auth.deleteUser(userRecord.uid);
-        purged.push({ uid: userRecord.uid, email: userRecord.email });
-        console.log(`[adminSyncAndPurgeOrphanAuthUsers] Purged orphan Auth account: ${userRecord.uid} (${userRecord.email})`);
-      } catch (delErr) {
-        if (delErr.code !== "auth/user-not-found") {
-          console.warn(`[adminSyncAndPurgeOrphanAuthUsers] Error deleting orphan Auth user ${userRecord.uid}:`, delErr);
+      if (PROTECTED_EMAILS.has(uEmail) || userRecord.customClaims?.superAdmin === true || userRecord.uid === request.auth.uid) {
+        continue;
+      }
+
+      const hasFirestoreMatch = firestoreUids.has(userRecord.uid) || (uEmail && firestoreEmails.has(uEmail));
+      if (!hasFirestoreMatch) {
+        try {
+          await auth.deleteUser(userRecord.uid);
+          purged.push({ uid: userRecord.uid, email: userRecord.email });
+          console.log(`[adminSyncAndPurgeOrphanAuthUsers] Purged orphan Auth account: ${userRecord.uid} (${userRecord.email})`);
+        } catch (delErr) {
+          if (delErr.code !== "auth/user-not-found") {
+            console.warn(`[adminSyncAndPurgeOrphanAuthUsers] Error deleting orphan Auth user ${userRecord.uid}:`, delErr);
+          }
         }
       }
     }
-  }
+    pageToken = listUsersResult.pageToken;
+  } while (pageToken);
 
   // 3. Write immutable server audit log
   await recordServerAuditLog(
     "ORPHAN_AUTH_USERS_PURGED",
-    `Purged ${purged.length} orphaned Firebase Auth accounts out of ${authUsers.length} total users scanned`,
+    `Purged ${purged.length} orphaned Firebase Auth accounts out of ${totalAuthScanned} total users scanned`,
     request.auth.uid,
     callerEmail,
     "GLOBAL"
@@ -1960,7 +1977,87 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
     success: true,
     purgedCount: purged.length,
     purgedUsers: purged,
-    totalScanned: authUsers.length
+    totalScanned: totalAuthScanned
+  };
+});
+
+// ============================================================================
+// 6D. SWITCH ACTIVE ROLE & LOCATION CONTEXT (CALLABLE CLOUD FUNCTION)
+// ============================================================================
+exports.switchActiveRole = onCall({ region: REGION }, async (request) => {
+  if (!request.auth || !request.auth.uid) {
+    throw new HttpsError("unauthenticated", "Authentication required to switch active role.");
+  }
+  await enforceRateLimit(request.auth.uid, "switchActiveRole", 30, 60);
+
+  const { targetRole, targetProjectId, targetLocationId, targetLocationName } = request.data || {};
+  if (!targetRole) {
+    throw new HttpsError("invalid-argument", "targetRole is required.");
+  }
+
+  const uid = request.auth.uid;
+  const userDocSnap = await db.collection("users").doc(uid).get();
+  if (!userDocSnap.exists) {
+    throw new HttpsError("not-found", "User document not found.");
+  }
+  const userData = userDocSnap.data();
+
+  // Verify caller is authorized for targetRole
+  const allowedRoles = Array.isArray(userData.roles) ? [...userData.roles] : [userData.role, userData.ptwRole, userData.uiRole].filter(Boolean);
+  if (Array.isArray(userData.assignments)) {
+    userData.assignments.forEach(a => {
+      if (a && a.role && !allowedRoles.includes(a.role)) allowedRoles.push(a.role);
+    });
+  }
+
+  const isSuperAdminCaller =
+    userData.superAdmin === true ||
+    userData.role === "super-admin" ||
+    request.auth.token.role === "super-admin" ||
+    request.auth.token.superAdmin === true ||
+    (request.auth.token.email && request.auth.token.email.toLowerCase() === "aic1176@aurogroup.com");
+
+  if (!isSuperAdminCaller && !allowedRoles.includes(targetRole)) {
+    throw new HttpsError("permission-denied", `User is not authorized for role ${targetRole}.`);
+  }
+
+  const newProjectId = targetProjectId || userData.projectId || request.auth.token.projectId || "PRJ-PEARL";
+
+  await auth.setCustomUserClaims(uid, {
+    role: targetRole,
+    roles: allowedRoles,
+    uiRole: targetRole,
+    ptwRole: targetRole,
+    projectId: newProjectId,
+    projectIds: Array.isArray(userData.projectIds) ? userData.projectIds : [newProjectId],
+    locationId: targetLocationId || userData.locationId || "CAMPUS-WIDE",
+    locationName: targetLocationName || userData.locationName || "Full Worksite",
+    campusWide: !!(userData.campusWide || targetLocationId === "CAMPUS-WIDE"),
+    name: userData.name || userData.displayName || "Authorized User",
+    superAdmin: isSuperAdminCaller
+  });
+
+  await db.collection("users").doc(uid).set({
+    activeRole: targetRole,
+    activeProjectId: newProjectId,
+    activeLocationId: targetLocationId || null,
+    activeLocationName: targetLocationName || null,
+    updatedAt: admin.firestore.FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  await recordServerAuditLog(
+    "USER_ROLE_SWITCHED",
+    `User ${userData.name || uid} switched active operational role to ${targetRole} for project ${newProjectId}`,
+    uid,
+    userData.email || request.auth.token.email,
+    newProjectId
+  );
+
+  return {
+    success: true,
+    activeRole: targetRole,
+    activeProjectId: newProjectId,
+    activeLocationId: targetLocationId || null
   };
 });
 

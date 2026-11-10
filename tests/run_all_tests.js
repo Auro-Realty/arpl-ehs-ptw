@@ -42,7 +42,8 @@ const suites = [
     { num: 24, name: 'SUNDAY WORK TILE & WEEKEND GOVERNANCE', file: 'test_sunday_work_tile.js' },
     { num: 25, name: 'DYNAMIC ENTERPRISE ARCHITECTURE, MULTI-PROJECT & CONTRACTOR GOVERNANCE', file: 'test_dynamic_enterprise_features.js' },
     { num: 26, name: 'PERMIT-SPECIFIC MASTER DATA & MANUAL CONTRACTOR/SUBCONTRACTOR ENTRY', file: 'test_master_data_updates.js' },
-    { num: 27, name: 'ATOMIC DUAL-DELETION & GHOST AUTH CLEANUP', file: 'test_dual_deletion_and_auth_cleanup.js' }
+    { num: 27, name: 'ATOMIC DUAL-DELETION & GHOST AUTH CLEANUP', file: 'test_dual_deletion_and_auth_cleanup.js' },
+    { num: 28, name: 'ROLE SWITCHER, LOCATION SWITCHER & PROJECT ADMIN NOMENCLATURE', file: 'test_role_switcher_and_project_admin.js' }
 ];
 
 console.log('================================================================');

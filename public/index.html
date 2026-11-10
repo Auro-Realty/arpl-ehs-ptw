@@ -5564,7 +5564,7 @@
                 <div class="view" id="view-admin-config">
                     <div class="view-header">
                         <div>
-                            <h1 id="adminConsoleHeaderTitle"><i class="fa-solid fa-map-location-dot"></i> Site Administrator Worksite Console</h1>
+                            <h1 id="adminConsoleHeaderTitle"><i class="fa-solid fa-map-location-dot"></i> Project Admin Worksite Console</h1>
                             <p id="adminConsoleHeaderSub">Administrator control: Configure worksite GPS geofence, active towers/zones, workflow tags, and empanel operational site roles</p>
                         </div>
                         <div id="adminHeaderActions">
@@ -5969,12 +5969,12 @@
                                                 <option value="blasting-incharge">Blasting Incharge (PTW-007 Initiator)</option>
                                                 <option value="it">IT in charge (Technical Clearance)</option>
                                                 <option value="electrician">Electrician (PTW-006 Initiator)</option>
-                                                <option value="section-head">Tower In charge (Tower &amp; Structure Approver)</option>
+                                                <option value="hw-section-head">Tower In charge (Tower &amp; Structure Approver)</option>
                                                 <option value="excavation-head">Section Head (Civil &amp; Earthwork Approver)</option>
                                                 <option value="ehs-officer">EHS supervisor (Field Surveillance &amp; Endorsement)</option>
                                                 <option value="ehs-manager">EHS Head (Statutory Endorsement &amp; Stop-Work)</option>
                                                 <option value="project-manager">Project Manager (Executive Approver &amp; Escalation)</option>
-                                                <option value="project-admin">Site admin (Worksite Geofence &amp; Staff Empanelment)</option>
+                                                <option value="project-admin">Project Admin (Worksite Geofence &amp; Staff Empanelment)</option>
                                                 <option value="quality-engineer">Quality Engineer (Parallel Reviewer)</option>
                                                 <option value="night-supervisor">Night Site Supervisor (PTW-010 Night Shift Handover)</option>
                                             </select>
@@ -8991,14 +8991,14 @@
             },
             {
                 key: 'admin',
-                label: 'Site admin',
+                label: 'Project Admin',
                 sub: 'Worksite Geofence & On-Site Personnel Accounts',
                 icon: 'fa-user-gear',
-                tier: 'Tier 5 · Site Administration',
+                tier: 'Tier 5 · Project Administration',
                 cat: 'admin',
                 tierBg: 'rgba(100, 116, 139, .22)',
                 tierColor: '#94A3B8',
-                desc: 'Site-level administrator. Authority restricted to configuring worksite GPS geolocation & geofencing radius, and provisioning on-site personnel accounts (Site Supervisor, Site Engineer, Section Head, EHS Officer, etc.).'
+                desc: 'Project-level administrator. Authority restricted to configuring worksite GPS geolocation & geofencing radius, and provisioning on-site personnel accounts (Site Supervisor, Site Engineer, Section Head, EHS Officer, etc.).'
             },
             {
                 key: 'night-supervisor',
@@ -9057,7 +9057,7 @@
         function roleInfo(key) {
             if (!key) return { key: '', label: 'Authorized Signatory', sub: '', icon: 'fa-user' };
             if (key === 'section-head') return ROLES.find(r => r.key === 'hw-section-head') || { key: 'hw-section-head', label: 'Tower Incharge', sub: 'Approving Authority', icon: 'fa-user-tie' };
-            if (key === 'admin' || key === 'project-admin' || key === 'site-admin') return { key: 'admin', label: 'Site admin', sub: 'Worksite Geofence & On-Site Personnel Accounts', icon: 'fa-user-gear' };
+            if (key === 'admin' || key === 'project-admin' || key === 'site-admin') return { key: 'admin', label: 'Project Admin', sub: 'Worksite Geofence & On-Site Personnel Accounts', icon: 'fa-user-gear' };
             if (key === 'super-admin') return { key: 'super-admin', label: 'Super admin', sub: 'Enterprise Master, Sites & Admin Provisioning', icon: 'fa-crown' };
             if (key === 'permittee') return { key: 'site-supervisor', label: 'Permittee', sub: 'Field Initiator & Permittee', icon: 'fa-user-pen' };
             if (key === 'ehs-head') return { key: 'ehs-manager', label: 'EHS Head', sub: 'Statutory Endorsement & Stop-Work Authority', icon: 'fa-shield-halved' };
@@ -9065,7 +9065,7 @@
             if (key === 'it-in-charge') return { key: 'it', label: 'IT in charge', sub: 'Technical Clearance (IT & Telecom Infrastructure)', icon: 'fa-network-wired' };
             if (key === 'p&m') return { key: 'pm', label: 'P&M', sub: 'Technical Clearance (Plant & Machinery)', icon: 'fa-gears' };
             const r = ROLES.find(r => r.key === key);
-            return r || { key: key, label: (key === 'super-admin' ? 'Super admin' : (key === 'admin' ? 'Site admin' : 'Authorized Signatory')), sub: '', icon: (key === 'super-admin' ? 'fa-crown' : (key === 'admin' ? 'fa-user-gear' : 'fa-user')) };
+            return r || { key: key, label: (key === 'super-admin' ? 'Super admin' : (key === 'admin' || key === 'project-admin' ? 'Project Admin' : 'Authorized Signatory')), sub: '', icon: (key === 'super-admin' ? 'fa-crown' : (key === 'admin' || key === 'project-admin' ? 'fa-user-gear' : 'fa-user')) };
         }
 
         /* ---------------- DATA ACCESS LAYER (STORAGE SERVICE) ---------------- */
@@ -12374,10 +12374,10 @@
             if (titleEl && subEl) {
                 if (isSuperAdmin) {
                     titleEl.innerHTML = '<i class="fa-solid fa-crown" style="color:var(--orange);"></i> Super Administrator Governance Center';
-                    subEl.textContent = 'Enterprise Master Scope: Provision Site Administrators and configure Projects & Sites Master.';
+                    subEl.textContent = 'Enterprise Master Scope: Provision Project Administrators and configure Projects & Sites Master.';
                 } else {
-                    titleEl.innerHTML = '<i class="fa-solid fa-map-location-dot" style="color:var(--orange);"></i> Site Administrator Worksite Console';
-                    subEl.textContent = 'Site Administrator Authority: Worksite GPS & Geofencing (Location-Level), and On-Site Role & Staff Empanelment.';
+                    titleEl.innerHTML = '<i class="fa-solid fa-map-location-dot" style="color:var(--orange);"></i> Project Admin Worksite Console';
+                    subEl.textContent = 'Project Administrator Authority: Worksite GPS & Geofencing (Location-Level), and On-Site Role & Staff Empanelment.';
                 }
             }
 
@@ -16345,7 +16345,7 @@
                 resolvedName = resolvedName || 'ARPL Super Admin';
             } else if (resolvedRole === 'admin' || resolvedRole === 'project-admin' || resolvedRole === 'site-admin') {
                 resolvedRole = 'project-admin';
-                resolvedRoleLabel = 'Site admin';
+                resolvedRoleLabel = 'Project Admin';
                 resolvedCampusWide = true;
             } else if (resolvedRole === 'ehs-manager' || resolvedRole === 'ehs-head') {
                 resolvedRole = 'ehs-manager';
@@ -16353,6 +16353,14 @@
             } else if (resolvedRole === 'ehs-officer' || resolvedRole === 'ehs-supervisor') {
                 resolvedRole = 'ehs-officer';
                 resolvedRoleLabel = 'EHS supervisor';
+            }
+
+            if (resolvedRoleLabel && (
+                resolvedRoleLabel.toLowerCase().includes('site safety incharge') ||
+                resolvedRoleLabel.toLowerCase().includes('site admin') ||
+                resolvedRoleLabel.toLowerCase().includes('site administrator')
+            )) {
+                resolvedRoleLabel = 'Project Admin';
             }
 
             if (!resolvedRole) {
@@ -16578,19 +16586,136 @@
         }
 
         
+        async function handleHeaderRoleSwitch(targetRole) {
+            if (!currentUser || !targetRole) return;
+            if (currentUser.role === targetRole || currentUser.key === targetRole) return;
+
+            showToast('Switching active operational role to ' + targetRole + '...', 'info');
+            try {
+                if (typeof firebase !== 'undefined' && firebase.functions) {
+                    const switchFn = firebase.functions().httpsCallable('switchActiveRole');
+                    await switchFn({
+                        targetRole: targetRole,
+                        targetProjectId: currentUser.projectId,
+                        targetLocationId: currentUser.locationId,
+                        targetLocationName: currentUser.locationName
+                    });
+                }
+                if (firebase && firebase.auth && firebase.auth().currentUser) {
+                    await firebase.auth().currentUser.getIdToken(true);
+                }
+            } catch (err) {
+                console.warn('Backend active role switch notice (client fallback active):', err);
+            }
+
+            const info = typeof roleInfo === 'function' ? roleInfo(targetRole) : {};
+            const updated = Object.assign({}, currentUser, {
+                key: (targetRole === 'project-admin' || targetRole === 'admin') ? 'admin' : targetRole,
+                role: targetRole,
+                ptwRole: targetRole,
+                uiRole: (targetRole === 'project-admin' || targetRole === 'admin') ? 'admin' : targetRole,
+                label: info.label || targetRole
+            });
+            currentUser = Object.freeze(updated);
+            window.currentUser = currentUser;
+            completeAuthenticatedLogin(updated);
+            if (typeof updateSidebarNavigation === 'function') updateSidebarNavigation();
+            if (typeof buildDashboard === 'function' && document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) {
+                buildDashboard();
+            }
+            if (typeof buildRegisterTable === 'function' && document.getElementById('view-register') && document.getElementById('view-register').classList.contains('active')) {
+                buildRegisterTable();
+            }
+            showToast('Active role switched to: ' + (info.label || targetRole), 'ok');
+        }
+        window.handleHeaderRoleSwitch = handleHeaderRoleSwitch;
+
+        async function handleHeaderLocationSwitch(targetVal) {
+            if (!currentUser || !targetVal) return;
+
+            let newProjectId = currentUser.projectId;
+            let newLocationName = currentUser.locationName;
+            let newLocationId = currentUser.locationId;
+            let newProjectName = currentUser.projectName;
+
+            if (currentUser.key === 'super-admin') {
+                if (targetVal === 'ALL') {
+                    newProjectId = null;
+                    newProjectName = 'Global Enterprise Scope (All Sites)';
+                    newLocationName = null;
+                    newLocationId = null;
+                } else {
+                    newProjectId = targetVal;
+                    newProjectName = typeof resolveProjectName === 'function' ? resolveProjectName(targetVal) : targetVal;
+                    newLocationName = null;
+                    newLocationId = null;
+                }
+            } else if (Array.isArray(currentUser.assignments) && currentUser.assignments.length > 0) {
+                const matched = currentUser.assignments.find(a => (a.locationName === targetVal || a.locationId === targetVal || a.projectId === targetVal));
+                if (matched) {
+                    newProjectId = matched.projectId;
+                    newProjectName = matched.projectName || newProjectName;
+                    newLocationName = matched.locationName;
+                    newLocationId = matched.locationId;
+                } else {
+                    newLocationName = targetVal;
+                }
+            } else {
+                newLocationName = targetVal;
+            }
+
+            showToast('Switching active location context...', 'info');
+            try {
+                if (typeof firebase !== 'undefined' && firebase.functions) {
+                    const switchFn = firebase.functions().httpsCallable('switchActiveRole');
+                    await switchFn({
+                        targetRole: currentUser.role,
+                        targetProjectId: newProjectId,
+                        targetLocationId: newLocationId,
+                        targetLocationName: newLocationName
+                    });
+                }
+                if (firebase && firebase.auth && firebase.auth().currentUser) {
+                    await firebase.auth().currentUser.getIdToken(true);
+                }
+            } catch (err) {
+                console.warn('Backend location switch notice (client fallback active):', err);
+            }
+
+            const updated = Object.assign({}, currentUser, {
+                projectId: newProjectId,
+                projectName: newProjectName,
+                locationId: newLocationId,
+                locationName: newLocationName
+            });
+            currentUser = Object.freeze(updated);
+            window.currentUser = currentUser;
+            completeAuthenticatedLogin(updated);
+            if (typeof buildDashboard === 'function' && document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) {
+                buildDashboard();
+            }
+            if (typeof buildRegisterTable === 'function' && document.getElementById('view-register') && document.getElementById('view-register').classList.contains('active')) {
+                buildRegisterTable();
+            }
+            showToast('Worksite context switched to: ' + (newLocationName || newProjectName), 'ok');
+        }
+        window.handleHeaderLocationSwitch = handleHeaderLocationSwitch;
+
         function switchUserAssignmentContext(index) {
             index = parseInt(index, 10);
             if (!currentUser || !Array.isArray(currentUser.assignments) || !currentUser.assignments[index]) return;
             const a = currentUser.assignments[index];
             const updated = Object.assign({}, currentUser, {
-                key: a.role,
+                key: (a.role === 'project-admin' || a.role === 'admin') ? 'admin' : a.role,
                 role: a.role,
+                ptwRole: a.role,
+                uiRole: (a.role === 'project-admin' || a.role === 'admin') ? 'admin' : a.role,
                 label: a.roleLabel || a.role,
                 projectId: a.projectId,
                 projectName: a.projectName,
                 locationId: a.locationId,
                 locationName: a.locationName,
-                campusWide: a.locationId === 'CAMPUS-WIDE' || a.locationName === 'All Site Towers'
+                campusWide: a.locationId === 'CAMPUS-WIDE' || a.locationName === 'All Site Towers' || a.locationName === 'Sector 1 (All Zones)'
             });
             currentUser = Object.freeze(updated);
             window.currentUser = currentUser;
@@ -16616,7 +16741,7 @@
                 console.warn('[Security] User email address is unverified:', safeUser.email);
             }
 
-            // 2. Set Active Session Identity Pill in top navigation (User Full Name + Assigned Role + Scope Badge)
+            // 2. Set Active Session Identity Pill in top navigation (User Full Name + Assigned Role + Scope Badge + Switchers)
             const rb = document.getElementById('roleBadgeValue');
             if (rb) {
                 rb.style.display = 'inline-block';
@@ -16624,19 +16749,73 @@
                 const scopeText = (safeUser.key === 'super-admin')
                     ? 'Global Enterprise Scope (All Sites)'
                     : ('Assigned Site: ' + escapeHtml(safeUser.projectName || safeUser.projectId) + ' (' + escapeHtml(safeUser.projectId || '') + ')' + locInfo);
-                let switcherHtml = '';
-                if (Array.isArray(safeUser.assignments) && safeUser.assignments.length > 1) {
-                    switcherHtml = '<select id="userAssignmentSwitcher" onchange="switchUserAssignmentContext(this.value)" style="margin-left:8px;padding:2px 8px;font-size:11px;font-weight:700;border:1px solid #CBD5E1;border-radius:6px;background:#FFFFFF;color:#0F172A;cursor:pointer;">' +
-                        safeUser.assignments.map((a, i) => {
-                            const isCurrent = (a.role === safeUser.key || a.role === safeUser.role) && (a.projectId === safeUser.projectId) && (a.locationName === safeUser.locationName || a.locationId === safeUser.locationId);
-                            return '<option value="' + i + '" ' + (isCurrent ? 'selected' : '') + '>' + escapeHtml(a.roleLabel || a.role) + ' &bull; ' + escapeHtml(a.locationName || a.projectName) + '</option>';
+
+                // Calculate available roles for role switcher
+                const availableRoles = new Set();
+                if (safeUser.role) availableRoles.add(safeUser.role);
+                if (safeUser.key && safeUser.key !== 'admin') availableRoles.add(safeUser.key);
+                if (Array.isArray(safeUser.roles)) safeUser.roles.forEach(r => availableRoles.add(r));
+                if (Array.isArray(safeUser.assignments)) safeUser.assignments.forEach(a => { if (a && a.role) availableRoles.add(a.role); });
+                const rolesList = Array.from(availableRoles).filter(Boolean);
+
+                let roleSwitcherHtml = '';
+                if (rolesList.length > 1) {
+                    roleSwitcherHtml = '<div style="display:inline-flex;align-items:center;margin-left:8px;background:#F8FAFC;border:1.5px solid #CBD5E1;border-radius:6px;padding:2px 8px;" title="Switch active operational role">' +
+                        '<i class="fa-solid fa-user-tag" style="color:var(--orange);font-size:11px;margin-right:5px;"></i>' +
+                        '<select id="headerRoleSwitcher" onchange="handleHeaderRoleSwitch(this.value)" style="border:none;background:transparent;font-size:11.5px;font-weight:700;color:#0F172A;cursor:pointer;outline:none;">' +
+                        rolesList.map(r => {
+                            const info = typeof roleInfo === 'function' ? roleInfo(r) : {};
+                            const isCur = (r === safeUser.role || r === safeUser.key || (r === 'project-admin' && safeUser.key === 'admin'));
+                            return '<option value="' + escapeHtml(r) + '" ' + (isCur ? 'selected' : '') + '>' + escapeHtml(info.label || r) + '</option>';
                         }).join('') +
-                        '</select>';
+                        '</select></div>';
                 }
+
+                // Calculate available locations / projects for location switcher
+                let locationSwitcherHtml = '';
+                if (safeUser.key === 'super-admin') {
+                    locationSwitcherHtml = '<div style="display:inline-flex;align-items:center;margin-left:8px;background:#F8FAFC;border:1.5px solid #CBD5E1;border-radius:6px;padding:2px 8px;" title="Switch enterprise site scope">' +
+                        '<i class="fa-solid fa-building" style="color:#0284C7;font-size:11px;margin-right:5px;"></i>' +
+                        '<select id="headerLocationSwitcher" onchange="handleHeaderLocationSwitch(this.value)" style="border:none;background:transparent;font-size:11.5px;font-weight:700;color:#0F172A;cursor:pointer;outline:none;">' +
+                        '<option value="ALL" ' + (!safeUser.projectId ? 'selected' : '') + '>All Sites (Global)</option>' +
+                        '<option value="PRJ-PEARL" ' + (safeUser.projectId === 'PRJ-PEARL' ? 'selected' : '') + '>The Pearl (PRJ-PEARL)</option>' +
+                        '<option value="PRJ-REGENT" ' + (safeUser.projectId === 'PRJ-REGENT' ? 'selected' : '') + '>The Regent (PRJ-REGENT)</option>' +
+                        '<option value="PRJ-SANSA" ' + (safeUser.projectId === 'PRJ-SANSA' ? 'selected' : '') + '>Sansa County (PRJ-SANSA)</option>' +
+                        '</select></div>';
+                } else {
+                    const locOptions = [];
+                    if (Array.isArray(safeUser.assignments) && safeUser.assignments.length > 1) {
+                        safeUser.assignments.forEach(a => {
+                            const val = a.locationName || a.locationId || a.projectId;
+                            if (val && !locOptions.find(o => o.val === val)) {
+                                locOptions.push({ val: val, label: (a.locationName || a.projectName) });
+                            }
+                        });
+                    }
+                    const prjTowers = (safeUser.projectId && typeof AUTHORITATIVE_PROJECT_TOWERS !== 'undefined' && AUTHORITATIVE_PROJECT_TOWERS[safeUser.projectId]) ? AUTHORITATIVE_PROJECT_TOWERS[safeUser.projectId] : [];
+                    if (locOptions.length <= 1 && prjTowers.length > 1 && (safeUser.key === 'admin' || safeUser.role === 'project-admin')) {
+                        locOptions.push({ val: 'Sector 1 (All Zones)', label: 'Sector 1 (All Zones)' });
+                        prjTowers.forEach(t => {
+                            if (!locOptions.find(o => o.val === t)) locOptions.push({ val: t, label: t });
+                        });
+                    }
+                    if (locOptions.length > 1) {
+                        locationSwitcherHtml = '<div style="display:inline-flex;align-items:center;margin-left:8px;background:#F8FAFC;border:1.5px solid #CBD5E1;border-radius:6px;padding:2px 8px;" title="Switch active tower/zone">' +
+                            '<i class="fa-solid fa-location-dot" style="color:#0284C7;font-size:11px;margin-right:5px;"></i>' +
+                            '<select id="headerLocationSwitcher" onchange="handleHeaderLocationSwitch(this.value)" style="border:none;background:transparent;font-size:11.5px;font-weight:700;color:#0F172A;cursor:pointer;outline:none;">' +
+                            locOptions.map(opt => {
+                                const isCur = (opt.val === safeUser.locationName || opt.val === safeUser.locationId);
+                                return '<option value="' + escapeHtml(opt.val) + '" ' + (isCur ? 'selected' : '') + '>' + escapeHtml(opt.label) + '</option>';
+                            }).join('') +
+                            '</select></div>';
+                    }
+                }
+
                 rb.innerHTML = '<span style="font-weight:800;color:var(--navy);">' + escapeHtml(safeUser.name) + '</span> ' +
                     '<span style="font-size:11.5px;color:#008160;font-weight:700;">&bull; ' + escapeHtml(safeUser.label) + '</span> ' +
                     '<span style="font-size:11px;color:var(--text-muted);font-weight:600;background:#EBF4F6;padding:2px 7px;border-radius:100px;margin-left:4px;">' + scopeText + '</span>' +
-                    switcherHtml;
+                    roleSwitcherHtml +
+                    locationSwitcherHtml;
             }
             const rLabel = document.querySelector('.role-badge-label');
             if (rLabel) rLabel.textContent = 'Authenticated Identity';
@@ -17225,8 +17404,8 @@
                 notifications: ['Notifications', 'Workflow and escalation alerts'],
                 detail: ['Permit Detail', ''],
                 'admin-config': [
-                    (currentUser && currentUser.key === 'super-admin') ? 'Super Admin Governance Center' : 'Site Admin Worksite Console',
-                    (currentUser && currentUser.key === 'super-admin') ? 'Enterprise control: Provision Site Admins, register/modify project sites' : 'Worksite control: Configure GPS geolocation coordinates, circle radius, and provision on-site personnel'
+                    (currentUser && currentUser.key === 'super-admin') ? 'Super Admin Governance Center' : 'Project Admin Worksite Console',
+                    (currentUser && currentUser.key === 'super-admin') ? 'Enterprise control: Provision Project Admins, register/modify project sites' : 'Worksite control: Configure GPS geolocation coordinates, circle radius, and provision on-site personnel'
                 ]
             };
             document.getElementById('topbarTitle').textContent = titles[view] ? titles[view][0] : 'Permit System';

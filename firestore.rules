@@ -128,11 +128,9 @@ service cloud.firestore {
         isAuthenticated() && request.auth.uid == userId
       );
 
-      // Deletion strictly restricted to Super Admin or the assigned Site Admin for that user's project
-      allow delete: if isSuperAdmin() || (
-        isProjectAdmin(resource.data.get('projectId', '')) &&
-        resource.data.get('role', '') != 'super-admin'
-      );
+      // All user deletions must be processed atomically through the adminDeleteUser Cloud Function
+      // to ensure simultaneous deletion from Firebase Authentication and Cloud Firestore.
+      allow delete: if false;
     }
 
     // ----------------------------------------------------------------------------
@@ -147,7 +145,7 @@ service cloud.firestore {
           (request.resource.data.get('projectId', '') != '' && exists(/databases/$(database)/documents/projects/$(request.resource.data.projectId)) && get(/databases/$(database)/documents/projects/$(request.resource.data.projectId)).data.get('adminEmail', '') == request.auth.token.email)
         )
       );
-      allow delete: if isSuperAdmin();
+      allow delete: if false;
     }
 
     // ----------------------------------------------------------------------------
@@ -166,9 +164,7 @@ service cloud.firestore {
       ) || (
         isAuthenticated() && request.auth.uid == staffId
       );
-      allow delete: if isSuperAdmin() || (
-        isProjectAdmin(resource.data.get('projectId', ''))
-      );
+      allow delete: if false;
     }
 
     // ----------------------------------------------------------------------------

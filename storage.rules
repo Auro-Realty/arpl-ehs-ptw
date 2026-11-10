@@ -40,13 +40,22 @@ service firebase.storage {
       allow update, delete: if false; // Auto-deleted by GCS lifecycle after 24 hours
     }
 
-    // Digital Signatures (Strictly PNG or WebP raster signatures <= 512KB)
+    // Digital Signatures for Permits (Strictly PNG or WebP raster signatures <= 512KB)
     match /signatures/{projectId}/{permitId}/{signatureId} {
       allow read: if hasProjectAccess(projectId);
       allow create: if hasProjectAccess(projectId)
                     && request.resource.size < 512 * 1024
                     && request.resource.contentType in ['image/png', 'image/webp'];
       allow update, delete: if false;
+    }
+
+    // Personnel Profile Signatures (Saved during user empanelment/profile edit <= 512KB)
+    match /signatures/{projectId}/users/{userId} {
+      allow read: if isAuthenticated();
+      allow create, update: if hasProjectAccess(projectId)
+                    && request.resource.size < 512 * 1024
+                    && request.resource.contentType in ['image/png', 'image/webp'];
+      allow delete: if isSuperAdmin() || hasProjectAccess(projectId);
     }
 
     // Statutory Permanent PDFs
