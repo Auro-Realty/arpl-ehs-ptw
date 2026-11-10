@@ -14700,7 +14700,7 @@
             const t = nowTime();
             PERMITS.forEach(p => {
                 // Pending-stage escalation (Stage 1 / Stage 2)
-                if (['Pending Site Engineer Acknowledgment', 'Pending Parallel Approval', 'Pending Section Head', 'Pending EHS Approval'].includes(p.status) && p.stageEnteredAt) {
+                if (['Pending Site Engineer Acknowledgment', 'Pending Parallel Approval', 'Pending Section Head', 'Pending EHS Approval', 'Pending P&M Acknowledgment', 'Pending Quality Engineer Approval', 'Pending MEP Clearance', 'Pending MEP or P&M Approval', 'Pending P&M Night Acknowledgment'].includes(p.status) && p.stageEnteredAt) {
                     const elapsed = t - new Date(p.stageEnteredAt);
                     if (!p.escalation) p.escalation = { stage1: false, stage2: false };
                     if (elapsed > STAGE1_MS && !p.escalation.stage1) {

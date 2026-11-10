@@ -2137,10 +2137,54 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
 
     const cleanAction = sanitizeString(action || "STAGE_APPROVED", 64);
     const cleanComments = sanitizeString(comments || "", 500);
+    const cleanTargetStatus = sanitizeString(targetStatus, 100);
+
+    // State machine & role authorization validation (README Section 4.2 & 6.1)
+    // Super Admins bypass stage role restrictions for enterprise oversight
+    const ALLOWED_STAGE_ROLES = {
+      "Pending Site Engineer Acknowledgment": ["site-supervisor", "blasting-incharge", "site-engineer"],
+      "Pending Site Engineer Re-Acknowledgment": ["site-supervisor", "blasting-incharge", "site-engineer"],
+      "Pending Blasting In-charge Acknowledgment": ["blasting-incharge"],
+      "Pending Blasting In-charge Re-Acknowledgment": ["blasting-incharge"],
+      "Pending P&M Acknowledgment": ["electrician", "pm"],
+      "Pending P&M Re-Acknowledgment": ["electrician", "pm"],
+      "Pending Quality Engineer Approval": ["pm", "quality-engineer"],
+      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it"],
+      "Pending MEP Clearance": ["site-engineer", "mep"],
+      "Pending MEP or P&M Approval": ["site-engineer", "mep", "pm"],
+      "Pending Section Head": ["site-engineer", "mep", "pm", "it", "quality-engineer", "hw-section-head", "excavation-head", "section-head"],
+      "Pending Project Manager Acknowledgment": ["hw-section-head", "project-manager"],
+      "Pending EHS Approval": ["site-engineer", "hw-section-head", "excavation-head", "section-head", "project-manager", "quality-engineer", "pm", "ehs-manager", "ehs-officer"],
+      "Night Shift Approved – Awaiting Linked Permit": ["hw-section-head", "section-head"],
+      "Approved – Pending Night Handover": ["hw-section-head", "section-head", "site-supervisor"],
+      "Pending P&M Night Acknowledgment": ["night-supervisor", "pm"],
+      "Active": ["ehs-manager", "ehs-officer"],
+      "Active – Observation Open": ["ehs-manager", "ehs-officer"],
+      "Observation Pending Site Engineer Acknowledgment": ["site-supervisor", "site-engineer"],
+      "Observation Pending Section Head Review": ["site-engineer", "hw-section-head", "excavation-head"],
+      "Observation Pending EHS Clearance": ["hw-section-head", "excavation-head", "ehs-manager", "ehs-officer"],
+      "Pending Site Engineer": ["site-supervisor", "lift-supervisor", "blasting-incharge", "site-engineer"],
+      "Returned for Correction": ["site-engineer", "hw-section-head", "excavation-head", "mep", "pm", "it", "quality-engineer", "project-manager", "ehs-manager", "ehs-officer"],
+      "Returned to Night Supervisor": ["ehs-manager", "ehs-officer", "night-supervisor"],
+      "Completed (Surrendered)": ["site-supervisor", "electrician", "blasting-incharge", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer"],
+      "Closed – Pending Surrender": ["site-supervisor", "electrician", "blasting-incharge", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer"],
+      "Cancelled": ["site-engineer", "hw-section-head", "excavation-head", "ehs-manager", "ehs-officer", "project-admin", "super-admin"],
+      "Expired": ["system", "site-supervisor", "ehs-manager", "ehs-officer", "super-admin"]
+    };
+
+    if (!isSuperAdmin && ALLOWED_STAGE_ROLES[cleanTargetStatus]) {
+      const allowedRoles = ALLOWED_STAGE_ROLES[cleanTargetStatus];
+      if (!allowedRoles.includes(userRole) && !allowedRoles.includes("super-admin")) {
+        throw new HttpsError(
+          "permission-denied",
+          `Role '${userRole}' is not authorized to transition permit to '${cleanTargetStatus}'.`
+        );
+      }
+    }
 
     // Mutate State
     transaction.update(permitRef, {
-      status: sanitizeString(targetStatus, 32),
+      status: cleanTargetStatus,
       lastAction: cleanAction,
       lastActionAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActionBy: request.auth.uid
@@ -2155,7 +2199,7 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       actorRole: userRole || "unknown",
       actorUid: request.auth.uid,
       actorName: sanitizeString(request.auth.token.name || request.auth.token.email || "Signatory", 100),
-      targetStatus: sanitizeString(targetStatus, 32),
+      targetStatus: cleanTargetStatus,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       comments: cleanComments,
       gps: (userLat && userLng) ? { lat: Number(userLat), lng: Number(userLng) } : null
@@ -2212,7 +2256,52 @@ exports.escalationSweep = onSchedule(
       });
     });
 
+    // Sweep pending approval permits past stage SLA thresholds (README Section 9)
+    try {
+      const pendingStages = [
+        { status: "Pending Site Engineer Acknowledgment", slaMins: 30 },
+        { status: "Pending Parallel Approval", slaMins: 45 },
+        { status: "Pending Section Head", slaMins: 45 },
+        { status: "Pending EHS Approval", slaMins: 30 },
+        { status: "Pending P&M Acknowledgment", slaMins: 30 },
+        { status: "Pending Quality Engineer Approval", slaMins: 30 }
+      ];
+      for (const st of pendingStages) {
+        const pSnap = await db.collection("permits").where("status", "==", st.status).limit(50).get();
+        pSnap.forEach((doc) => {
+          const d = doc.data();
+          if (d.stageEnteredAt) {
+            const enteredMs = d.stageEnteredAt.toMillis ? d.stageEnteredAt.toMillis() : new Date(d.stageEnteredAt).getTime();
+            const elapsedMins = (now.toMillis() - enteredMs) / (60 * 1000);
+            const esc = d.escalation || { stage1: false, stage2: false };
+            let updated = null;
+            if (elapsedMins >= st.slaMins * 2 && !esc.stage2) {
+              updated = { stage1: true, stage2: true };
+            } else if (elapsedMins >= st.slaMins && !esc.stage1) {
+              updated = { stage1: true, stage2: false };
+            }
+            if (updated) {
+              batch.update(doc.ref, { escalation: updated, lastEscalationAt: now });
+              const logRef = doc.ref.collection("activity_log").doc();
+              batch.set(logRef, {
+                id: logRef.id,
+                permitId: doc.id,
+                action: updated.stage2 ? "ESCALATION_STAGE_2_BREACH" : "ESCALATION_STAGE_1_WARNING",
+                actorRole: "system",
+                actorUid: "system-cron",
+                actorName: "SLA Escalation Engine",
+                timestamp: now,
+                details: `Permit pending in ${st.status} for ${Math.round(elapsedMins)}m (exceeds ${st.slaMins}m stage SLA).`
+              });
+            }
+          }
+        });
+      }
+    } catch (pendingErr) {
+      console.warn("Pending SLA sweep note:", pendingErr);
+    }
+
     await batch.commit();
-    console.log(`Auto-expired ${activePermits.size} elapsed permits.`);
+    console.log(`Auto-expired ${activePermits.size} elapsed permits and swept pending SLA stages.`);
   }
 );

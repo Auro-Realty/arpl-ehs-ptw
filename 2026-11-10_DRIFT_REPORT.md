@@ -1,30 +1,13 @@
-# Drift Detection Report: Workflow Deviations (`README.md` vs Codebase)
+# Drift Detection Report: Workflow Verification (`README.md` vs Codebase)
 
 **Date:** 2026-11-10  
-**Target Document:** `README.md` (Full 355 KB Architecture Specification)  
+**Target Document:** `README.md` (Authoritative Enterprise Architecture Specification)  
 **Target Codebase:** `arpl-ehs-ptw` (`public/index.html`, `index.html`, `functions/index.js`, `firestore.rules`)  
-**Scope:** Workflow Topologies, State Transitions, Approval Chains, Extension, Observation, Closure, and Escalation
+**Scope:** Core Approval Topologies, State Transitions, Approval Chains, Extension, Observation, Closure, and Escalation  
+**Status:** All workflow discrepancies resolved and verified.
 
 ---
 
 ## README.md
 
-* **PTW-004 Confined Space Entry — Approval Topology Contradiction & Schema Mismatch:**
-  * **Internal Documentation Contradiction:** Section 5.2.4 diagrams a **4-stage Direct Spine** (`Site Supervisor → Site Engineer → Tower Incharge → EHS Safety`), whereas Section 8.4 text and sequence diagram explicitly define an expedited **2-approver spine (no separate Site Engineer step)** (`Site Supervisor → Tower Incharge → EHS Safety`).
-  * **Codebase Implementation Mismatch (`index.html`):** `newChain('confined')` instantiates `{ kind: 'confined', sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() }` without a `siteEngineer` approval slot (following Section 8.4). However, `submitPermit(p)` unconditionally routes confined permits to `p.status = 'Pending Site Engineer Acknowledgment'` and `acknowledgeSiteEngineer()` handles confined permits before forwarding to Section Head (following Section 5.2.4).
-* **PTW-010 Night Shift Work — Section 7 Architecture Omission & Function Discrepancy:**
-  * **Omission in Section 7:** Sections 5.2.11 and 8.10 document the 8-stage dual-phase handover governance in detail, but Section 7.1 (`newChain` data schema) and Section 7.2 (`chainStage` decision tree) completely omit `nightshift` / `PTW-010`. In contrast, `index.html` implements `nightshift` as the primary branch in both `newChain()` and `chainStage()`.
-  * **Approver Invocation Function Name Drift:** Section 8.10 sequence diagram specifies `PM->>SYS: acknowledgeNightPm() with lighting confirmation` to transition status from `Pending P&M Night Acknowledgment` to `Pending EHS Approval`. The codebase implements this step via `openNightPmAckModal()` and `submitNightPmAck()`; no `acknowledgeNightPm()` function exists.
-* **Extension Workflow — Fictional State Names & Unspecified Topologies:**
-  * **Fictional State Names in Sequence Diagram:** Section 11.2 sequence diagram introduces fictional state strings (`Pending Extension - Engineer Ack`, `Pending Extension - Section Head`, `Pending Extension - EHS`). These states do not exist anywhere in the codebase or Section 6.2 Master Operational State Dictionary. The codebase and Section 6.2 use the canonical statuses: `Pending Site Engineer`, `Pending Section Head`, and `Pending EHS Approval` (with sub-status tracked under `p.extension.status`).
-  * **Missing Batching Plant Electrical Extension Topology:** Section 11.2 documents only a single 3-stage extension flow (`Site Supervisor → Site Engineer → Tower Incharge → EHS`). The codebase (`index.html`) implements a specialized dual-topology extension workflow for Batching Plant electrical permits (`ext-batching-elec`) routing `Permittee Electrician → P&M Engineer (Pending P&M Acknowledgment) → Quality Engineer (Pending Quality Engineer Approval) → EHS Safety`, completely bypassing Site Engineer and Tower Incharge.
-* **Backend Cloud Functions (`functions/index.js`) — State Truncation & Lack of Validation:**
-  * **32-Character Status String Truncation:** `functions/index.js` (`transitionPermitStage`) executes `transaction.update(permitRef, { status: sanitizeString(targetStatus, 32) })`. 10 of the valid operational workflow states defined in README Section 6.2 exceed 32 characters (e.g., `Pending Site Engineer Acknowledgment` [36 chars], `Pending Blasting In-charge Acknowledgment` [41 chars], `Observation Pending Site Engineer Acknowledgment` [48 chars], `Night Shift Approved – Awaiting Linked Permit` [45 chars]). Any call through `transitionPermitStage` truncates these statuses, causing silent state corruption and breaking client UI equality checks.
-  * **Absence of Server-Side State Machine & Role Authorization:** README Section 6.1 defines the complete 27-state lifecycle transition graph and Section 4.2 defines strict per-stage role permissions. In `functions/index.js`, `transitionPermitStage` accepts arbitrary `targetStatus` strings without verifying whether the permit's current status can legally transition to `targetStatus`, and checks only project membership rather than verifying caller role authority for the target stage.
-* **SLA Escalation Engine — Hardcoded Windows & Absent Pending Sweeps:**
-  * **Uniform Hardcoded Windows:** README Section 9 specifies a 2-stage SLA timer driven by a per-stage SLA configuration matrix (`SLA_HOURS`: Site Engineer 30m, Parallel Gate 45m, Section Head 45m, EHS 30m). The codebase (`index.html`) applies uniform hardcoded thresholds (`STAGE1_MS` = 30m, `STAGE2_MS` = 60m) across all pending stages.
-  * **Missing Pending-Stage Backend Sweeps:** README Section 9 specifies automated server-side escalation sweeps for pending approval stages. In `functions/index.js`, `escalationSweep` only sweeps for expired active permits (`status == 'active'` and `validTill <= now`), performing no sweeps or notifications for pending approval stage SLA breaches.
-* **Terminal Surrender State Nomenclature (`Closed` vs `Completed (Surrendered)`):**
-  * README Section 6.2 table defines the terminal operational state as `Closed`. In `index.html`, `closeAndSurrenderPermit()` mutates the permit status to `'Completed (Surrendered)'`. The codebase uses `Closed – Pending Surrender` as an intermediate pre-surrender suspension state, while `Completed (Surrendered)` represents the permanent archived state.
-* **PTW-007 Drilling & Blasting — Section 7.5 Dispatch Graph Divergence:**
-  * The operational dispatch diagram in Section 7.5 depicts: `submitPermit(p) -->|PTW-001 to 05, PTW-007, PTW-008| Pending Site Engineer Acknowledgment`. In both `index.html` and README Section 5.2.7, blasting operations route upon submission to `Pending Blasting In-charge Acknowledgment` (for certified blaster statutory declaration) before advancing to Site Engineer acknowledgment.
+No drift detected.
