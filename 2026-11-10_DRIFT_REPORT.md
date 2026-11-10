@@ -1,65 +1,30 @@
-# Drift Detection Report: Design Documents vs Codebase
+# Drift Detection Report: Workflow Deviations (`README.md` vs Codebase)
 
 **Date:** 2026-11-10  
-**Target Repository:** `arpl-ehs-ptw`  
-**Inspected Design Documents:** `design_draft.md`, `SPECIFICATION.md`, `IMPLEMENTATION_PLAN.md`, `README.md`  
-**Inspected Source Files:** `index.html`, `public/index.html`, `functions/index.js`, `firestore.rules`, `storage.rules`, `public/config.projects.json`
-
----
-
-## design_draft.md
-
-No drift detected.
-
----
-
-## SPECIFICATION.md
-
-* **Architectural Compute Layer Divergence (Section 2 Non-Functional Requirements):**
-  * `SPECIFICATION.md` specifies a "Hybrid Firebase + Cloud Run Architecture" utilizing a containerized Cloud Run REST API (`<250ms warm API`, container auto-scaling `80 req/instance`, `roleCanActOnChain` transition API, and Admin Cloud Run API). The actual implementation runs a 100% native Firebase serverless stack (`functions/index.js` using Cloud Functions 2nd Gen `onCall` and `onSchedule`) with zero external Cloud Run microservices.
-* **Worksite Portfolio & Scale Model Divergence (Section 2 & FR-021):**
-  * `SPECIFICATION.md` models a fixed operational baseline of "6 projects, 360 unique users". The active platform governs 3 authoritative construction mega-sites (`PRJ-PEARL`, `PRJ-REGENT`, `PRJ-SANSA`) with authoritative towers per site (`AUTHORITATIVE_PROJECT_TOWERS`) and dynamic, unlimited user provisioning.
-* **Role Taxonomy & Administrative Hierarchy Divergence (Section 3 User Roles):**
-  * `SPECIFICATION.md` defines `admin` as generic "Administrator" and lacks the architectural separation between enterprise `super-admin` (`aic1176@aurogroup.com`) and site-level `project-admin` (**Project Admin**).
-  * `SPECIFICATION.md` uses legacy technical labels (`Site Supervisor`, `Permittee Electrician`, `P and M Engineer`, `IT Engineer`, `EHS Manager`, `EHS Officer`, `Excavation Head`) instead of the standardized platform taxonomy: `Permittee (Initiator)`, `Electrician (Specialist Permittee)`, `P&M (Plant & Machinery Approver)`, `IT in charge (Technical Approver)`, `EHS Head (Statutory Endorser / Issuer)`, `EHS supervisor (Safety Endorser)`, `Section Head (Civil Approver)`, `Tower In charge (Section Approver)`, and `Project Admin (Worksite Administrator)`.
-* **Absence of Dual-Deletion & Auth Lifecycle Specifications:**
-  * `SPECIFICATION.md` contains no specification for user offboarding via atomic dual-deletion (`adminDeleteUser`), permanent Firebase Authentication account removal (`auth.deleteUser`), one-click orphaned Auth account purging (`adminSyncAndPurgeOrphanAuthUsers`), or `auth/email-already-in-use` automatic profile recovery.
-* **Absence of Multi-Role & Multi-Location Dynamic Switcher Specifications:**
-  * `SPECIFICATION.md` binds users to a single scalar role and location. It lacks specifications for the multi-assignment schema (`assignments[]`), header Role Switcher (`#headerRoleSwitcher`), header Location Switcher (`#headerLocationSwitcher`), and the `switchActiveRole` Cloud Function.
-* **Missing Direct Client Deletion Security Lockout:**
-  * `SPECIFICATION.md` does not document the mandatory `allow delete: if false;` security constraint on `/users`, `/project_admins`, and `/site_personnel` in `firestore.rules`.
-* **Outdated Code Metrics (Header Note):**
-  * `SPECIFICATION.md` cites `index.html (~21,450 LOC)` and `25 master test suites`. The actual codebase has expanded to ~28,777 LOC validated across 28 master test suites (100% pass rate).
-
----
-
-## IMPLEMENTATION_PLAN.md
-
-* **Core Backend Architecture Divergence (Section 4.2):**
-  * `IMPLEMENTATION_PLAN.md` blueprints a dedicated Google Cloud Run containerized Express REST API service (`arpl-ehs-api`) with `min-instances = 1`, Google Cloud Tasks rate-limited queues, Google Artifact Registry container scanning, and Secret Manager in-memory injection. The actual implementation runs exclusively on native Firebase Cloud Functions 2nd Gen (`functions/index.js` in `asia-south1`) with zero Cloud Run containers and zero Cloud Tasks queues.
-* **Hypothetical Worksite Portfolio Drift (Section 3 Workload Specification):**
-  * `IMPLEMENTATION_PLAN.md` models 6 hypothetical projects (`PRJ-AGR`, `PRJ-ABP`, `PRJ-ART`, `PRJ-AB2`, `PRJ-AVC`, `PRJ-AHT`) with a rigid 360-user capacity model (60 users/site). The active production platform operates across 3 real construction sites (`PRJ-PEARL`, `PRJ-REGENT`, `PRJ-SANSA`) with dynamic, unlimited user provisioning.
-* **Asynchronous Queueing & Processing Divergence (Section 4.2 & 6):**
-  * `IMPLEMENTATION_PLAN.md` specifies Cloud Tasks for asynchronous PDF rendering and Cloud Scheduler calling the Cloud Run REST container for SLA escalations. In reality, statutory PDFs are generated client-side via jsPDF (with fallback Cloud Functions) and SLA escalation sweeps are scheduled via native `firebase-functions/v2/scheduler`.
-* **Missing User Lifecycle & Dual-Deletion Deliverables (Section 6 WBS):**
-  * `IMPLEMENTATION_PLAN.md` contains no work packages or deliverables for atomic dual-deletion from Firebase Auth (`adminDeleteUser`), ghost Auth account scanning/purging (`adminSyncAndPurgeOrphanAuthUsers`), or in-session active role context switching (`switchActiveRole`).
-* **Role Taxonomy & Administrative Hierarchy Drift:**
-  * `IMPLEMENTATION_PLAN.md` uses "Site Administrator" rather than the standardized Indian site terminology **Project Admin** (`project-admin`), and lacks specifications for dynamic in-session role and location switchers.
+**Target Document:** `README.md` (Full 355 KB Architecture Specification)  
+**Target Codebase:** `arpl-ehs-ptw` (`public/index.html`, `index.html`, `functions/index.js`, `firestore.rules`)  
+**Scope:** Workflow Topologies, State Transitions, Approval Chains, Extension, Observation, Closure, and Escalation
 
 ---
 
 ## README.md
 
-* **Statutory Approval Topology Inaccuracies (Section 3 Table):**
-  * **PTW-002 (Hot Work):** `README.md` lists `Site Supervisor → Site Engineer → EHS Officer → Safety Lead`. The actual topology enforced by code and tests is `Site Supervisor (Permittee) → Site Engineer → Tower Incharge (hw-section-head) → EHS Head / EHS Officer`.
-  * **PTW-003 (Guard Rail Removal):** `README.md` lists `Site Supervisor → Safety Inspector → EHS Officer → Construction Lead`. The actual topology enforced by code and tests is `Site Supervisor (Permittee) → Site Engineer → Tower Incharge (hw-section-head) → EHS Head / EHS Officer`.
-  * **PTW-005 (Shaft Work):** `README.md` lists `Equipment Supervisor → Mechanical Engineer → EHS Officer → Project Admin`. The actual topology enforced by code and tests is `Site Supervisor (Permittee) → Site Engineer → MEP Engineer → Tower Incharge (hw-section-head) → EHS Head / EHS Officer`.
-  * **PTW-007 (Drilling & Blasting):** `README.md` lists `Certified Blasting Master → Mining Engineer → EHS Manager → Worksite VP`. The actual topology enforced by code and tests is `Blasting Incharge → Site Engineer → Tower Incharge (hw-section-head) → EHS Manager`.
-* **Incomplete Authorization Matrix (Section 4 Table):**
-  * `README.md` lists only 9 operational roles in the Section 4 summary table, omitting `hw-section-head` (Tower In charge), `excavation-head` (Section Head), `mep` (MEP), `pm` (P&M), `it` (IT in charge), `lift-supervisor` (Lifting Supervisor), `blasting-incharge` (Blasting Incharge), and `quality-engineer` (Quality Engineer).
-* **Missing Header Switchers & Active Context Transition Documentation:**
-  * `README.md` does not document `#headerRoleSwitcher` or `#headerLocationSwitcher` for multi-role and multi-location personnel, nor the `switchActiveRole` Cloud Function.
-* **Missing Dual-Deletion & Ghost Auth Purge Governance:**
-  * `README.md` does not document `adminDeleteUser`, `adminSyncAndPurgeOrphanAuthUsers`, or the `allow delete: if false;` direct Firestore deletion lockout.
-* **Outdated Master Test Suite Count (Section 11):**
-  * `README.md` does not reflect the current test suite count; the master test runner now executes 28 comprehensive test suites (with Suite 27 validating atomic dual-deletion and Suite 28 validating role switchers and Project Admin taxonomy).
+* **PTW-004 Confined Space Entry — Approval Topology Contradiction & Schema Mismatch:**
+  * **Internal Documentation Contradiction:** Section 5.2.4 diagrams a **4-stage Direct Spine** (`Site Supervisor → Site Engineer → Tower Incharge → EHS Safety`), whereas Section 8.4 text and sequence diagram explicitly define an expedited **2-approver spine (no separate Site Engineer step)** (`Site Supervisor → Tower Incharge → EHS Safety`).
+  * **Codebase Implementation Mismatch (`index.html`):** `newChain('confined')` instantiates `{ kind: 'confined', sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() }` without a `siteEngineer` approval slot (following Section 8.4). However, `submitPermit(p)` unconditionally routes confined permits to `p.status = 'Pending Site Engineer Acknowledgment'` and `acknowledgeSiteEngineer()` handles confined permits before forwarding to Section Head (following Section 5.2.4).
+* **PTW-010 Night Shift Work — Section 7 Architecture Omission & Function Discrepancy:**
+  * **Omission in Section 7:** Sections 5.2.11 and 8.10 document the 8-stage dual-phase handover governance in detail, but Section 7.1 (`newChain` data schema) and Section 7.2 (`chainStage` decision tree) completely omit `nightshift` / `PTW-010`. In contrast, `index.html` implements `nightshift` as the primary branch in both `newChain()` and `chainStage()`.
+  * **Approver Invocation Function Name Drift:** Section 8.10 sequence diagram specifies `PM->>SYS: acknowledgeNightPm() with lighting confirmation` to transition status from `Pending P&M Night Acknowledgment` to `Pending EHS Approval`. The codebase implements this step via `openNightPmAckModal()` and `submitNightPmAck()`; no `acknowledgeNightPm()` function exists.
+* **Extension Workflow — Fictional State Names & Unspecified Topologies:**
+  * **Fictional State Names in Sequence Diagram:** Section 11.2 sequence diagram introduces fictional state strings (`Pending Extension - Engineer Ack`, `Pending Extension - Section Head`, `Pending Extension - EHS`). These states do not exist anywhere in the codebase or Section 6.2 Master Operational State Dictionary. The codebase and Section 6.2 use the canonical statuses: `Pending Site Engineer`, `Pending Section Head`, and `Pending EHS Approval` (with sub-status tracked under `p.extension.status`).
+  * **Missing Batching Plant Electrical Extension Topology:** Section 11.2 documents only a single 3-stage extension flow (`Site Supervisor → Site Engineer → Tower Incharge → EHS`). The codebase (`index.html`) implements a specialized dual-topology extension workflow for Batching Plant electrical permits (`ext-batching-elec`) routing `Permittee Electrician → P&M Engineer (Pending P&M Acknowledgment) → Quality Engineer (Pending Quality Engineer Approval) → EHS Safety`, completely bypassing Site Engineer and Tower Incharge.
+* **Backend Cloud Functions (`functions/index.js`) — State Truncation & Lack of Validation:**
+  * **32-Character Status String Truncation:** `functions/index.js` (`transitionPermitStage`) executes `transaction.update(permitRef, { status: sanitizeString(targetStatus, 32) })`. 10 of the valid operational workflow states defined in README Section 6.2 exceed 32 characters (e.g., `Pending Site Engineer Acknowledgment` [36 chars], `Pending Blasting In-charge Acknowledgment` [41 chars], `Observation Pending Site Engineer Acknowledgment` [48 chars], `Night Shift Approved – Awaiting Linked Permit` [45 chars]). Any call through `transitionPermitStage` truncates these statuses, causing silent state corruption and breaking client UI equality checks.
+  * **Absence of Server-Side State Machine & Role Authorization:** README Section 6.1 defines the complete 27-state lifecycle transition graph and Section 4.2 defines strict per-stage role permissions. In `functions/index.js`, `transitionPermitStage` accepts arbitrary `targetStatus` strings without verifying whether the permit's current status can legally transition to `targetStatus`, and checks only project membership rather than verifying caller role authority for the target stage.
+* **SLA Escalation Engine — Hardcoded Windows & Absent Pending Sweeps:**
+  * **Uniform Hardcoded Windows:** README Section 9 specifies a 2-stage SLA timer driven by a per-stage SLA configuration matrix (`SLA_HOURS`: Site Engineer 30m, Parallel Gate 45m, Section Head 45m, EHS 30m). The codebase (`index.html`) applies uniform hardcoded thresholds (`STAGE1_MS` = 30m, `STAGE2_MS` = 60m) across all pending stages.
+  * **Missing Pending-Stage Backend Sweeps:** README Section 9 specifies automated server-side escalation sweeps for pending approval stages. In `functions/index.js`, `escalationSweep` only sweeps for expired active permits (`status == 'active'` and `validTill <= now`), performing no sweeps or notifications for pending approval stage SLA breaches.
+* **Terminal Surrender State Nomenclature (`Closed` vs `Completed (Surrendered)`):**
+  * README Section 6.2 table defines the terminal operational state as `Closed`. In `index.html`, `closeAndSurrenderPermit()` mutates the permit status to `'Completed (Surrendered)'`. The codebase uses `Closed – Pending Surrender` as an intermediate pre-surrender suspension state, while `Completed (Surrendered)` represents the permanent archived state.
+* **PTW-007 Drilling & Blasting — Section 7.5 Dispatch Graph Divergence:**
+  * The operational dispatch diagram in Section 7.5 depicts: `submitPermit(p) -->|PTW-001 to 05, PTW-007, PTW-008| Pending Site Engineer Acknowledgment`. In both `index.html` and README Section 5.2.7, blasting operations route upon submission to `Pending Blasting In-charge Acknowledgment` (for certified blaster statutory declaration) before advancing to Site Engineer acknowledgment.
