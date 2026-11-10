@@ -14264,28 +14264,28 @@
             );
             if (!confirmed) return false;
 
-            // 1. Backend Cloud Function Deletion (Permanently deletes from Firebase Authentication + Firestore)
+            // 1. Backend Cloud Function Deletion (Invokes exported adminDeleteUser)
             let backendSuccess = false;
             if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
                 try {
-                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
-                    const res = await assignFn({
-                        action: 'delete',
+                    const delFn = firebase.app().functions('asia-south1').httpsCallable('adminDeleteUser');
+                    const res = await delFn({
                         uid: targetUid,
                         email: targetEmail,
-                        projectId: targetProjectId || 'PRJ-SANSA'
+                        projectId: targetProjectId
                     });
                     if (res && res.data && res.data.success) {
                         backendSuccess = true;
                     }
                 } catch (cfErr) {
-                    console.warn('[unifiedDeleteUser] adminAssignProjectRole delete notice:', cfErr);
+                    console.warn('[unifiedDeleteUser] adminDeleteUser notice:', cfErr);
                     try {
-                        const delFn = firebase.app().functions('asia-south1').httpsCallable('adminDeleteUser');
-                        const res2 = await delFn({
+                        const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                        const res2 = await assignFn({
+                            action: 'delete',
                             uid: targetUid,
                             email: targetEmail,
-                            projectId: targetProjectId
+                            projectId: targetProjectId || 'PRJ-SANSA'
                         });
                         if (res2 && res2.data && res2.data.success) {
                             backendSuccess = true;
@@ -14373,10 +14373,13 @@
                 recordAuditLog('DELETE_USER_PERMANENT', 'Permanently deleted user account ' + targetName + ' (' + (targetEmail || targetUid) + ') from Firebase and directory.');
             }
 
+            if (typeof initFirestoreDataSync === 'function') {
+                try { await initFirestoreDataSync(); } catch (_syncErr) {}
+            }
+            if (typeof renderUsersDirectoryView === 'function') renderUsersDirectoryView();
             if (typeof renderSitePersonnelTable === 'function') renderSitePersonnelTable();
             if (typeof renderSuperAdminAdminsTab === 'function') renderSuperAdminAdminsTab();
             if (typeof renderProjectAdminsView === 'function') renderProjectAdminsView();
-            if (typeof renderUsersDirectoryView === 'function') renderUsersDirectoryView();
             if (typeof renderWorksiteGovernanceHeader === 'function') renderWorksiteGovernanceHeader();
 
             showToast('Account for ' + targetName + ' permanently deleted from Firebase & system.', 'ok');
@@ -16644,6 +16647,7 @@
             const frozenUser = Object.freeze(Object.assign({}, safeUser));
             currentUser = frozenUser;
             window.currentUser = frozenUser;
+            if (typeof initUsersLiveSnapshot === 'function') initUsersLiveSnapshot();
 
             // 4. Permanently disable role switching and manual in-memory logins
             window.switchRole = () => {
@@ -27887,6 +27891,7 @@ ptypeOf(p) === 'general' ?
                 '<option value="">All Operational Roles</option>' +
                 ROLES.filter(r => r.key !== 'super-admin').map(r => '<option value="' + r.key + '" ' + (roleFilter === r.key ? 'selected' : '') + '>' + r.label + '</option>').join('') +
                 '</select>' +
+                (isSuperAdmin ? '<button type="button" class="btn btn-sm" id="btnPurgeGhostUsers" onclick="handlePurgeGhostUsers()" style="background:#FFF7ED;color:#C2410C;border:1px solid #FDBA74;font-weight:700;white-space:nowrap;padding:7px 12px;border-radius:6px;display:inline-flex;align-items:center;gap:6px;cursor:pointer;" title="Scan Firebase Authentication against Firestore and purge accounts with no matching user profile"><i class="fa-solid fa-ghost"></i> Sync Auth &amp; Purge Ghost Users</button>' : '') +
                 '</div>' +
                 '</div>' +
                 '<div class="card card-pad" style="padding-bottom:0;">' +
@@ -27905,6 +27910,71 @@ ptypeOf(p) === 'general' ?
                 '</div>' +
                 paginationHtml +
                 '</div>';
+        }
+
+        /* --- 3B. SUPER ADMIN ORPHANED AUTH PURGE & LIVE SNAPSHOT --- */
+        async function handlePurgeGhostUsers() {
+            const confirmed = confirm(
+                'SYNC AUTH & PURGE GHOST ACCOUNTS\n\n' +
+                'This utility will scan Firebase Authentication against all Firestore user profiles.\n' +
+                'Any Firebase Auth account that has no corresponding profile in Cloud Firestore (and is not a protected Super Admin) will be permanently deleted.\n\n' +
+                'Do you want to proceed with the scan and cleanup?'
+            );
+            if (!confirmed) return;
+
+            const btn = document.getElementById('btnPurgeGhostUsers');
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Scanning Auth & Purging...';
+            }
+            try {
+                if (typeof firebase === 'undefined' || !firebase.app || typeof firebase.app().functions !== 'function') {
+                    throw new Error('Firebase Functions service unavailable.');
+                }
+                const purgeFn = firebase.app().functions('asia-south1').httpsCallable('adminSyncAndPurgeOrphanAuthUsers');
+                const res = await purgeFn({});
+                const count = (res && res.data && typeof res.data.purgedCount === 'number') ? res.data.purgedCount : 0;
+                const total = (res && res.data && typeof res.data.totalScanned === 'number') ? res.data.totalScanned : 0;
+                showToast('Auth Sync Complete: ' + count + ' orphaned ghost accounts purged out of ' + total + ' scanned.', count > 0 ? 'ok' : 'info');
+                if (typeof initFirestoreDataSync === 'function') {
+                    await initFirestoreDataSync();
+                }
+                if (typeof renderUsersDirectoryView === 'function') {
+                    renderUsersDirectoryView();
+                }
+            } catch (err) {
+                console.error('[handlePurgeGhostUsers] Purge error:', err);
+                showToast('Purge failed: ' + (err.message || err), 'err');
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-ghost"></i> Sync Auth &amp; Purge Ghost Users';
+                }
+            }
+        }
+
+        let usersDirectoryUnsubscribe = null;
+        function initUsersLiveSnapshot() {
+            if (typeof firebase === 'undefined' || !firebase.firestore) return;
+            if (usersDirectoryUnsubscribe) return;
+            try {
+                const db = firebase.firestore();
+                usersDirectoryUnsubscribe = db.collection('users').onSnapshot(snap => {
+                    console.log('[Users Directory] Live snapshot update received, count:', snap.size);
+                    if (typeof initFirestoreDataSync === 'function') {
+                        initFirestoreDataSync().then(() => {
+                            const uView = document.getElementById('view-users');
+                            if (uView && uView.classList.contains('active') && typeof renderUsersDirectoryView === 'function') {
+                                renderUsersDirectoryView();
+                            }
+                        }).catch(() => {});
+                    }
+                }, err => {
+                    console.warn('[Users Directory] Live snapshot notice:', err);
+                });
+            } catch (e) {
+                console.warn('[Users Directory] Failed to bind live snapshot:', e);
+            }
         }
 
         /* --- 4. ROLES & STATUTORY PERMISSIONS MATRIX --- */

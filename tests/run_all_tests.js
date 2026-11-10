@@ -41,7 +41,8 @@ const suites = [
     { num: 23, name: 'PTW-010 NIGHT SHIFT / HOLIDAY WORK & DUAL-PHASE HANDOVER', file: 'test_pt10_night_shift.js' },
     { num: 24, name: 'SUNDAY WORK TILE & WEEKEND GOVERNANCE', file: 'test_sunday_work_tile.js' },
     { num: 25, name: 'DYNAMIC ENTERPRISE ARCHITECTURE, MULTI-PROJECT & CONTRACTOR GOVERNANCE', file: 'test_dynamic_enterprise_features.js' },
-    { num: 26, name: 'PERMIT-SPECIFIC MASTER DATA & MANUAL CONTRACTOR/SUBCONTRACTOR ENTRY', file: 'test_master_data_updates.js' }
+    { num: 26, name: 'PERMIT-SPECIFIC MASTER DATA & MANUAL CONTRACTOR/SUBCONTRACTOR ENTRY', file: 'test_master_data_updates.js' },
+    { num: 27, name: 'ATOMIC DUAL-DELETION & GHOST AUTH CLEANUP', file: 'test_dual_deletion_and_auth_cleanup.js' }
 ];
 
 console.log('================================================================');
