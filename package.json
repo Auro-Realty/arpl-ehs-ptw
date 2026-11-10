@@ -4,6 +4,9 @@
   "description": "Enterprise-Grade Digital Safety Governance & Permit-to-Work System for Construction Operations",
   "main": "server.js",
   "scripts": {
+    "sync": "node scripts/sync_public.js",
+    "pretest": "node scripts/sync_public.js",
+    "predeploy": "node scripts/sync_public.js",
     "start": "node server.js",
     "test": "node tests/run_all_tests.js",
     "test:audit": "node tests/run_extended_audit_tests.js",

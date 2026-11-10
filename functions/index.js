@@ -127,6 +127,174 @@ function validateProjectTower(projectId, towerNameOrLocId) {
 }
 
 /**
+ * Authoritative Deterministic Permit Approval Topology Matrix (PTW-001 through PTW-010)
+ * Maps every statutory stage strictly to provisionable canonical role keys:
+ * - site-supervisor (Permittee / Initiator)
+ * - site-engineer (Field Verification & Physical Checklist)
+ * - section-head / hw-section-head (Tower Incharge / Section Head)
+ * - excavation-head (Civil & Earthwork Section Head)
+ * - mep (MEP Engineer Clearance)
+ * - pm (Plant & Machinery Clearance)
+ * - it (IT Telecom Infrastructure Clearance)
+ * - quality-engineer (Quality Engineer Clearance)
+ * - electrician (Certified Permittee Electrician)
+ * - blasting-incharge (Shot-Firer / Blasting In-charge)
+ * - lift-supervisor (Rigging & Lifting In-charge)
+ * - night-supervisor (Night Handover In-charge)
+ * - project-manager (Executive Clearance)
+ * - ehs-officer / ehs-manager (Statutory Safety Authorization)
+ * - project-admin / admin (Site Administrator)
+ */
+const PERMIT_APPROVAL_MATRIX = {
+  "PTW-001": {
+    code: "PTW-001",
+    key: "excavation",
+    name: "Excavation Work",
+    short: "Excavation",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Checklist", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Field Ground Verification", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Technical Clearances (Parallel)", roleKey: ["mep", "pm", "it"], roleLabel: "MEP, P&M & IT Engineers (Clearances)", canonicalRoles: ["mep", "pm", "it"] },
+      { order: 4, name: "Section Head Endorsement", roleKey: "excavation-head", roleLabel: "Excavation Head (Section Head)", canonicalRoles: ["excavation-head"] },
+      { order: 5, name: "Statutory Safety Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-002": {
+    code: "PTW-002",
+    key: "hotwork",
+    name: "Hot Work",
+    short: "Hot Work",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Fire Safety Checklist", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Spark Hazard & Barrier Check", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Section Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 4, name: "Continuous Gas Check & Safety Endorsement", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-003": {
+    code: "PTW-003",
+    key: "guardrail",
+    name: "Guard Rail / Floor Protection Removal",
+    short: "Guard Rail",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Fall Protection Plan", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Perimeter Hazard & Safety Net Check", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Tower Section Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 4, name: "Statutory Safety Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-004": {
+    code: "PTW-004",
+    key: "confined",
+    name: "Confined Space Entry",
+    short: "Confined Space",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Atmosphere Test Prep", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Ventilation & Physical Entry Check", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Access Isolation Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 4, name: "Multi-Gas Test & Entry Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-005": {
+    code: "PTW-005",
+    key: "shaft",
+    name: "Shaft Work",
+    short: "Shaft Work",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Shaft Rigging Plan", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Shaft Barrier & Descent Verification", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Services & MEP Technical Clearance", roleKey: "mep", roleLabel: "MEP Engineer (Clearance)", canonicalRoles: ["mep"] },
+      { order: 4, name: "Tower Section Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 5, name: "Statutory Safety Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-006": {
+    code: "PTW-006",
+    key: "electrical",
+    name: "Electrical Isolation & Energization",
+    short: "Electrical Work",
+    initiatorRole: "electrician",
+    stages: [
+      { order: 1, name: "Initiation & LOTO Protocol", roleKey: "electrician", roleLabel: "Electrician (Certified Permittee)", canonicalRoles: ["electrician"] },
+      { order: 2, name: "Physical LOTO Inspection & Lock Verification", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Substation & Machinery Clearance", roleKey: ["mep", "pm"], roleLabel: "MEP / P&M Engineer", canonicalRoles: ["mep", "pm"] },
+      { order: 4, name: "Section Head Endorsement", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 5, name: "Statutory Safety Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-007": {
+    code: "PTW-007",
+    key: "blasting",
+    name: "Drilling & Controlled Blasting",
+    short: "Drilling & Blasting",
+    initiatorRole: "blasting-incharge",
+    stages: [
+      { order: 1, name: "Initiation & Shot-Firer Drill Plan", roleKey: "blasting-incharge", roleLabel: "Blasting In-charge (Shot Firer)", canonicalRoles: ["blasting-incharge"] },
+      { order: 2, name: "Drill Hole & Warning Siren Check", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Blast Perimeter & Danger Zone Review", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 4, name: "Statutory Explosives & Controlled Blast Endorsement", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-008": {
+    code: "PTW-008",
+    key: "general",
+    name: "General Work at Height & Hazardous Operations",
+    short: "General Work",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Task Hazard Assessment", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Safety Harness & Anchor Inspection", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Section Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 4, name: "Statutory Safety Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-009": {
+    code: "PTW-009",
+    key: "lifting",
+    name: "Lifting Operations & Critical Lift Plan",
+    short: "Lifting Operations",
+    initiatorRole: "lift-supervisor",
+    stages: [
+      { order: 1, name: "Initiation & Rigging Stress Calculations", roleKey: "lift-supervisor", roleLabel: "Lifting Supervisor (Certified Permittee)", canonicalRoles: ["lift-supervisor"] },
+      { order: 2, name: "Ground Stability & Outrigger Check", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Crane Fitness & Lifting Gear Clearance", roleKey: "pm", roleLabel: "P&M Engineer (Machinery Clearance)", canonicalRoles: ["pm"] },
+      { order: 4, name: "Tower Section Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 5, name: "Executive Oversight (Critical Lift > 5MT / Tandem)", roleKey: "project-manager", roleLabel: "Project Manager (Executive Clearance)", canonicalRoles: ["project-manager"] },
+      { order: 6, name: "Statutory Safety Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  },
+  "PTW-010": {
+    code: "PTW-010",
+    key: "nightshift",
+    name: "Night Shift & Holiday Work",
+    short: "Night Shift",
+    initiatorRole: "site-supervisor",
+    stages: [
+      { order: 1, name: "Day Pre-Fill & Scope Definition", roleKey: "site-supervisor", roleLabel: "Site Supervisor (Day Permittee)", canonicalRoles: ["site-supervisor"] },
+      { order: 2, name: "Day Site Verification", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
+      { order: 3, name: "Section Head Day Clearance", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
+      { order: 4, name: "Night Physical Handover & Lighting Verification", roleKey: "night-supervisor", roleLabel: "Night Site Supervisor (Night In-charge)", canonicalRoles: ["night-supervisor"] },
+      { order: 5, name: "Night Machinery & Lighting Verification", roleKey: "pm", roleLabel: "P&M Engineer (Night On-Call)", canonicalRoles: ["pm"] },
+      { order: 6, name: "Final Statutory Night Authorization", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+    ]
+  }
+};
+
+// Aliases for permit keys
+["excavation", "hotwork", "guardrail", "confined", "shaft", "electrical", "blasting", "general", "lifting", "liftplan", "nightshift"].forEach((k) => {
+  const match = Object.values(PERMIT_APPROVAL_MATRIX).find(m => m.key === k || (k === "liftplan" && m.key === "lifting"));
+  if (match) PERMIT_APPROVAL_MATRIX[k] = match;
+});
+
+exports.AUTHORITATIVE_PROJECT_TOWERS = AUTHORITATIVE_PROJECT_TOWERS;
+exports.PERMIT_APPROVAL_MATRIX = PERMIT_APPROVAL_MATRIX;
+
+/**
  * Generate cryptographically secure random password (16 chars, meets all complexity rules)
  */
 function generateSecureRandomPassword(length = 16) {
@@ -1264,12 +1432,25 @@ exports.escalationSweep = onSchedule(
   { region: REGION, schedule: "every 5 minutes", timeoutSeconds: 120 },
   async () => {
     const now = admin.firestore.Timestamp.now();
-    const activePermits = await db
-      .collection("permits")
-      .where("status", "==", "active")
-      .where("validTill", "<=", now)
-      .limit(100)
-      .get();
+    let activePermits;
+    try {
+      activePermits = await db
+        .collection("permits")
+        .where("status", "==", "active")
+        .where("validTill", "<=", now)
+        .limit(100)
+        .get();
+    } catch (idxErr) {
+      console.warn("Index fallback in escalationSweep (falling back to status-only query with in-memory filter):", idxErr);
+      const snap = await db.collection("permits").where("status", "==", "active").limit(100).get();
+      const filteredDocs = snap.docs.filter((d) => {
+        const vt = d.data().validTill;
+        if (!vt) return false;
+        const vtMillis = vt.toMillis ? vt.toMillis() : new Date(vt).getTime();
+        return vtMillis <= now.toMillis();
+      });
+      activePermits = { forEach: (fn) => filteredDocs.forEach(fn), size: filteredDocs.length };
+    }
 
     const batch = db.batch();
     activePermits.forEach((doc) => {

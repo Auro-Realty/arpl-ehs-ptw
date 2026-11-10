@@ -1,0 +1,99 @@
+[
+  {
+    "id": "PRJ-PEARL",
+    "name": "The Pearl",
+    "configured": true,
+    "site": {
+      "lat": 17.4125,
+      "lng": 78.3984,
+      "address": "The Pearl, Hitec City, Hyderabad, Telangana"
+    },
+    "radius": 200,
+    "towers": [
+      "P1",
+      "P2",
+      "P3",
+      "P4",
+      "P5",
+      "P6",
+      "P7",
+      "Clubhouse",
+      "Podium",
+      "NTA_PHASE-1",
+      "NTA_PHASE-2",
+      "NTA_PHASE-3"
+    ],
+    "basements": [
+      "Basement 3 (B3)",
+      "Basement 2 (B2)",
+      "Basement 1 (B1)",
+      "Ground Floor (GF)",
+      "Podium Level 1 (P1)",
+      "Podium Level 2 (P2)"
+    ],
+    "contractors": [
+      "Apex Infrastructure Pvt Ltd",
+      "L&T Construction Heavy Civil",
+      "SteelFab Engineering Solutions",
+      "In-House Auro Engineering Corps"
+    ]
+  },
+  {
+    "id": "PRJ-REGENT",
+    "name": "The Regent",
+    "configured": true,
+    "site": {
+      "lat": 17.4371,
+      "lng": 78.3612,
+      "address": "The Regent, Financial District, Hyderabad, Telangana"
+    },
+    "radius": 200,
+    "towers": [
+      "Tower 4",
+      "Tower 5",
+      "NTA",
+      "Stores",
+      "FormWork",
+      "Precast",
+      "Phase-1"
+    ],
+    "basements": [
+      "Basement 2 (B2)",
+      "Basement 1 (B1)",
+      "Ground Floor (GF)",
+      "Podium Level 1"
+    ],
+    "contractors": [
+      "Shapoorji Pallonji & Co. Ltd",
+      "Apex Heavy Lift Ltd",
+      "EnerSys Electrical & Power Infra",
+      "In-House Auro Engineering Corps"
+    ]
+  },
+  {
+    "id": "PRJ-SANSA",
+    "name": "Sansa County",
+    "configured": true,
+    "site": {
+      "lat": 17.4892,
+      "lng": 78.3144,
+      "address": "Sansa County Development, Miyapur, Hyderabad, Telangana"
+    },
+    "radius": 250,
+    "towers": [
+      "Sector 1 - Zone 1 & 2",
+      "Sector 1 - Zone 03",
+      "Sector 1 - Zone 04"
+    ],
+    "basements": [
+      "Basement 1 (B1)",
+      "Ground Level (GL)",
+      "Podium Deck"
+    ],
+    "contractors": [
+      "Apex Infrastructure Pvt Ltd",
+      "RockBlast Geo-Technics India",
+      "In-House Auro Engineering Corps"
+    ]
+  }
+]

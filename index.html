@@ -8207,6 +8207,157 @@
             nightshift: { key: 'nightshift', code: 'PTW-010', name: 'Night Shift Work', short: 'Night Shift', prefix: 'PTW-010', form: 'PTW-010', sh: 'hw-section-head', shLabel: 'Tower Incharge' }
         };
 
+        /* ---------------- DETERMINISTIC PERMIT APPROVAL MATRIX (PTW-001 TO PTW-010) ----------------
+           Maps every approval stage strictly to canonical provisionable role keys. */
+        const PERMIT_APPROVAL_MATRIX = {
+            'PTW-001': {
+                code: 'PTW-001',
+                key: 'excavation',
+                name: 'Excavation Work',
+                short: 'Excavation',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Checklist', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Field Ground Verification', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Technical Clearances (Parallel)', roleKey: ['mep', 'pm', 'it'], roleLabel: 'MEP, P&M & IT Engineers (Clearances)', canonicalRoles: ['mep', 'pm', 'it'] },
+                    { order: 4, name: 'Section Head Endorsement', roleKey: 'excavation-head', roleLabel: 'Excavation Head (Section Head)', canonicalRoles: ['excavation-head'] },
+                    { order: 5, name: 'Statutory Safety Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-002': {
+                code: 'PTW-002',
+                key: 'hotwork',
+                name: 'Hot Work',
+                short: 'Hot Work',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Fire Safety Checklist', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Spark Hazard & Barrier Check', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Section Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 4, name: 'Continuous Gas Check & Safety Endorsement', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-003': {
+                code: 'PTW-003',
+                key: 'guardrail',
+                name: 'Guard Rail / Floor Protection Removal',
+                short: 'Guard Rail',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Fall Protection Plan', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Perimeter Hazard & Safety Net Check', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Tower Section Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 4, name: 'Statutory Safety Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-004': {
+                code: 'PTW-004',
+                key: 'confined',
+                name: 'Confined Space Entry',
+                short: 'Confined Space',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Atmosphere Test Prep', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Ventilation & Physical Entry Check', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Access Isolation Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 4, name: 'Multi-Gas Test & Entry Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-005': {
+                code: 'PTW-005',
+                key: 'shaft',
+                name: 'Shaft Work',
+                short: 'Shaft Work',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Shaft Rigging Plan', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Shaft Barrier & Descent Verification', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Services & MEP Technical Clearance', roleKey: 'mep', roleLabel: 'MEP Engineer (Clearance)', canonicalRoles: ['mep'] },
+                    { order: 4, name: 'Tower Section Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 5, name: 'Statutory Safety Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-006': {
+                code: 'PTW-006',
+                key: 'electrical',
+                name: 'Electrical Isolation & Energization',
+                short: 'Electrical Work',
+                initiatorRole: 'electrician',
+                stages: [
+                    { order: 1, name: 'Initiation & LOTO Protocol', roleKey: 'electrician', roleLabel: 'Electrician (Certified Permittee)', canonicalRoles: ['electrician'] },
+                    { order: 2, name: 'Physical LOTO Inspection & Lock Verification', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Substation & Machinery Clearance', roleKey: ['mep', 'pm'], roleLabel: 'MEP / P&M Engineer', canonicalRoles: ['mep', 'pm'] },
+                    { order: 4, name: 'Section Head Endorsement', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 5, name: 'Statutory Safety Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-007': {
+                code: 'PTW-007',
+                key: 'blasting',
+                name: 'Drilling & Controlled Blasting',
+                short: 'Drilling & Blasting',
+                initiatorRole: 'blasting-incharge',
+                stages: [
+                    { order: 1, name: 'Initiation & Shot-Firer Drill Plan', roleKey: 'blasting-incharge', roleLabel: 'Blasting In-charge (Shot Firer)', canonicalRoles: ['blasting-incharge'] },
+                    { order: 2, name: 'Drill Hole & Warning Siren Check', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Blast Perimeter & Danger Zone Review', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 4, name: 'Statutory Explosives & Controlled Blast Endorsement', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-008': {
+                code: 'PTW-008',
+                key: 'general',
+                name: 'General Work at Height & Hazardous Operations',
+                short: 'General Work',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Task Hazard Assessment', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Safety Harness & Anchor Inspection', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Section Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 4, name: 'Statutory Safety Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-009': {
+                code: 'PTW-009',
+                key: 'lifting',
+                name: 'Lifting Operations & Critical Lift Plan',
+                short: 'Lifting Operations',
+                initiatorRole: 'lift-supervisor',
+                stages: [
+                    { order: 1, name: 'Initiation & Rigging Stress Calculations', roleKey: 'lift-supervisor', roleLabel: 'Lifting Supervisor (Certified Permittee)', canonicalRoles: ['lift-supervisor'] },
+                    { order: 2, name: 'Ground Stability & Outrigger Check', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Crane Fitness & Lifting Gear Clearance', roleKey: 'pm', roleLabel: 'P&M Engineer (Machinery Clearance)', canonicalRoles: ['pm'] },
+                    { order: 4, name: 'Tower Section Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 5, name: 'Executive Oversight (Critical Lift > 5MT / Tandem)', roleKey: 'project-manager', roleLabel: 'Project Manager (Executive Clearance)', canonicalRoles: ['project-manager'] },
+                    { order: 6, name: 'Statutory Safety Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            },
+            'PTW-010': {
+                code: 'PTW-010',
+                key: 'nightshift',
+                name: 'Night Shift & Holiday Work',
+                short: 'Night Shift',
+                initiatorRole: 'site-supervisor',
+                stages: [
+                    { order: 1, name: 'Day Pre-Fill & Scope Definition', roleKey: 'site-supervisor', roleLabel: 'Site Supervisor (Day Permittee)', canonicalRoles: ['site-supervisor'] },
+                    { order: 2, name: 'Day Site Verification', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
+                    { order: 3, name: 'Section Head Day Clearance', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
+                    { order: 4, name: 'Night Physical Handover & Lighting Verification', roleKey: 'night-supervisor', roleLabel: 'Night Site Supervisor (Night In-charge)', canonicalRoles: ['night-supervisor'] },
+                    { order: 5, name: 'Night Machinery & Lighting Verification', roleKey: 'pm', roleLabel: 'P&M Engineer (Night On-Call)', canonicalRoles: ['pm'] },
+                    { order: 6, name: 'Final Statutory Night Authorization', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                ]
+            }
+        };
+
+        ['excavation', 'hotwork', 'guardrail', 'confined', 'shaft', 'electrical', 'blasting', 'general', 'lifting', 'liftplan', 'nightshift'].forEach(k => {
+            const match = Object.values(PERMIT_APPROVAL_MATRIX).find(item => item.key === k || (k === 'liftplan' && item.key === 'lifting'));
+            if (match) PERMIT_APPROVAL_MATRIX[k] = match;
+        });
+
+        if (typeof window !== 'undefined') {
+            window.PERMIT_APPROVAL_MATRIX = PERMIT_APPROVAL_MATRIX;
+        }
+
         // Synchronize APP_CONFIG with PTYPE_META and PERMIT_TYPES for seamless interoperability
         Object.keys(PTYPE_META).forEach(k => {
             if (APP_CONFIG.permitTypes[k]) {
@@ -26986,20 +27137,36 @@ ptypeOf(p) === 'general' ?
                     }
                 } catch (e) {}
 
-                // 5. Audit Logs Sync (filter out any legacy demo aud-001..aud-005 and normalize Super Admin global scope)
-                const audSnap = await db.collection('audit_logs').orderBy('timestamp', 'desc').limit(100).get();
-                if (!audSnap.empty) {
-                    const logs = [];
-                    audSnap.forEach(doc => {
-                        const d = doc.data();
-                        if (d && !['aud-001', 'aud-002', 'aud-003', 'aud-004', 'aud-005'].includes(d.id)) {
-                            if ((d.actorRole === 'super-admin' || d.actorEmail === 'aic1176@aurogroup.com') && d.action === 'AUTH_LOGIN_SUCCESS') {
-                                d.projectId = null;
+                // 5. Audit Logs Sync (resilient query with fallback to in-memory sort on missing composite index)
+                try {
+                    let audSnap;
+                    try {
+                        audSnap = await db.collection('audit_logs').orderBy('timestamp', 'desc').limit(100).get();
+                    } catch (idxErr) {
+                        console.warn('[Firestore Sync] audit_logs ordered query notice (falling back to un-ordered fetch + in-memory sort):', idxErr);
+                        audSnap = await db.collection('audit_logs').limit(100).get();
+                    }
+                    if (audSnap && !audSnap.empty) {
+                        const logs = [];
+                        audSnap.forEach(doc => {
+                            const d = doc.data();
+                            if (d && !['aud-001', 'aud-002', 'aud-003', 'aud-004', 'aud-005'].includes(d.id)) {
+                                if ((d.actorRole === 'super-admin' || d.actorEmail === 'aic1176@aurogroup.com') && d.action === 'AUTH_LOGIN_SUCCESS') {
+                                    d.projectId = null;
+                                }
+                                logs.push(d);
                             }
-                            logs.push(d);
-                        }
-                    });
-                    window.AUDIT_LOGS = logs;
+                        });
+                        // Safe in-memory descending sort by timestamp
+                        logs.sort((a, b) => {
+                            const ta = a.timestamp && a.timestamp.toMillis ? a.timestamp.toMillis() : (new Date(a.timestamp || 0).getTime() || 0);
+                            const tb = b.timestamp && b.timestamp.toMillis ? b.timestamp.toMillis() : (new Date(b.timestamp || 0).getTime() || 0);
+                            return tb - ta;
+                        });
+                        window.AUDIT_LOGS = logs;
+                    }
+                } catch (audErr) {
+                    console.warn('[Firestore Sync] Non-blocking audit logs sync notice:', audErr);
                 }
 
                 // 6. Permits Collection Synchronization (Persisted Cloud PTW & Drafts)
@@ -27713,26 +27880,29 @@ ptypeOf(p) === 'general' ?
             const container = document.getElementById('view-approval-workflows');
             if (!container) return;
 
-            const workflows = [
-                { id: 'excavation', name: 'Excavation Permit (PTW-001)', stages: ['1. Site Supervisor (Initiation)', '2. Site Engineer (Ground Check + GPS Gate)', '3. Excavation Head (Section Endorsement)', '4. MEP / Plant Clearance (Utility Check)', '5. EHS Safety Manager (Final Statutory Authorization)'] },
-                { id: 'hotwork', name: 'Hot Work Permit (PTW-002)', stages: ['1. Site Supervisor (Initiation)', '2. Site Engineer (Spark Hazard Check)', '3. Tower Incharge (Section Clearance)', '4. EHS Safety Officer (Continuous Gas Testing)', '5. EHS Safety Manager (Final Statutory Authorization)'] },
-                { id: 'confined', name: 'Confined Space Entry (PTW-004)', stages: ['1. Site Supervisor (Initiation)', '2. Site Engineer (Oxygen & Atmosphere Check)', '3. Tower Incharge (Access Isolation Check)', '4. EHS Officer (Mandatory Multi-Gas Reading)', '5. EHS Safety Manager (Entry Authorization)'] },
-                { id: 'electrical', name: 'Electrical Isolation (PTW-006)', stages: ['1. Permittee Electrician (Initiation)', '2. Site Engineer (LOTO Verification)', '3. MEP Engineer (Substation Clearance)', '4. EHS Safety Officer (Field Inspection)', '5. EHS Safety Manager (Power Isolation Auth)'] },
-                { id: 'blasting', name: 'Drilling & Blasting (PTW-007)', stages: ['1. Blasting In-charge (Shot Firer)', '2. Site Engineer (Drill Hole Check)', '3. Excavation Head (Siren & Evacuation Check)', '4. EHS Officer (Safety Radius Verification)', '5. EHS Safety Manager (Controlled Blast Clearance)'] }
-            ];
+            const matrixList = ['PTW-001', 'PTW-002', 'PTW-003', 'PTW-004', 'PTW-005', 'PTW-006', 'PTW-007', 'PTW-008', 'PTW-009', 'PTW-010']
+                .map(code => (typeof PERMIT_APPROVAL_MATRIX !== 'undefined' ? PERMIT_APPROVAL_MATRIX[code] : null))
+                .filter(Boolean);
 
-            let cardsHtml = workflows.map(w => {
+            let cardsHtml = matrixList.map(w => {
                 let stagePills = w.stages.map((s, idx) => {
                     return '<div style="display:flex;align-items:center;gap:8px;">' +
-                        '<div style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;"><i class="fa-solid fa-arrow-right" style="color:var(--orange);margin-right:6px;"></i>' + s + '</div>' +
+                        '<div style="background:var(--navy);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,0.1);">' +
+                        '<span style="color:var(--orange);margin-right:6px;font-weight:700;">' + s.order + '.</span>' +
+                        escapeHtml(s.name) +
+                        ' <span style="font-size:10.5px;color:#94A3B8;margin-left:4px;">(' + escapeHtml(s.roleLabel) + ')</span>' +
+                        '</div>' +
                         (idx < w.stages.length - 1 ? '<i class="fa-solid fa-angle-right" style="color:var(--text-muted);font-size:14px;"></i>' : '') +
                         '</div>';
                 }).join('');
 
                 return '<div class="card card-pad" style="margin-bottom:16px;border-left:4px solid var(--orange);">' +
-                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">' +
-                    '<h3 style="font-size:14px;font-weight:700;margin:0;color:var(--navy);">' + w.name + '</h3>' +
-                    '<span class="dpdp-tag" style="background:#F0FDF4;color:#166534;border-color:#BBF7D0;"><i class="fa-solid fa-shield-check"></i> Statutory SOP Topology</span>' +
+                    '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:8px;">' +
+                    '<div>' +
+                    '<span class="mono" style="font-weight:800;color:var(--orange);font-size:12px;margin-right:6px;">' + escapeHtml(w.code) + '</span>' +
+                    '<h3 style="font-size:15px;font-weight:700;margin:0;display:inline;color:var(--navy);">' + escapeHtml(w.name) + '</h3>' +
+                    '</div>' +
+                    '<span class="dpdp-tag" style="background:#F0FDF4;color:#166534;border-color:#BBF7D0;"><i class="fa-solid fa-shield-check"></i> ' + w.stages.length + '-Stage Statutory Topology</span>' +
                     '</div>' +
                     '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">' + stagePills + '</div>' +
                     '</div>';
@@ -27741,7 +27911,7 @@ ptypeOf(p) === 'general' ?
             container.innerHTML = '<div class="view-header">' +
                 '<div>' +
                 '<h1><i class="fa-solid fa-diagram-project" style="color:var(--orange);"></i> Permit-to-Work Approval Workflows</h1>' +
-                '<p>Statutory multi-stage approval topology and SLA governance per permit type</p>' +
+                '<p>Deterministic multi-stage approval topology and SLA governance per permit type (PTW-001 through PTW-010)</p>' +
                 '</div>' +
                 '</div>' +
                 cardsHtml;

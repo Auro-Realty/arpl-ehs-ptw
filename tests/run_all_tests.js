@@ -6,6 +6,15 @@
 const { execSync } = require('child_process');
 const path = require('path');
 
+// Ensure root and public files are synchronized with 100% byte parity before running tests
+try {
+    const syncScript = path.join(__dirname, '..', 'scripts', 'sync_public.js');
+    execSync(`node "${syncScript}"`, { encoding: 'utf8', stdio: 'inherit' });
+} catch (syncErr) {
+    console.error('Failed to synchronize assets prior to testing:', syncErr);
+    process.exit(1);
+}
+
 const suites = [
     { num: 1, name: 'BASE LIFECYCLE & ENGINE TESTS', file: 'run_full_test_suite.js' },
     { num: 2, name: 'EXTENDED AUDIT TESTS (NOTIFS, ESCALATION, PDF, KPIS, FILTERS)', file: 'run_extended_audit_tests.js' },

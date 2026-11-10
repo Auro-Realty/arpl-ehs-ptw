@@ -34,6 +34,9 @@ jobs:
           workload_identity_provider: 'projects/1045760890879/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'sa-github-deployer@prj-aurorealty-ehs-ptw-dev.iam.gserviceaccount.com'
 
+      - name: 4b. Synchronize Canonical Assets to Public
+        run: node scripts/sync_public.js
+
       - name: 5. Inject Firebase Secrets into Client Configuration
         run: |
           echo "Injecting Firebase Secrets from GitHub Secrets into client configuration..."
