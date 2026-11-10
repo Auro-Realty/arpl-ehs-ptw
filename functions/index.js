@@ -1275,6 +1275,86 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     };
   }
 
+  // Action: Purge Orphaned Authentication Accounts
+  if (action === "purge_orphan_auth_users" || action === "adminSyncAndPurgeOrphanAuthUsers") {
+    if (!isSuperAdminCaller) {
+      throw new HttpsError("permission-denied", "Only Super Administrators can scan and purge orphaned Auth accounts.");
+    }
+    const protectedEmails = new Set([
+      "aic1176@aurogroup.com",
+      "ehs.superadmin@aurorealty.com"
+    ]);
+
+    const activeFirestoreUids = new Set();
+    const activeFirestoreEmails = new Set();
+
+    const uDocs = await db.collection("users").get();
+    uDocs.forEach(d => {
+      activeFirestoreUids.add(d.id);
+      const data = d.data();
+      if (data && data.email) activeFirestoreEmails.add(data.email.toLowerCase().trim());
+    });
+
+    const paDocs = await db.collection("project_admins").get();
+    paDocs.forEach(d => {
+      activeFirestoreUids.add(d.id);
+      const data = d.data();
+      if (data && data.email) activeFirestoreEmails.add(data.email.toLowerCase().trim());
+    });
+
+    const spDocs = await db.collection("site_personnel").get();
+    spDocs.forEach(d => {
+      activeFirestoreUids.add(d.id);
+      const data = d.data();
+      if (data && data.email) activeFirestoreEmails.add(data.email.toLowerCase().trim());
+    });
+
+    let totalAuthScanned = 0;
+    let purgedCount = 0;
+    const purgedUsers = [];
+
+    const listResult = await auth.listUsers(1000);
+    const authUsers = listResult.users || [];
+    totalAuthScanned = authUsers.length;
+
+    for (const authUser of authUsers) {
+      const aUid = authUser.uid;
+      const aEmail = (authUser.email || "").toLowerCase().trim();
+
+      if (aEmail && protectedEmails.has(aEmail)) continue;
+
+      const hasDocByUid = activeFirestoreUids.has(aUid);
+      const hasDocByEmail = aEmail ? activeFirestoreEmails.has(aEmail) : false;
+
+      if (!hasDocByUid && !hasDocByEmail) {
+        try {
+          await auth.deleteUser(aUid);
+          purgedCount++;
+          purgedUsers.push({ uid: aUid, email: aEmail });
+          console.log(`[adminAssignProjectRole.purge] Purged orphaned Auth user: ${aUid} (${aEmail})`);
+        } catch (delErr) {
+          console.warn(`[adminAssignProjectRole.purge] Notice deleting orphan ${aUid}:`, delErr);
+        }
+      }
+    }
+
+    await recordServerAuditLog(
+      "ORPHAN_AUTH_USERS_PURGED",
+      `Super Admin purged ${purgedCount} orphaned Auth user(s) out of ${totalAuthScanned} scanned`,
+      request.auth.uid,
+      callerEmail,
+      "GLOBAL"
+    );
+
+    return {
+      success: true,
+      scannedCount: totalAuthScanned,
+      purgedCount: purgedCount,
+      totalScanned: totalAuthScanned,
+      purgedUsers: purgedUsers
+    };
+  }
+
   // Action: Toggle Status (Disable / Enable)
   if (action === "toggle-status") {
     if (!uid || typeof uid !== "string") {

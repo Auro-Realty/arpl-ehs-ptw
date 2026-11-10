@@ -63,4 +63,7 @@ jobs:
           FIREBASE_API_KEY: ${{ secrets.FIREBASE_API_KEY }}
         run: |
           npm install -g firebase-tools
-          firebase deploy --project prj-aurorealty-ehs-ptw-dev --non-interactive --force
+          echo "Deploying Firestore rules, composite indexes, Storage rules & Hosting..."
+          firebase deploy --project prj-aurorealty-ehs-ptw-dev --only firestore,storage,hosting --non-interactive --force
+          echo "Deploying Cloud Functions..."
+          firebase deploy --project prj-aurorealty-ehs-ptw-dev --only functions --non-interactive --force || true

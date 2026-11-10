@@ -27931,8 +27931,15 @@ ptypeOf(p) === 'general' ?
                 if (typeof firebase === 'undefined' || !firebase.app || typeof firebase.app().functions !== 'function') {
                     throw new Error('Firebase Functions service unavailable.');
                 }
-                const purgeFn = firebase.app().functions('asia-south1').httpsCallable('adminSyncAndPurgeOrphanAuthUsers');
-                const res = await purgeFn({});
+                let res;
+                try {
+                    const purgeFn = firebase.app().functions('asia-south1').httpsCallable('adminSyncAndPurgeOrphanAuthUsers');
+                    res = await purgeFn({});
+                } catch (fnErr) {
+                    console.warn('[handlePurgeGhostUsers] direct endpoint failed, using adminAssignProjectRole fallback:', fnErr);
+                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    res = await assignFn({ action: 'purge_orphan_auth_users' });
+                }
                 const count = (res && res.data && typeof res.data.purgedCount === 'number') ? res.data.purgedCount : 0;
                 const total = (res && res.data && typeof res.data.totalScanned === 'number') ? res.data.totalScanned : 0;
                 showToast('Auth Sync Complete: ' + count + ' orphaned ghost accounts purged out of ' + total + ' scanned.', count > 0 ? 'ok' : 'info');
