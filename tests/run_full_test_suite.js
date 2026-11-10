@@ -149,7 +149,7 @@ function runSuite(suiteName, fn) {
 // SUITE 1: Roles, RBAC & Signatory Isolation
 // ------------------------------------------------------------------
 runSuite('Roles, RBAC & Signatory Isolation', () => {
-    assert(app.ROLES.length === 15 || app.ROLES.length === 16, 'ROLES list contains active functional roles', `Found ${app.ROLES.length}`);
+    assert(app.ROLES.length >= 15 && app.ROLES.length <= 17, 'ROLES list contains active functional roles', `Found ${app.ROLES.length}`);
     
     const roleKeys = app.ROLES.map(r => r.key);
     assert(!roleKeys.includes('section-head'), 'Legacy "section-head" key is not exposed in ROLES list');

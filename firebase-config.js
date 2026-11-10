@@ -1,5 +1,16 @@
 var PROJECT_MASTER = window.PROJECT_MASTER || [];
 window.PROJECT_MASTER = PROJECT_MASTER;
+
+// Baseline Authoritative Projects Initialization
+window.PROJECTS = window.PROJECTS || [
+    { id: 'PRJ-PEARL', name: 'The Pearl', towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} },
+    { id: 'PRJ-REGENT', name: 'The Regent', towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} },
+    { id: 'PRJ-SANSA', name: 'Sansa County', towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} }
+];
+window.PROJECT_MASTER = window.PROJECTS || window.PROJECT_MASTER || [];
+window.CONTRACTORS = window.CONTRACTORS || [];
+var PROJECT_MASTER = window.PROJECT_MASTER;
+
 /**
  * ARPL EHS Permit to Work - Firebase Web Configuration
  * Connected to GitHub Secrets (FIREBASE_API_KEY).
@@ -44,4 +55,62 @@ window.PROJECT_MASTER = PROJECT_MASTER;
     window.isFirebaseConfigured = function () {
         return Boolean(window.getFirebaseApiKey());
     };
+
+    // Immediate synchronous initialization guarantee to prevent "No Firebase App '[DEFAULT]'" error
+    try {
+        if (typeof firebase !== 'undefined' && (!firebase.apps || !firebase.apps.length)) {
+            var fbConfig = window.firebaseConfig;
+            if (!fbConfig || !fbConfig.apiKey || fbConfig.apiKey.indexOf('__FIREBASE') !== -1) {
+                fbConfig = {
+                    apiKey: fallbackKey,
+                    authDomain: "prj-aurorealty-ehs-ptw-dev.firebaseapp.com",
+                    projectId: "prj-aurorealty-ehs-ptw-dev",
+                    storageBucket: "prj-aurorealty-ehs-ptw-dev.firebasestorage.app",
+                    messagingSenderId: "1045760890879",
+                    appId: "1:1045760890879:web:b7dac1bd13d481fcc179ca",
+                    measurementId: "G-GF258H8BBQ"
+                };
+            }
+            firebase.initializeApp(fbConfig);
+            console.log('[Firebase Init] Synchronously initialized Firebase default app.');
+        }
+
+        // Native Firestore Offline IndexedDB Persistence & Unlimited Cache Engine
+        if (typeof firebase !== 'undefined' && firebase.firestore) {
+            try {
+                var dbInstance = firebase.firestore();
+                if (dbInstance && dbInstance.settings) {
+                    try {
+                        dbInstance.settings({
+                            cacheSizeBytes: firebase.firestore.CACHE_SIZE_UNLIMITED,
+                            merge: true
+                        });
+                    } catch (_setErr) {}
+                }
+                dbInstance.enablePersistence({ synchronizeTabs: true })
+                    .then(function() {
+                        console.log('[Firestore] Native IndexedDB multi-tab offline persistence active.');
+                        window.__FIRESTORE_PERSISTENCE_ACTIVE__ = true;
+                        if (typeof updateConnectivityUI === 'function') {
+                            updateConnectivityUI(navigator.onLine);
+                        }
+                    })
+                    .catch(function(err) {
+                        if (err.code === 'failed-precondition') {
+                            console.warn('[Firestore] Multiple tabs open; offline persistence active in primary tab.');
+                            window.__FIRESTORE_PERSISTENCE_ACTIVE__ = true;
+                        } else if (err.code === 'unimplemented') {
+                            console.warn('[Firestore] Browser does not support IndexedDB persistence.');
+                            window.__FIRESTORE_PERSISTENCE_ACTIVE__ = false;
+                        } else {
+                            console.warn('[Firestore] enablePersistence notice:', err);
+                        }
+                    });
+            } catch (persistErr) {
+                console.warn('[Firestore] Persistence initialization exception:', persistErr);
+            }
+        }
+    } catch (e) {
+        console.warn('[Firebase Init] Immediate init fallback:', e);
+    }
 })(window);

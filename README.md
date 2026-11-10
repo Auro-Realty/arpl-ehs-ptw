@@ -396,6 +396,12 @@ node tests/run_all_tests.js
 powershell -ExecutionPolicy Bypass -File scratch/verify_tests.ps1
 ```
 
+
+### Sunday Work Tile & Weekend Governance Architecture
+
+- **Sunday Work Tile:** Pre-authorization window for high-risk statutory operations scheduled for Sunday execution.
+- **Zero Permit-Raising Lockout on Sunday:** Under ARPL EHS Statutory Governance, zero permit-raising is enforced on Sunday. All permits executed on Sunday must be prepared and approved in advance on Saturday.
+
 ### Static Test Suite Coverage
 
 - **`test_navigation_application_wide.js`:** Verifies modal state lifecycle, focus management, step switches, and scroll preservation.

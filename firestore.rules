@@ -37,11 +37,16 @@ service cloud.firestore {
     function isProjectAdmin(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
-        (request.auth.token.role in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.projectId == projectId || request.auth.token.projectId == null)) ||
+        (request.auth.token.role in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.projectId == projectId || request.auth.token.projectId == null || (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds))) ||
         (userDocExists() && (
           userDocRole() in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
           userDocData().get('uiRole', '') in ['admin', 'project-admin']
-        ) && (userDocData().get('projectId', '') == projectId || userDocData().get('projectId', '') == '' || userDocData().get('campusWide', false) == true)) ||
+        ) && (
+          userDocData().get('projectId', '') == projectId ||
+          (userDocData().get('projectIds', []) is list && projectId in userDocData().get('projectIds', [])) ||
+          userDocData().get('projectId', '') == '' ||
+          userDocData().get('campusWide', false) == true
+        )) ||
         (exists(/databases/$(database)/documents/projects/$(projectId)) && (
           get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.email ||
           get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
@@ -60,7 +65,11 @@ service cloud.firestore {
         isSuperAdmin() ||
         request.auth.token.projectId == projectId ||
         (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds) ||
-        (userDocExists() && (userDocData().get('projectId', '') == projectId || userDocData().get('campusWide', false) == true)) ||
+        (userDocExists() && (
+          userDocData().get('projectId', '') == projectId ||
+          (userDocData().get('projectIds', []) is list && projectId in userDocData().get('projectIds', [])) ||
+          userDocData().get('campusWide', false) == true
+        )) ||
         (exists(/databases/$(database)/documents/projects/$(projectId)) && (
           get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.email ||
           get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
@@ -98,8 +107,10 @@ service cloud.firestore {
       
       // Super Admin can provision anyone; Site Admin can provision users for their assigned projectId; Any user can create/sync their own profile
       allow create: if isSuperAdmin() || (
-        request.resource.data.get('projectId', '') != '' &&
-        isProjectAdmin(request.resource.data.projectId) &&
+        (
+          (request.resource.data.get('projectId', '') != '' && isProjectAdmin(request.resource.data.projectId)) ||
+          (request.resource.data.get('projectIds', []) is list && request.resource.data.get('projectIds', []).size() > 0 && isProjectAdmin(request.resource.data.get('projectIds', [])[0]))
+        ) &&
         request.resource.data.get('role', '') != 'super-admin'
       ) || (
         isAuthenticated() && request.auth.uid == userId
@@ -107,7 +118,11 @@ service cloud.firestore {
 
       // Updates strictly bound to project ownership or user updating their own profile
       allow update: if isSuperAdmin() || (
-        isProjectAdmin(request.resource.data.get('projectId', resource.data.get('projectId', ''))) &&
+        (
+          isProjectAdmin(request.resource.data.get('projectId', resource.data.get('projectId', ''))) ||
+          (resource.data.get('projectId', '') != '' && isProjectAdmin(resource.data.projectId)) ||
+          (request.resource.data.get('projectIds', []) is list && request.resource.data.get('projectIds', []).size() > 0 && isProjectAdmin(request.resource.data.get('projectIds', [])[0]))
+        ) &&
         resource.data.get('role', '') != 'super-admin'
       ) || (
         isAuthenticated() && request.auth.uid == userId

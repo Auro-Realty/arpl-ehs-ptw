@@ -56,16 +56,11 @@ function validateEmail(email) {
 }
 
 /**
- * Validate enterprise password strength: min 10 chars, uppercase, lowercase, number, symbol
+ * Validate enterprise password strength: min 6 chars, max 128 chars
  */
 function validatePassword(pwd) {
   if (!pwd || typeof pwd !== "string") return false;
-  if (pwd.length < 10 || pwd.length > 128) return false;
-  const hasUpper = /[A-Z]/.test(pwd);
-  const hasLower = /[a-z]/.test(pwd);
-  const hasDigit = /[0-9]/.test(pwd);
-  const hasSpecial = /[^A-Za-z0-9]/.test(pwd);
-  return hasUpper && hasLower && hasDigit && hasSpecial;
+  return pwd.length >= 6 && pwd.length <= 128;
 }
 
 /**
@@ -1007,11 +1002,11 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "site-supervisor", "supervisor",
     "site-engineer", "engineer",
     "mep", "mep-engineer",
-    "pm", "pm-engineer",
+    "pm", "pm-engineer", "pnm",
     "it", "it-engineer",
     "quality-engineer",
     "excavation-head",
-    "hw-section-head", "tower-incharge",
+    "hw-section-head", "tower-incharge", "section-head",
     "project-manager",
     "ehs-officer", "ehs", "safety-officer",
     "ehs-manager",
@@ -1033,8 +1028,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "engineer": "site-engineer",
     "mep-engineer": "mep",
     "pm-engineer": "pm",
+    "pnm": "pm",
     "it-engineer": "it",
-    "tower-incharge": "hw-section-head",
+    "tower-incharge": "section-head",
+    "hw-section-head": "section-head",
     "electrical-engineer": "electrician",
     "lifting-incharge": "lift-supervisor",
     "safety-officer": "ehs-officer",
@@ -1088,16 +1085,53 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     });
   }
 
+  // Retrieve existing user profile to support multi-role & multi-location assignments
+  const existingUserSnap = await db.collection("users").doc(userRecord.uid).get();
+  let existingAssignments = [];
+  if (existingUserSnap.exists) {
+    const data = existingUserSnap.data();
+    if (Array.isArray(data.assignments)) {
+      existingAssignments = data.assignments;
+    }
+  }
+
+  // Construct structured assignment object
+  const newAssignment = {
+    projectId: projectId,
+    projectName: sanitizeString(projectName || projectId, 100),
+    locationId: cleanLocationId,
+    locationName: cleanLocationName,
+    role: canonicalRole,
+    roleLabel: cleanRoleLabel
+  };
+
+  // Upsert assignment entry: replace if exact match (projectId + role + location), else append
+  const assignIdx = existingAssignments.findIndex(
+    a => a.projectId === projectId && a.role === canonicalRole && (a.locationName === cleanLocationName || a.locationId === cleanLocationId)
+  );
+  if (assignIdx >= 0) {
+    existingAssignments[assignIdx] = newAssignment;
+  } else {
+    existingAssignments.push(newAssignment);
+  }
+
+  // Aggregate all unique roles and projectIds for backward compatibility
+  const aggregatedRoles = Array.from(new Set(existingAssignments.map(a => a.role)));
+  const aggregatedProjects = Array.from(new Set(existingAssignments.map(a => a.projectId)));
+
   // Set Custom Claims for Auth RBAC & Location/Workflow Scope
   await auth.setCustomUserClaims(userRecord.uid, {
     role: canonicalRole,
+    roles: aggregatedRoles,
     uiRole: canonicalRole,
     ptwRole: canonicalRole,
     projectId: projectId,
+    projectIds: aggregatedProjects,
     locationId: cleanLocationId,
     locationName: cleanLocationName,
     campusWide: campusWide !== undefined ? !!campusWide : cleanLocationId === "CAMPUS-WIDE",
-    name: cleanName
+    name: cleanName,
+    assignments: existingAssignments
   });
 
   const staffDoc = {
@@ -1107,10 +1141,12 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     name: cleanName,
     displayName: cleanName,
     role: canonicalRole,
+    roles: aggregatedRoles,
     uiRole: canonicalRole,
     ptwRole: canonicalRole,
     roleLabel: cleanRoleLabel,
     projectId: projectId,
+    projectIds: aggregatedProjects,
     projectName: sanitizeString(projectName || projectId, 100),
     locationId: cleanLocationId,
     locationName: cleanLocationName,
@@ -1122,6 +1158,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     empId: cleanEmpId,
     phone: cleanPhone,
     status: "Active",
+    assignments: existingAssignments,
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     assignedBy: callerEmail || request.auth.uid
   };
