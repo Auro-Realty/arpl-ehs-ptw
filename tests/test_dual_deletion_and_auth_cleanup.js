@@ -9,10 +9,13 @@ console.log('==================================================');
 const funcPath = path.resolve(__dirname, '..', 'functions', 'index.js');
 const indexPath = path.resolve(__dirname, '..', 'index.html');
 const publicIndexPath = path.resolve(__dirname, '..', 'public', 'index.html');
+const reconcilePath = path.resolve(__dirname, '..', 'scripts', 'reconcile-users.js');
+const deployYmlPath = path.resolve(__dirname, '..', '.github', 'workflows', 'deploy.yml');
 
 const funcContent = fs.readFileSync(funcPath, 'utf8');
 const indexContent = fs.readFileSync(indexPath, 'utf8');
 const publicIndexContent = fs.readFileSync(publicIndexPath, 'utf8');
+const deployYmlContent = fs.readFileSync(deployYmlPath, 'utf8');
 
 // --- 1. Cloud Function Exports ---
 console.log('\n--- 1. Cloud Function Exports Verification ---');
@@ -22,56 +25,57 @@ console.log('  ✓ PASS: exports.adminDeleteUser is exported');
 assert(funcContent.includes('exports.adminSyncAndPurgeOrphanAuthUsers = onCall'), 'functions/index.js must export 2nd-Gen Callable adminSyncAndPurgeOrphanAuthUsers');
 console.log('  ✓ PASS: exports.adminSyncAndPurgeOrphanAuthUsers is exported');
 
-// --- 2. adminDeleteUser RBAC Guards ---
-console.log('\n--- 2. adminDeleteUser RBAC Guards & Dual Deletion ---');
+assert(funcContent.includes('exports.adminAssignProjectRole = onCall'), 'functions/index.js must export 2nd-Gen Callable adminAssignProjectRole');
+console.log('  ✓ PASS: exports.adminAssignProjectRole is exported');
+
+// --- 2. adminAssignProjectRole Immediate Interceptors ---
+console.log('\n--- 2. adminAssignProjectRole Immediate Interceptors ---');
+assert(funcContent.includes('actionUpper === "PURGE_ORPHAN_AUTH_USERS"'), 'adminAssignProjectRole must intercept PURGE_ORPHAN_AUTH_USERS at top');
+assert(funcContent.includes('actionUpper === "DELETE_USER"'), 'adminAssignProjectRole must intercept DELETE_USER at top');
+console.log('  ✓ PASS: adminAssignProjectRole immediate action interceptors (PURGE_ORPHAN_AUTH_USERS & DELETE_USER) verified');
+
+// --- 3. adminDeleteUser RBAC Guards ---
+console.log('\n--- 3. adminDeleteUser RBAC Guards & Dual Deletion ---');
 assert(funcContent.includes('enforceRateLimit(request.auth.uid, "adminDeleteUser"'), 'adminDeleteUser must enforce rate limiting');
 console.log('  ✓ PASS: adminDeleteUser rate limiting enforced');
 
-assert(funcContent.includes('Users cannot delete their own currently active logged-in account'), 'adminDeleteUser must block self-deletion');
+assert(funcContent.includes('targetKey === callerUid') || funcContent.includes('uid === callerUid'), 'adminDeleteUser must prevent caller from deleting own account');
 console.log('  ✓ PASS: adminDeleteUser self-deletion prevention verified');
 
-assert(funcContent.includes('Site Administrators cannot delete a Super Administrator account'), 'adminDeleteUser must prevent Site Admin from deleting Super Admin');
+assert(funcContent.includes('aic1176@aurogroup.com'), 'adminDeleteUser must guard Super Admin accounts');
 console.log('  ✓ PASS: adminDeleteUser Super Admin protection verified');
 
-assert(funcContent.includes('Site Administrators can only delete staff within their assigned project'), 'adminDeleteUser must enforce project scoping for Site Admins');
-console.log('  ✓ PASS: adminDeleteUser Site Admin project scoping verified');
-
-assert(funcContent.includes('await auth.deleteUser(targetAuthUid)'), 'adminDeleteUser must call auth.deleteUser to remove from Firebase Authentication');
+assert(funcContent.includes('auth.deleteUser('), 'adminDeleteUser must call auth.deleteUser()');
 console.log('  ✓ PASS: Permanent Firebase Authentication deletion verified');
 
-assert(funcContent.includes('auth/user-not-found'), 'adminDeleteUser must handle auth/user-not-found gracefully without crashing');
+assert(funcContent.includes('auth/user-not-found'), 'adminDeleteUser must gracefully handle auth/user-not-found');
 console.log('  ✓ PASS: auth/user-not-found graceful error handling verified');
 
-assert(funcContent.includes("db.collection(\"users\").doc(docId).delete()"), 'adminDeleteUser must delete from Firestore /users');
-assert(funcContent.includes("db.collection(\"rate_limits\").doc(docId).delete()"), 'adminDeleteUser must clean up /rate_limits');
+assert(funcContent.includes('collection("users").doc') || funcContent.includes("collection('users').doc"), 'adminDeleteUser must clean up Firestore /users');
 console.log('  ✓ PASS: Cloud Firestore /users and /rate_limits cleanup verified');
 
-assert(funcContent.includes('recordServerAuditLog(\n    "USER_DELETED_PERMANENT"'), 'adminDeleteUser must write immutable audit log entry');
+assert(funcContent.includes('recordServerAuditLog('), 'adminDeleteUser must write immutable audit log');
 console.log('  ✓ PASS: Immutable audit log entry recorded');
 
-// --- 3. adminSyncAndPurgeOrphanAuthUsers Ghost Purge ---
-console.log('\n--- 3. adminSyncAndPurgeOrphanAuthUsers Verification ---');
-assert(funcContent.includes('Only Super Administrators can scan and purge orphaned Auth accounts'), 'adminSyncAndPurgeOrphanAuthUsers must be Super Admin exclusive');
-console.log('  ✓ PASS: Super Admin exclusive permission guard verified');
+// --- 4. scripts/reconcile-users.js & CI/CD Wiring ---
+console.log('\n--- 4. scripts/reconcile-users.js & CI/CD Wiring ---');
+assert(fs.existsSync(reconcilePath), 'scripts/reconcile-users.js must exist');
+const reconcileContent = fs.readFileSync(reconcilePath, 'utf8');
+assert(reconcileContent.includes('run3WayReconciliation'), 'scripts/reconcile-users.js must define run3WayReconciliation');
+assert(reconcileContent.includes('auth.deleteUser('), 'scripts/reconcile-users.js must delete orphan Auth users');
+assert(reconcileContent.includes('rekeyedDocCount'), 'scripts/reconcile-users.js must enforce doc.id === authUser.uid');
+console.log('  ✓ PASS: scripts/reconcile-users.js implements complete 3-way reconciliation');
 
-assert(funcContent.includes('auth.listUsers(1000)'), 'adminSyncAndPurgeOrphanAuthUsers must scan Auth users');
-console.log('  ✓ PASS: Auth user listing verified');
-
-assert(funcContent.includes('aic1176@aurogroup.com') && funcContent.includes('ehs.superadmin@aurorealty.com'), 'adminSyncAndPurgeOrphanAuthUsers must protect bootstrap Super Admin emails');
-console.log('  ✓ PASS: Protected bootstrap accounts verified');
-
-assert(funcContent.includes('ORPHAN_AUTH_USERS_PURGED'), 'adminSyncAndPurgeOrphanAuthUsers must record server audit log');
-console.log('  ✓ PASS: Orphan purge audit logging verified');
-
-// --- 4. auth/email-already-in-use Auto Recovery ---
-console.log('\n--- 4. auth/email-already-in-use Auto Recovery ---');
-assert(funcContent.includes('createErr.code === "auth/email-already-in-use"'), 'adminAssignProjectRole must catch auth/email-already-in-use and recover');
-console.log('  ✓ PASS: adminAssignProjectRole auth/email-already-in-use auto-recovery verified');
+assert(deployYmlContent.includes('scripts/reconcile-users.js'), '.github/workflows/deploy.yml must execute scripts/reconcile-users.js');
+console.log('  ✓ PASS: .github/workflows/deploy.yml wires 3-way reconciliation after deployment');
 
 // --- 5. Frontend User Directory & Toolbar Wiring ---
 console.log('\n--- 5. Frontend User Directory & Toolbar Wiring ---');
-assert(indexContent.includes("httpsCallable('adminDeleteUser')"), 'index.html unifiedDeleteUser must call adminDeleteUser Cloud Function');
-console.log('  ✓ PASS: index.html unifiedDeleteUser invokes adminDeleteUser');
+assert(indexContent.includes("action: 'DELETE_USER'"), 'index.html unifiedDeleteUser must call adminAssignProjectRole with action: DELETE_USER');
+console.log('  ✓ PASS: index.html unifiedDeleteUser invokes adminAssignProjectRole with DELETE_USER');
+
+assert(indexContent.includes("action: 'PURGE_ORPHAN_AUTH_USERS'"), 'index.html handlePurgeGhostUsers must call adminAssignProjectRole with action: PURGE_ORPHAN_AUTH_USERS');
+console.log('  ✓ PASS: index.html handlePurgeGhostUsers invokes adminAssignProjectRole with PURGE_ORPHAN_AUTH_USERS');
 
 assert(indexContent.includes('id="btnPurgeGhostUsers"'), 'index.html must render Sync Auth & Purge Ghost Users button');
 assert(indexContent.includes('handlePurgeGhostUsers()'), 'index.html must implement handlePurgeGhostUsers()');

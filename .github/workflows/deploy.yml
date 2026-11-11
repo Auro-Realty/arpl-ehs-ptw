@@ -67,3 +67,11 @@ jobs:
           firebase deploy --project prj-aurorealty-ehs-ptw-dev --only firestore,storage,hosting --non-interactive --force
           echo "Deploying Cloud Functions..."
           firebase deploy --project prj-aurorealty-ehs-ptw-dev --only functions --non-interactive --force || true
+
+      - name: 7. Run Strict 3-Way User Reconciliation (Auth <-> Firestore)
+        env:
+          GCLOUD_PROJECT: prj-aurorealty-ehs-ptw-dev
+          GOOGLE_CLOUD_PROJECT: prj-aurorealty-ehs-ptw-dev
+        run: |
+          echo "Running 3-way user reconciliation between Firestore /users and Firebase Authentication..."
+          NODE_PATH=./functions/node_modules node scripts/reconcile-users.js || true

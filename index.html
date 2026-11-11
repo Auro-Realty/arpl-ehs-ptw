@@ -14346,30 +14346,30 @@
             );
             if (!confirmed) return false;
 
-            // 1. Backend Cloud Function Deletion (Invokes exported adminDeleteUser)
+            // 1. Backend Cloud Function Deletion (Primary: adminAssignProjectRole with DELETE_USER, Fallback: adminDeleteUser)
             let backendSuccess = false;
             if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
                 try {
-                    const delFn = firebase.app().functions('asia-south1').httpsCallable('adminDeleteUser');
-                    const res = await delFn({
+                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const res = await assignFn({
+                        action: 'DELETE_USER',
                         uid: targetUid,
                         email: targetEmail,
-                        projectId: targetProjectId
+                        projectId: targetProjectId || 'PRJ-SANSA'
                     });
-                    if (res && res.data && res.data.success) {
+                    if (res && res.data && (res.data.success || res.data.ok)) {
                         backendSuccess = true;
                     }
                 } catch (cfErr) {
-                    console.warn('[unifiedDeleteUser] adminDeleteUser notice:', cfErr);
+                    console.warn('[unifiedDeleteUser] adminAssignProjectRole DELETE_USER notice:', cfErr);
                     try {
-                        const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
-                        const res2 = await assignFn({
-                            action: 'delete',
+                        const delFn = firebase.app().functions('asia-south1').httpsCallable('adminDeleteUser');
+                        const res2 = await delFn({
                             uid: targetUid,
                             email: targetEmail,
-                            projectId: targetProjectId || 'PRJ-SANSA'
+                            projectId: targetProjectId
                         });
-                        if (res2 && res2.data && res2.data.success) {
+                        if (res2 && res2.data && (res2.data.success || res2.data.ok)) {
                             backendSuccess = true;
                         }
                     } catch (_dErr) {}
@@ -28172,8 +28172,8 @@ ptypeOf(p) === 'general' ?
                 const rInfo = roleInfo(u.role);
                 let actionBtns = '';
                 const editBtn = '<button type="button" class="btn btn-xs btn-ghost" onclick="startEditUser(\'' + u.id + '\')" style="color:var(--orange);padding:2px 8px;font-size:11px;margin-right:6px;" title="Edit User Profile & Assignments"><i class="fa-solid fa-pen-to-square"></i> Edit</button>';
-                const userDelKey = u.id || u.uid || u.email;
-                const delBtnHtml = '<button class="btn btn-xs btn-ghost" onclick="unifiedDeleteUser(\'' + escapeHtml(userDelKey) + '\');" style="color:var(--red);padding:2px 6px;" title="Delete Account Permanently"><i class="fa-solid fa-trash-can"></i></button>';
+                const userPayload = JSON.stringify({ id: u.id, uid: u.uid || u.id, email: u.email, projectId: u.projectId, name: u.name }).replace(/"/g, '&quot;');
+                const delBtnHtml = '<button class="btn btn-xs btn-ghost" onclick="unifiedDeleteUser(' + userPayload + ');" style="color:var(--red);padding:2px 6px;" title="Delete Account Permanently"><i class="fa-solid fa-trash-can"></i></button>';
                 if (isSiteAdmin) {
                     actionBtns = editBtn +
                         '<button class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + u.id + '\'); renderUsersDirectoryView();" style="color:var(--blue);padding:2px 8px;font-size:11px;margin-right:6px;" title="Reset Login Password"><i class="fa-solid fa-key"></i> Reset</button>' +
@@ -28284,16 +28284,24 @@ ptypeOf(p) === 'general' ?
                 }
                 let res;
                 try {
+                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    res = await assignFn({ action: 'PURGE_ORPHAN_AUTH_USERS', projectId: 'PRJ-SANSA' });
+                } catch (fnErr) {
+                    console.warn('[handlePurgeGhostUsers] adminAssignProjectRole failed, trying direct endpoint:', fnErr);
                     const purgeFn = firebase.app().functions('asia-south1').httpsCallable('adminSyncAndPurgeOrphanAuthUsers');
                     res = await purgeFn({});
-                } catch (fnErr) {
-                    console.warn('[handlePurgeGhostUsers] direct endpoint failed, using adminAssignProjectRole fallback:', fnErr);
-                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
-                    res = await assignFn({ action: 'purge_orphan_auth_users', projectId: 'PRJ-SANSA' });
                 }
+
+                if (res && res.data && (res.data.ok === false || res.data.success === false)) {
+                    showToast('Purge Notice: ' + (res.data.error || 'Operation returned incomplete'), 'warn');
+                    return;
+                }
+
                 const count = (res && res.data && typeof res.data.purgedCount === 'number') ? res.data.purgedCount : 0;
                 const total = (res && res.data && typeof res.data.totalScanned === 'number') ? res.data.totalScanned : 0;
-                showToast('Auth Sync Complete: ' + count + ' orphaned ghost accounts purged out of ' + total + ' scanned.', count > 0 ? 'ok' : 'info');
+                const emails = (res && res.data && Array.isArray(res.data.purgedEmails)) ? res.data.purgedEmails : [];
+                const emailMsg = emails.length > 0 ? (' (' + emails.slice(0, 3).join(', ') + (emails.length > 3 ? ' +' + (emails.length - 3) + ' more' : '') + ')') : '';
+                showToast('Auth Sync Complete: ' + count + ' orphaned ghost accounts purged' + emailMsg + ' out of ' + total + ' scanned.', count > 0 ? 'ok' : 'info');
                 if (typeof initFirestoreDataSync === 'function') {
                     await initFirestoreDataSync();
                 }

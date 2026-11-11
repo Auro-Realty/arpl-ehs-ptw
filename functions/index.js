@@ -934,6 +934,277 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
+  // --- IMMEDIATE ACTION INTERCEPTOR (PURGE_ORPHAN_AUTH_USERS & DELETE_USER) ---
+  // Must execute at the very first line before rate-limiter, email, role, or projectId checks!
+  const rawAction = String(request.data?.action || "").trim();
+  const actionUpper = rawAction.toUpperCase();
+  const isPurgeReq = actionUpper === "PURGE_ORPHAN_AUTH_USERS" || actionUpper === "ADMINSYNCANDPURGEORPHANAUTHUSERS" || rawAction === "purge_orphan_auth_users";
+  const isDeleteReq = actionUpper === "DELETE_USER" || actionUpper === "DELETE" || rawAction === "delete";
+
+  if (isPurgeReq) {
+    try {
+      const callerEmail = (request.auth.token.email || "").toLowerCase().trim();
+      let isCallerSuperAdmin =
+        request.auth.token.superAdmin === true ||
+        request.auth.token.role === "super-admin" ||
+        callerEmail === "aic1176@aurogroup.com" ||
+        callerEmail === "ehs.superadmin@aurorealty.com";
+
+      if (!isCallerSuperAdmin && request.auth.uid) {
+        try {
+          const sDoc = await db.collection("users").doc(request.auth.uid).get();
+          if (sDoc.exists) {
+            const sd = sDoc.data() || {};
+            if (sd.role === "super-admin" || sd.superAdmin === true || sd.uiRole === "super-admin" || (sd.roleLabel && sd.roleLabel.toLowerCase().includes("super admin"))) {
+              isCallerSuperAdmin = true;
+            }
+          }
+        } catch (_e) {}
+      }
+
+      if (!isCallerSuperAdmin) {
+        return { ok: false, success: false, error: "Only Super Administrators can scan and purge orphaned Auth accounts." };
+      }
+
+      const PROTECTED_EMAILS = new Set([
+        "aic1176@aurogroup.com",
+        "ehs.superadmin@aurorealty.com"
+      ]);
+
+      // 1. Read Firestore /users & hard-delete soft-deleted docs
+      const usersSnap = await db.collection("users").get();
+      const activeFirestoreByEmail = new Map();
+      const activeFirestoreById = new Map();
+      let hardDeletedCount = 0;
+
+      for (const doc of usersSnap.docs) {
+        const data = doc.data() || {};
+        const email = (data.email || "").toLowerCase().trim();
+        const isSoftDeleted = data.deleted === true || data.status === "deleted" || data.status === "revoked" || !email;
+        const isProtected = PROTECTED_EMAILS.has(email) || data.role === "super-admin" || data.superAdmin === true;
+
+        if (isSoftDeleted && !isProtected) {
+          await doc.ref.delete().catch(() => {});
+          await db.collection("site_personnel").doc(doc.id).delete().catch(() => {});
+          await db.collection("project_admins").doc(doc.id).delete().catch(() => {});
+          hardDeletedCount++;
+          continue;
+        }
+
+        if (email) {
+          activeFirestoreByEmail.set(email, { docId: doc.id, ref: doc.ref, data });
+          activeFirestoreById.set(doc.id, { email, ref: doc.ref, data });
+        }
+      }
+
+      // Also index project_admins collection
+      const paSnap = await db.collection("project_admins").get().catch(() => ({ docs: [] }));
+      for (const doc of paSnap.docs) {
+        const data = doc.data() || {};
+        const email = (data.email || "").toLowerCase().trim();
+        if (email && !activeFirestoreByEmail.has(email)) {
+          activeFirestoreByEmail.set(email, { docId: doc.id, ref: doc.ref, data });
+        }
+      }
+
+      // 2. Scan Firebase Authentication accounts & purge orphans
+      let totalAuthScanned = 0;
+      let purgedCount = 0;
+      const purgedEmails = [];
+      const existingAuthUsersByEmail = new Map();
+
+      let pageToken = undefined;
+      do {
+        const listResult = pageToken ? await auth.listUsers(1000, pageToken) : await auth.listUsers(1000);
+        const authUsers = listResult.users || [];
+        totalAuthScanned += authUsers.length;
+
+        for (const authUser of authUsers) {
+          const aEmail = (authUser.email || "").toLowerCase().trim();
+          const aUid = authUser.uid;
+
+          if (aEmail) existingAuthUsersByEmail.set(aEmail, authUser);
+
+          if (aUid === request.auth.uid || (aEmail && PROTECTED_EMAILS.has(aEmail)) || authUser.customClaims?.superAdmin === true) {
+            continue;
+          }
+
+          const hasActiveDoc = aEmail ? activeFirestoreByEmail.has(aEmail) : activeFirestoreById.has(aUid);
+          if (!hasActiveDoc) {
+            try {
+              await auth.deleteUser(aUid);
+              purgedCount++;
+              purgedEmails.push(aEmail || aUid);
+              console.log("[adminAssignProjectRole.purge] Purged orphan Auth user: " + (aEmail || aUid));
+            } catch (delErr) {
+              if (delErr.code !== "auth/user-not-found") {
+                console.warn("[adminAssignProjectRole.purge] Notice deleting orphan " + aUid + ":", delErr.message);
+              }
+            }
+          }
+        }
+        pageToken = listResult.pageToken;
+      } while (pageToken);
+
+      // 3. Re-key any active Firestore /users doc where doc.id !== authUser.uid
+      let rekeyedCount = 0;
+      for (const [email, rec] of activeFirestoreByEmail.entries()) {
+        const authUser = existingAuthUsersByEmail.get(email);
+        if (authUser && rec.docId !== authUser.uid) {
+          try {
+            const canonicalData = Object.assign({}, rec.data, {
+              id: authUser.uid,
+              uid: authUser.uid,
+              email: email,
+              updatedAt: admin.firestore.FieldValue.serverTimestamp()
+            });
+            await db.collection("users").doc(authUser.uid).set(canonicalData, { merge: true });
+            await db.collection("users").doc(rec.docId).delete();
+            rekeyedCount++;
+            console.log("[adminAssignProjectRole.purge] Re-keyed /users/" + authUser.uid + " and deleted old /users/" + rec.docId);
+          } catch (rkErr) {
+            console.warn("[adminAssignProjectRole.purge] Error re-keying doc for " + email + ":", rkErr.message);
+          }
+        }
+      }
+
+      await recordServerAuditLog(
+        "ORPHAN_AUTH_USERS_PURGED",
+        "Super Admin purged " + purgedCount + " orphaned Auth user(s) out of " + totalAuthScanned + " scanned",
+        request.auth.uid,
+        callerEmail,
+        "GLOBAL"
+      );
+
+      return {
+        ok: true,
+        success: true,
+        purgedCount,
+        purgedEmails,
+        rekeyedCount,
+        hardDeletedCount,
+        totalScanned: totalAuthScanned
+      };
+    } catch (err) {
+      console.error("[adminAssignProjectRole.PURGE_ORPHAN_AUTH_USERS] Error:", err);
+      return { ok: false, success: false, error: err.message || String(err) };
+    }
+  }
+
+  if (isDeleteReq) {
+    try {
+      const { uid, email, projectId } = request.data || {};
+      const callerEmail = (request.auth.token.email || "").toLowerCase().trim();
+      const callerUid = request.auth.uid;
+
+      // Prevent self-deletion
+      if (uid && uid === callerUid) {
+        return { ok: false, success: false, error: "Users cannot delete their own active account." };
+      }
+
+      const normalizedEmail = (email || "").toLowerCase().trim();
+      if (normalizedEmail === "aic1176@aurogroup.com" || normalizedEmail === "ehs.superadmin@aurorealty.com") {
+        return { ok: false, success: false, error: "Protected Super Admin bootstrap accounts cannot be deleted." };
+      }
+
+      // Permissions check
+      let hasDeletePermission =
+        request.auth.token.superAdmin === true ||
+        request.auth.token.role === "super-admin" ||
+        callerEmail === "aic1176@aurogroup.com" ||
+        callerEmail === "ehs.superadmin@aurorealty.com";
+
+      if (!hasDeletePermission && callerUid) {
+        const callerDoc = await db.collection("users").doc(callerUid).get();
+        if (callerDoc.exists) {
+          const cd = callerDoc.data() || {};
+          if (cd.role === "super-admin" || cd.superAdmin === true) {
+            hasDeletePermission = true;
+          } else if (
+            (cd.role === "project-admin" || cd.role === "admin" || cd.uiRole === "admin" || cd.role === "ehs-manager" || cd.role === "ehs-officer" || cd.role === "safety-incharge") &&
+            (!projectId || cd.projectId === projectId || cd.campusWide === true)
+          ) {
+            hasDeletePermission = true;
+          }
+        }
+      }
+
+      if (!hasDeletePermission) {
+        return { ok: false, success: false, error: "Permission denied: Insufficient privileges to delete user." };
+      }
+
+      // 1. Resolve Firebase Auth UID by BOTH uid and email
+      let resolvedAuthUid = uid || null;
+      if (normalizedEmail) {
+        try {
+          const authUser = await auth.getUserByEmail(normalizedEmail);
+          if (authUser && authUser.uid) {
+            resolvedAuthUid = authUser.uid;
+          }
+        } catch (_notFound) {}
+      }
+
+      // 2. Delete user from Firebase Authentication
+      if (resolvedAuthUid) {
+        try {
+          await auth.deleteUser(resolvedAuthUid);
+        } catch (authDelErr) {
+          if (authDelErr.code !== "auth/user-not-found") {
+            console.warn("[DELETE_USER] Notice deleting Auth user " + resolvedAuthUid + ":", authDelErr.message);
+          }
+        }
+      }
+      if (uid && uid !== resolvedAuthUid) {
+        try {
+          await auth.deleteUser(uid);
+        } catch (_ign) {}
+      }
+
+      // 3. Delete ALL Firestore documents matching doc.id === uid, doc.id === resolvedAuthUid, or where('email', '==', normalizedEmail)
+      const uidsToDelete = new Set([uid, resolvedAuthUid].filter(Boolean));
+      for (const u of uidsToDelete) {
+        await db.collection("users").doc(u).delete().catch(() => {});
+        await db.collection("site_personnel").doc(u).delete().catch(() => {});
+        await db.collection("project_admins").doc(u).delete().catch(() => {});
+        await db.collection("rate_limits").doc("adminAssignProjectRole_" + u).delete().catch(() => {});
+        await db.collection("rate_limits").doc("adminDeleteUser_" + u).delete().catch(() => {});
+      }
+
+      if (normalizedEmail) {
+        const uSnap = await db.collection("users").where("email", "==", normalizedEmail).get().catch(() => null);
+        if (uSnap && !uSnap.empty) {
+          for (const d of uSnap.docs) await d.ref.delete().catch(() => {});
+        }
+        const spSnap = await db.collection("site_personnel").where("email", "==", normalizedEmail).get().catch(() => null);
+        if (spSnap && !spSnap.empty) {
+          for (const d of spSnap.docs) await d.ref.delete().catch(() => {});
+        }
+        const paSnap = await db.collection("project_admins").where("email", "==", normalizedEmail).get().catch(() => null);
+        if (paSnap && !paSnap.empty) {
+          for (const d of paSnap.docs) await d.ref.delete().catch(() => {});
+        }
+      }
+
+      await recordServerAuditLog(
+        "USER_DELETED",
+        "Permanently deleted staff " + (normalizedEmail || uid) + " (Auth UID: " + (resolvedAuthUid || uid) + ") from Firebase",
+        callerUid,
+        callerEmail,
+        projectId || "Global"
+      );
+
+      return {
+        ok: true,
+        success: true,
+        deletedUid: resolvedAuthUid || uid,
+        deletedEmail: normalizedEmail
+      };
+    } catch (err) {
+      console.error("[adminAssignProjectRole.DELETE_USER] Error deleting user:", err);
+      return { ok: false, success: false, error: err.message || String(err) };
+    }
+  }
+
   // Rate limit: max 25 requests per minute per caller
   await enforceRateLimit(request.auth.uid, "adminAssignProjectRole", 25, 60);
 
@@ -2012,15 +2283,20 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
   );
 
   return {
+    ok: true,
     success: true,
     purgedCount: purged.length,
     purgedUsers: purged,
+    purgedEmails: purged.map(p => p.email || p.uid),
     totalScanned: totalAuthScanned
   };
   } catch (err) {
     console.error("[adminSyncAndPurgeOrphanAuthUsers] Critical error:", err);
-    if (err instanceof HttpsError) throw err;
-    throw new HttpsError("internal", "Orphaned accounts scan failed: " + (err.message || String(err)));
+    return {
+      ok: false,
+      success: false,
+      error: err.message || String(err)
+    };
   }
 });
 
