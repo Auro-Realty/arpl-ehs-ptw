@@ -156,7 +156,7 @@ The **ARPL EHS Permit-to-Work (PTW) Management System** digitises the entire hig
 | User Lifecycle Governance | Atomic dual-deletion (Auth + Firestore), ghost Auth purge, and dynamic role/location switchers |
 | Worksite Portfolio | 3 Authoritative Mega-Projects (The Pearl, The Regent, Sansa County) with multi-tower zone mapping |
 | Total Codebase | Single `index.html` (~28,777 lines, 1.96 MB byte-identical with `public/index.html`) |
-| External Dependencies | 2 (Font Awesome icons, jsPDF) |me icons, jsPDF) |
+| External Dependencies | 2 (Font Awesome icons, jsPDF) |
 
 ---
 
@@ -3717,7 +3717,7 @@ To provide immediate operational focus without information overload, the system 
 | | **Open Observations** | `PERMITS.filter(p => p.ptype === 'electrical' && p.observation && p.observation.status !== 'Resolved').length` | Electrical safety deviations requiring rectification |
 | | **Extension Requests** | `PERMITS.filter(p => p.ptype === 'electrical' && p.extension && p.extension.status === 'pending').length` | Electrical shutdown extension requests under review |
 | | **Closed & De-isolated** | `PERMITS.filter(p => p.ptype === 'electrical' && p.status === 'Closed').length` | Safely de-isolated and surrendered electrical permits |
-| **Blasting / Drilling In-charge** | **Pending My Acknowledgment** | `PERMITS.filter(p => p.ptype === 'blasting' && (p.status === 'Pending Blasting In-charge Acknowledgment' || p.status === 'Pending Blasting In-charge Re-Acknowledgment')).length` | Blasting permits waiting for statutory PESO acknowledgment |
+| **Blasting / Drilling In-charge** | **Pending My Acknowledgment** | `PERMITS.filter(p => p.ptype === 'blasting' && (p.status === 'Pending Blasting In-charge Acknowledgment' \|\| p.status === 'Pending Blasting In-charge Re-Acknowledgment')).length` | Blasting permits waiting for statutory PESO acknowledgment |
 | | **Active Blasting Permits** | `PERMITS.filter(p => p.ptype === 'blasting' && p.status === 'Active').length` | Live blasting/drilling operations under licensed supervision |
 | | **Acknowledged by Me** | `PERMITS.filter(p => p.ptype === 'blasting' && p.signatories?.['blasting-incharge']).length` | Historical blasting permits endorsed |
 | | **Total Closed** | `PERMITS.filter(p => p.ptype === 'blasting' && p.status === 'Closed').length` | Completed blasts surrendered with post-blast clearance |
