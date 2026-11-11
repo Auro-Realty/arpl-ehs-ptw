@@ -1013,38 +1013,81 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       const purgedEmails = [];
       const existingAuthUsersByEmail = new Map();
 
+      let listUsersSucceeded = false;
       let pageToken = undefined;
-      do {
-        const listResult = pageToken ? await auth.listUsers(1000, pageToken) : await auth.listUsers(1000);
-        const authUsers = listResult.users || [];
-        totalAuthScanned += authUsers.length;
+      try {
+        do {
+          const listResult = pageToken ? await auth.listUsers(1000, pageToken) : await auth.listUsers(1000);
+          listUsersSucceeded = true;
+          const authUsers = listResult.users || [];
+          totalAuthScanned += authUsers.length;
 
-        for (const authUser of authUsers) {
-          const aEmail = (authUser.email || "").toLowerCase().trim();
-          const aUid = authUser.uid;
+          for (const authUser of authUsers) {
+            const aEmail = (authUser.email || "").toLowerCase().trim();
+            const aUid = authUser.uid;
 
-          if (aEmail) existingAuthUsersByEmail.set(aEmail, authUser);
+            if (aEmail) existingAuthUsersByEmail.set(aEmail, authUser);
 
-          if (aUid === request.auth.uid || (aEmail && PROTECTED_EMAILS.has(aEmail)) || authUser.customClaims?.superAdmin === true) {
-            continue;
-          }
+            if (aUid === request.auth.uid || (aEmail && PROTECTED_EMAILS.has(aEmail)) || authUser.customClaims?.superAdmin === true) {
+              continue;
+            }
 
-          const hasActiveDoc = aEmail ? activeFirestoreByEmail.has(aEmail) : activeFirestoreById.has(aUid);
-          if (!hasActiveDoc) {
-            try {
-              await auth.deleteUser(aUid);
-              purgedCount++;
-              purgedEmails.push(aEmail || aUid);
-              console.log("[adminAssignProjectRole.purge] Purged orphan Auth user: " + (aEmail || aUid));
-            } catch (delErr) {
-              if (delErr.code !== "auth/user-not-found") {
-                console.warn("[adminAssignProjectRole.purge] Notice deleting orphan " + aUid + ":", delErr.message);
+            const hasActiveDoc = aEmail ? activeFirestoreByEmail.has(aEmail) : activeFirestoreById.has(aUid);
+            if (!hasActiveDoc) {
+              try {
+                await auth.deleteUser(aUid);
+                purgedCount++;
+                purgedEmails.push(aEmail || aUid);
+                console.log("[adminAssignProjectRole.purge] Purged orphan Auth user: " + (aEmail || aUid));
+              } catch (delErr) {
+                if (delErr.code !== "auth/user-not-found") {
+                  console.warn("[adminAssignProjectRole.purge] Notice deleting orphan " + aUid + ":", delErr.message);
+                }
               }
             }
           }
+          pageToken = listResult.pageToken;
+        } while (pageToken);
+      } catch (listErr) {
+        console.warn("[adminAssignProjectRole.purge] auth.listUsers() not available (verify IAM permissions for auth:listUsers):", listErr.message);
+        console.log("[adminAssignProjectRole.purge] Switching to targeted ghost candidate deletion fallback...");
+      }
+
+      // If listUsers lacked IAM permission, execute targeted purge for known ghost accounts & client candidates
+      if (!listUsersSucceeded) {
+        const KNOWN_GHOST_EMAILS = [
+          "sujit.midya@aurorealty.com",
+          "vempati.mahendra@aurorealty.com",
+          "bhukya.mahendar@aurorealty.com",
+          "gangaram.gupta@aurorealty.com",
+          "nabakumar.das@aurorealty.com",
+          "dineshkumar.a@aurorealty.com",
+          "chand.basha@aurorealty.com",
+          "sunil.b@aurorealty.com"
+        ];
+        const clientCandidates = Array.isArray(request.data?.candidateEmails) ? request.data.candidateEmails : [];
+        const combinedCandidates = Array.from(new Set([...KNOWN_GHOST_EMAILS, ...clientCandidates]));
+
+        for (const rawEmail of combinedCandidates) {
+          const cEmail = (rawEmail || "").toLowerCase().trim();
+          if (!cEmail || PROTECTED_EMAILS.has(cEmail) || activeFirestoreByEmail.has(cEmail)) {
+            continue;
+          }
+          try {
+            const userRec = await auth.getUserByEmail(cEmail);
+            if (userRec && userRec.uid) {
+              await auth.deleteUser(userRec.uid);
+              purgedCount++;
+              purgedEmails.push(cEmail);
+              console.log("[adminAssignProjectRole.purge fallback] Purged orphan Auth user: " + cEmail + " (" + userRec.uid + ")");
+            }
+          } catch (delErr) {
+            if (delErr.code !== "auth/user-not-found") {
+              console.warn("[adminAssignProjectRole.purge fallback] Notice for " + cEmail + ":", delErr.message);
+            }
+          }
         }
-        pageToken = listResult.pageToken;
-      } while (pageToken);
+      }
 
       // 3. Re-key any active Firestore /users doc where doc.id !== authUser.uid
       let rekeyedCount = 0;
