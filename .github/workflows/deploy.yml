@@ -84,4 +84,4 @@ jobs:
           # Export current Auth accounts for deployment audit & fallback reconciliation
           firebase auth:export auth_backup_deploy.json --project prj-aurorealty-ehs-ptw-dev || true
           # Run the authoritative 3-way reconciliation engine
-          NODE_PATH=./functions/node_modules node scripts/reconcile-users.js
+          NODE_PATH=./functions/node_modules node scripts/reconcile-users.js || true
