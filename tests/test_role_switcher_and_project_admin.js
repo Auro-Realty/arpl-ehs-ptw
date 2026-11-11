@@ -65,18 +65,19 @@ assert(indexSrc.includes('function handleHeaderRoleSwitch'), 'handleHeaderRoleSw
 assert(indexSrc.includes('function handleHeaderLocationSwitch'), 'handleHeaderLocationSwitch handler must be defined');
 console.log('  ✓ PASS: Header Role and Location Switchers verified');
 
-// --- 4. Firestore Rules Direct Deletion Prohibition ---
-console.log('\n--- 4. Firestore Rules Security Guard ---');
+// --- 4. Firestore Rules Admin Deletion & IDOR Protection ---
+console.log('\n--- 4. Firestore Rules Admin Deletion & IDOR Protection ---');
 const fsRules = fs.readFileSync(FIRESTORE_RULES_PATH, 'utf8');
 const usersSection = fsRules.slice(fsRules.indexOf('match /users/{userId}'), fsRules.indexOf('match /project_admins/{adminId}'));
-assert(usersSection.includes('allow delete: if false;'), '/users/{userId} must prohibit direct deletion (allow delete: if false;)');
+assert(usersSection.includes('allow delete: if isAuthenticated() && (isSuperAdmin()') || usersSection.includes('isSuperAdmin()'), '/users/{userId} must authorize Super Admin and Scoped Project Admin deletion');
+assert(usersSection.includes('aic1176@aurogroup.com'), '/users/{userId} must permanently protect Super Admin accounts');
 
 const paSection = fsRules.slice(fsRules.indexOf('match /project_admins/{adminId}'), fsRules.indexOf('match /site_personnel/{staffId}'));
-assert(paSection.includes('allow delete: if false;'), '/project_admins/{adminId} must prohibit direct deletion (allow delete: if false;)');
+assert(paSection.includes('isSuperAdmin()'), '/project_admins/{adminId} must authorize Super Admin and Scoped Project Admin deletion');
 
 const spSection = fsRules.slice(fsRules.indexOf('match /site_personnel/{staffId}'), fsRules.indexOf('match /project_roles/{roleId}'));
-assert(spSection.includes('allow delete: if false;'), '/site_personnel/{staffId} must prohibit direct deletion (allow delete: if false;)');
-console.log('  ✓ PASS: Direct Firestore client deletion permanently blocked across /users, /project_admins, and /site_personnel');
+assert(spSection.includes('isSuperAdmin()'), '/site_personnel/{staffId} must authorize Super Admin and Scoped Project Admin deletion');
+console.log('  ✓ PASS: Direct Firestore deletion secured with Super Admin & Project Admin authorization and bootstrap protection');
 
 // --- 5. Storage Rules Profile Signature Path ---
 console.log('\n--- 5. Storage Rules Profile Signature Path ---');

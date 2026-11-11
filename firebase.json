@@ -28,6 +28,34 @@
         "function": "downloadStatutoryPdf"
       },
       {
+        "source": "/api/adminAssignProjectRole",
+        "function": {
+          "functionId": "adminAssignProjectRole",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/api/adminDeleteUser",
+        "function": {
+          "functionId": "adminDeleteUser",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/api/adminSyncAndPurgeOrphanAuthUsers",
+        "function": {
+          "functionId": "adminSyncAndPurgeOrphanAuthUsers",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/api/switchActiveRole",
+        "function": {
+          "functionId": "switchActiveRole",
+          "region": "asia-south1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

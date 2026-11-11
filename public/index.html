@@ -14352,7 +14352,25 @@
                 );
                 if (!confirmed) return false;
 
-                // 1. Backend Cloud Function Deletion (Primary: adminAssignProjectRole with DELETE_USER, Fallback: adminDeleteUser)
+                // 1. Direct Cloud Firestore Deletion (Authorized for Super Admin & Scoped Project Admin in firestore.rules)
+                if (typeof firebase !== 'undefined' && firebase.firestore) {
+                    try {
+                        const db = firebase.firestore();
+                        const batch = db.batch();
+                        if (targetDocId) batch.delete(db.collection('users').doc(targetDocId));
+                        if (targetUid && targetUid !== targetDocId) batch.delete(db.collection('users').doc(targetUid));
+                        if (targetDocId) batch.delete(db.collection('site_personnel').doc(targetDocId));
+                        if (targetUid) batch.delete(db.collection('site_personnel').doc(targetUid));
+                        if (targetDocId) batch.delete(db.collection('project_admins').doc(targetDocId));
+                        if (targetUid) batch.delete(db.collection('project_admins').doc(targetUid));
+                        await batch.commit().catch(e => console.warn('[unifiedDeleteUser] Firestore batch delete note:', e));
+                    } catch (fsErr) {
+                        console.warn('[unifiedDeleteUser] Firestore direct delete exception:', fsErr);
+                    }
+                }
+
+                // 2. Backend Cloud Function Deletion (Primary: adminAssignProjectRole with DELETE_USER, Fallback: adminDeleteUser)
+                // Note: Triggers permanent Firebase Authentication cleanup with Admin SDK authority.
                 let backendSuccess = false;
                 if (typeof firebase !== 'undefined') {
                     try {
@@ -14390,11 +14408,7 @@
                     }
                 }
 
-                // NOTE: We strictly DO NOT execute client-side db.collection('users').doc().delete()
-                // because firestore.rules intentionally disallows direct client deletions (allow delete: if false;).
-                // All permanent hard deletions are executed with Admin SDK authority in the Cloud Function above.
-
-                // 2. Remove immediately from client in-memory state
+                // 3. Remove immediately from client in-memory state
                 const emailMatch = (e) => targetEmail && e && e.toLowerCase().trim() === targetEmail;
                 const idMatch = (id) => id && (id === targetUid || id === target.id || id === targetDocId);
                 const empIdMatch = (em) => targetEmpId && em && String(em).trim().toLowerCase() === targetEmpId.toLowerCase();
@@ -14478,10 +14492,55 @@
         window.getFunctions = getFunctions;
 
         function httpsCallable(functionsInstance, fnName) {
-            if (functionsInstance && typeof functionsInstance.httpsCallable === 'function') {
-                return functionsInstance.httpsCallable(fnName);
-            }
-            return getFunctions(firebase.app(), 'asia-south1').httpsCallable(fnName);
+            const fInst = (functionsInstance && typeof functionsInstance.httpsCallable === 'function')
+                ? functionsInstance
+                : getFunctions(firebase.app(), 'asia-south1');
+
+            return async function(data) {
+                // Primary: Standard Firebase SDK Callable (routes to asia-south1 Cloud Function)
+                try {
+                    const standardCallable = fInst.httpsCallable(fnName);
+                    return await standardCallable(data);
+                } catch (primaryErr) {
+                    console.warn(`[httpsCallable] Primary invocation of ${fnName} threw:`, primaryErr);
+
+                    // Fallback 1: Same-origin hosting rewrite via httpsCallableFromURL
+                    if (window.location && window.location.origin && typeof fInst.httpsCallableFromURL === 'function') {
+                        try {
+                            const originCallable = fInst.httpsCallableFromURL(`${window.location.origin}/api/${fnName}`);
+                            return await originCallable(data);
+                        } catch (urlErr) {
+                            console.warn(`[httpsCallable] httpsCallableFromURL fallback for ${fnName} threw:`, urlErr);
+                        }
+                    }
+
+                    // Fallback 2: Direct same-origin HTTP POST with ID Token (bypasses cross-origin CORS preflight)
+                    try {
+                        let token = null;
+                        if (typeof firebase !== 'undefined' && firebase.auth && firebase.auth().currentUser) {
+                            token = await firebase.auth().currentUser.getIdToken(true);
+                        }
+                        const endpoint = `/api/${fnName}`;
+                        const response = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+                            },
+                            body: JSON.stringify({ data: data || {} })
+                        });
+                        if (response.ok) {
+                            const resData = await response.json();
+                            return { data: resData.result || resData.data || resData };
+                        }
+                    } catch (fetchErr) {
+                        console.warn(`[httpsCallable] Direct same-origin fetch for ${fnName} threw:`, fetchErr);
+                    }
+
+                    // If all fallbacks exhausted, rethrow primary error
+                    throw primaryErr;
+                }
+            };
         }
         window.httpsCallable = httpsCallable;
 

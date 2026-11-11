@@ -15,6 +15,7 @@
 const { onCall, onRequest, HttpsError } = require("firebase-functions/v2/https");
 const { onObjectFinalized } = require("firebase-functions/v2/storage");
 const { onSchedule } = require("firebase-functions/v2/scheduler");
+const { onDocumentDeleted } = require("firebase-functions/v2/firestore");
 const admin = require("firebase-admin");
 const sharp = require("sharp");
 const { PDFDocument, rgb, StandardFonts } = require("pdf-lib");
@@ -2752,5 +2753,61 @@ exports.escalationSweep = onSchedule(
 
     await batch.commit();
     console.log(`Auto-expired ${activePermits.size} elapsed permits and swept pending SLA stages.`);
+  }
+);
+
+// ============================================================================
+// 9. AUTOMATIC FIRESTORE <-> AUTH RECONCILIATION EVENTARC TRIGGER
+// ============================================================================
+/**
+ * Automatically purges Firebase Auth account when a user document is deleted in Cloud Firestore.
+ * Does not require allUsers public HTTP invoker (uses internal GCP Eventarc trigger).
+ */
+exports.onUserDocumentDeleted = onDocumentDeleted(
+  {
+    document: "users/{userId}",
+    region: REGION
+  },
+  async (event) => {
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data() || {};
+    const uid = event.params.userId;
+    const email = (data.email || "").toLowerCase().trim();
+
+    // Guard bootstrap Super Admins
+    if (email === "aic1176@aurogroup.com" || email === "ehs.superadmin@aurorealty.com" || data.role === "super-admin") {
+      console.log(`[onUserDocumentDeleted] Preserving bootstrap super admin: ${email}`);
+      return;
+    }
+
+    console.log(`[onUserDocumentDeleted] Triggered for deleted user doc: ${uid} (${email})`);
+
+    // 1. Delete by Auth UID if valid
+    if (uid && uid.length >= 20) {
+      try {
+        await auth.deleteUser(uid);
+        console.log(`[onUserDocumentDeleted] Successfully deleted Auth UID: ${uid}`);
+      } catch (err) {
+        if (err.code !== "auth/user-not-found" && err.code !== "auth/invalid-uid") {
+          console.warn(`[onUserDocumentDeleted] Auth UID deletion notice (${uid}):`, err.message);
+        }
+      }
+    }
+
+    // 2. Delete by Email lookup if different from UID
+    if (email) {
+      try {
+        const authUser = await auth.getUserByEmail(email);
+        if (authUser && authUser.uid) {
+          await auth.deleteUser(authUser.uid);
+          console.log(`[onUserDocumentDeleted] Successfully deleted Auth user by email: ${email} (UID: ${authUser.uid})`);
+        }
+      } catch (err) {
+        if (err.code !== "auth/user-not-found") {
+          console.warn(`[onUserDocumentDeleted] Auth email deletion notice (${email}):`, err.message);
+        }
+      }
+    }
   }
 );
