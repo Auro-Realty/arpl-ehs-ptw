@@ -143,6 +143,41 @@ async function run3WayReconciliation() {
     listPageToken = listResult.pageToken;
   } while (listPageToken);
 
+  // 2B. Inspect auth_backup_deploy.json if created by CLI (firebase auth:export)
+  const backupFile = path.resolve(__dirname, '..', 'auth_backup_deploy.json');
+  if (fs.existsSync(backupFile)) {
+    try {
+      const backupJson = JSON.parse(fs.readFileSync(backupFile, 'utf8'));
+      const backupList = backupJson.users || [];
+      console.log(`  [Auth Export File] Inspecting ${backupList.length} user(s) from auth_backup_deploy.json...`);
+      for (const bUser of backupList) {
+        const bEmail = (bUser.email || '').toLowerCase().trim();
+        const bUid = bUser.localId || bUser.uid;
+        if (bEmail && !existingAuthUsersByEmail.has(bEmail)) {
+          existingAuthUsersByEmail.set(bEmail, { uid: bUid, email: bEmail });
+        }
+        const isProtected = (bEmail && PROTECTED_SUPER_ADMIN_EMAILS.has(bEmail));
+        if (!isProtected && bUid) {
+          const hasActiveDoc = bEmail ? activeFirestoreByEmail.has(bEmail) : activeFirestoreById.has(bUid);
+          if (!hasActiveDoc && !purgedAuthEmails.includes(bEmail || bUid)) {
+            try {
+              await auth.deleteUser(bUid);
+              purgedAuthCount++;
+              purgedAuthEmails.push(bEmail || bUid);
+              console.log(`  [Auth Export Purge] Purged orphan Auth account: ${bEmail || 'NO_EMAIL'} (${bUid})`);
+            } catch (delErr) {
+              if (delErr.code !== 'auth/user-not-found') {
+                console.warn(`    Failed to purge export user ${bUid}:`, delErr.message);
+              }
+            }
+          }
+        }
+      }
+    } catch (eErr) {
+      console.warn('  [Auth Export Notice] Could not read auth_backup_deploy.json:', eErr.message);
+    }
+  }
+
   console.log(`  ✓ Auth Scan Complete. Scanned: ${totalAuthScanned}, Purged: ${purgedAuthCount} ghost user(s).`);
 
   // STEP 3: Reconcile Firestore -> Auth (Ensure active Firestore users exist in Auth & match UIDs)

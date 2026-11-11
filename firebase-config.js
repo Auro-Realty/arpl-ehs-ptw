@@ -3,9 +3,9 @@ window.PROJECT_MASTER = PROJECT_MASTER;
 
 // Baseline Authoritative Projects Initialization
 window.PROJECTS = window.PROJECTS || [
-    { id: 'PRJ-PEARL', name: 'The Pearl', towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} },
-    { id: 'PRJ-REGENT', name: 'The Regent', towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} },
-    { id: 'PRJ-SANSA', name: 'Sansa County', towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04'], configured: false, geofence: null, lat: null, lng: null, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} }
+    { id: 'PRJ-PEARL', name: 'The Pearl', towers: ['P1', 'P2', 'P3', 'P4', 'P5', 'P6', 'P7', 'Clubhouse', 'Podium', 'NTA_PHASE-1', 'NTA_PHASE-2', 'NTA_PHASE-3'], configured: true, site: { lat: 17.4125, lng: 78.3984, address: 'The Pearl, Hitec City' }, geofence: { lat: 17.4125, lng: 78.3984, radius: 200 }, lat: 17.4125, lng: 78.3984, radius: 200, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} },
+    { id: 'PRJ-REGENT', name: 'The Regent', towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'], configured: true, site: { lat: 17.4371, lng: 78.3612, address: 'The Regent, Financial District' }, geofence: { lat: 17.4371, lng: 78.3612, radius: 200 }, lat: 17.4371, lng: 78.3612, radius: 200, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} },
+    { id: 'PRJ-SANSA', name: 'Sansa County', towers: ['Sector 1 - Zone 1 & 2', 'Sector 1 - Zone 03', 'Sector 1 - Zone 04', 'Podium Deck'], configured: true, site: { lat: 17.4892, lng: 78.3144, address: 'Sansa County Development, Miyapur' }, geofence: { lat: 17.4892, lng: 78.3144, radius: 250 }, lat: 17.4892, lng: 78.3144, radius: 250, adminName: null, adminEmail: null, safetyInchargeName: null, safetyInchargeEmail: null, employeeId: null, roles: {} }
 ];
 window.PROJECT_MASTER = window.PROJECTS || window.PROJECT_MASTER || [];
 window.CONTRACTORS = window.CONTRACTORS || [];

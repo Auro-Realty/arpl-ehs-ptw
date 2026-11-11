@@ -13979,7 +13979,8 @@
             // Step 1: Attempt Provisioning via Cloud Function adminAssignProjectRole
             if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
                 try {
-                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const functions = getFunctions(firebase.app(), 'asia-south1');
+                    const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
                     const res = await assignFn({
                         action: 'create',
                         email: rawEmail,
@@ -14107,7 +14108,8 @@
                         } catch (directFsErr) {
                             console.warn('Direct Firestore write permission notice, falling back to secure Cloud Function:', directFsErr);
                             if (typeof firebase.functions === 'function') {
-                                const assignFn = firebase.functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                                const functions = getFunctions(firebase.app(), 'asia-south1');
+                                const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
                                 await assignFn({
                                     action: 'create',
                                     email: rawEmail,
@@ -14253,7 +14255,8 @@
             // 1. Try backend Cloud Function reset
             if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
                 try {
-                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const functions = getFunctions(firebase.app(), 'asia-south1');
+                    const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
                     const res = await assignFn({
                         action: 'reset-password',
                         uid: stf.uid || stf.id,
@@ -14348,9 +14351,10 @@
 
             // 1. Backend Cloud Function Deletion (Primary: adminAssignProjectRole with DELETE_USER, Fallback: adminDeleteUser)
             let backendSuccess = false;
-            if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
+            if (typeof firebase !== 'undefined') {
                 try {
-                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
+                    const functions = getFunctions(firebase.app(), 'asia-south1');
+                    const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
                     const res = await assignFn({
                         action: 'DELETE_USER',
                         uid: targetUid,
@@ -14363,7 +14367,8 @@
                 } catch (cfErr) {
                     console.warn('[unifiedDeleteUser] adminAssignProjectRole DELETE_USER notice:', cfErr);
                     try {
-                        const delFn = firebase.app().functions('asia-south1').httpsCallable('adminDeleteUser');
+                        const functions = getFunctions(firebase.app(), 'asia-south1');
+                        const delFn = httpsCallable(functions, 'adminDeleteUser');
                         const res2 = await delFn({
                             uid: targetUid,
                             email: targetEmail,
@@ -14471,6 +14476,29 @@
         async function siteAdminRemoveStaff(staffId) {
             return await unifiedDeleteUser(staffId);
         }
+
+        /**
+         * Global Firebase Functions Regional Helper
+         * Strictly routes all Cloud Functions calls to 'asia-south1' (Mumbai)
+         */
+        function getFunctions(app, region) {
+            const reg = region || 'asia-south1';
+            if (typeof firebase !== 'undefined') {
+                if (app && typeof app.functions === 'function') return app.functions(reg);
+                if (typeof firebase.app === 'function' && firebase.apps && firebase.apps.length) return firebase.app().functions(reg);
+                if (typeof firebase.functions === 'function') return firebase.functions(reg);
+            }
+            throw new Error('Firebase Functions service unavailable.');
+        }
+        window.getFunctions = getFunctions;
+
+        function httpsCallable(functionsInstance, fnName) {
+            if (functionsInstance && typeof functionsInstance.httpsCallable === 'function') {
+                return functionsInstance.httpsCallable(fnName);
+            }
+            return getFunctions(firebase.app(), 'asia-south1').httpsCallable(fnName);
+        }
+        window.httpsCallable = httpsCallable;
 
         /* --- Super Admin: Projects & Structural Hierarchies (Modify Sites) --- */
         function renderAdminProjectsTab() {
@@ -16675,7 +16703,8 @@
             showToast('Switching active operational role to ' + targetRole + '...', 'info');
             try {
                 if (typeof firebase !== 'undefined' && firebase.functions) {
-                    const switchFn = firebase.functions().httpsCallable('switchActiveRole');
+                    const functions = getFunctions(firebase.app(), 'asia-south1');
+                    const switchFn = httpsCallable(functions, 'switchActiveRole');
                     await switchFn({
                         targetRole: targetRole,
                         targetProjectId: currentUser.projectId,
@@ -16749,7 +16778,8 @@
             showToast('Switching active location context...', 'info');
             try {
                 if (typeof firebase !== 'undefined' && firebase.functions) {
-                    const switchFn = firebase.functions().httpsCallable('switchActiveRole');
+                    const functions = getFunctions(firebase.app(), 'asia-south1');
+                    const switchFn = httpsCallable(functions, 'switchActiveRole');
                     await switchFn({
                         targetRole: currentUser.role,
                         targetProjectId: newProjectId,
@@ -28279,21 +28309,12 @@ ptypeOf(p) === 'general' ?
                 btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Scanning Auth & Purging...';
             }
             try {
-                if (typeof firebase === 'undefined' || !firebase.app || typeof firebase.app().functions !== 'function') {
-                    throw new Error('Firebase Functions service unavailable.');
-                }
-                let res;
-                try {
-                    const assignFn = firebase.app().functions('asia-south1').httpsCallable('adminAssignProjectRole');
-                    res = await assignFn({ action: 'PURGE_ORPHAN_AUTH_USERS', projectId: 'PRJ-SANSA' });
-                } catch (fnErr) {
-                    console.warn('[handlePurgeGhostUsers] adminAssignProjectRole failed, trying direct endpoint:', fnErr);
-                    const purgeFn = firebase.app().functions('asia-south1').httpsCallable('adminSyncAndPurgeOrphanAuthUsers');
-                    res = await purgeFn({});
-                }
+                const functions = getFunctions(firebase.app(), 'asia-south1');
+                const fn = httpsCallable(functions, 'adminAssignProjectRole');
+                const res = await fn({ action: 'PURGE_ORPHAN_AUTH_USERS' });
 
                 if (res && res.data && (res.data.ok === false || res.data.success === false)) {
-                    showToast('Purge Notice: ' + (res.data.error || 'Operation returned incomplete'), 'warn');
+                    showToast('Purge failed: ' + (res.data.error || 'Operation returned incomplete'), 'err');
                     return;
                 }
 
@@ -28310,11 +28331,10 @@ ptypeOf(p) === 'general' ?
                 }
             } catch (err) {
                 console.error('[handlePurgeGhostUsers] Purge error:', err);
-                let errText = err.message || String(err);
-                if (errText === 'internal' || errText.includes('internal')) {
-                    errText = 'Cloud Functions authentication service error (verify IAM Service Account permissions for auth:listUsers in GCP Console, or verify asia-south1 functions deployment).';
-                }
-                showToast('Purge failed: ' + errText, 'err');
+                const code = err.code ? '[' + err.code + '] ' : '';
+                const msg = err.message || String(err);
+                const details = err.details ? ' (' + (typeof err.details === 'object' ? JSON.stringify(err.details) : err.details) + ')' : '';
+                showToast('Purge failed: ' + code + msg + details, 'err');
             } finally {
                 if (btn) {
                     btn.disabled = false;
