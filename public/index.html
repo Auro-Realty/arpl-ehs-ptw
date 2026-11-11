@@ -372,6 +372,50 @@
             }
         }
 
+        /* Mobile Drawer Context Switcher (<= 960px) */
+        .mobile-drawer-context {
+            display: none;
+        }
+        @media (max-width: 960px) {
+            .mobile-drawer-context {
+                display: block;
+            }
+        }
+
+        /* Intermediate Viewport Responsiveness (768px - 1200px) */
+        @media (max-width: 1200px) {
+            .topbar-sub {
+                display: none !important;
+            }
+        }
+        @media (max-width: 1050px) {
+            .topbar-clock .tc-date {
+                display: none !important;
+            }
+        }
+        @media (max-width: 900px) {
+            .topbar-clock {
+                display: none !important;
+            }
+            .connectivity-pill .conn-text {
+                display: none !important;
+            }
+        }
+
+        /* Button Touch Target Fixes (WCAG 2.2 AA >= 44x44px) */
+        @media (max-width: 768px) {
+            .btn-switch-user {
+                min-width: 44px !important;
+                min-height: 44px !important;
+                width: 44px !important;
+                height: 44px !important;
+            }
+            .icon-btn {
+                min-width: 44px !important;
+                min-height: 44px !important;
+            }
+        }
+
         /* Modern Ergonomic Mobile Bottom Navigation Bar (<= 768px) */
         .mobile-bottom-bar {
             display: none;
@@ -4497,7 +4541,13 @@
             }
 
             .role-badge {
-                display: none !important;
+                display: inline-flex !important;
+                padding: 3px 6px;
+                max-width: 110px;
+                overflow: hidden;
+            }
+            .role-badge span:not(:first-child) {
+                display: none;
             }
 
             .topbar-title {
@@ -9919,7 +9969,7 @@
             const ctx = photoModalCtx;
             let html = '';
             if (ctx.captured) {
-                html += '<div class="photo-preview"><img src="' + ctx.captured.dataUrl + '"><button class="rm" onclick="clearPhoto()"><i class="fa-solid fa-xmark"></i></button></div>' +
+                html += '<div class="photo-preview"><img src="' + ctx.captured.dataUrl + '"><button class="rm" onclick="clearPhoto()" title="Remove Photo" aria-label="Remove Photo"><i class="fa-solid fa-xmark"></i></button></div>' +
                     '<div class="form-hint" style="margin-top:8px;">' + ctx.captured.name + ' &middot; captured ' + fmtDateTime(nowTime()) + '</div>';
             } else {
                 html += '<div class="photo-drop" onclick="document.getElementById(\'hiddenFileInput\').click()"><i class="fa-solid fa-camera"></i>Click to choose or capture a photo from this device<div class="form-hint" style="margin-top:4px;">JPG or PNG</div></div>';
@@ -17069,7 +17119,80 @@
         }
         function buildNav() {
             const items = navItemsFor(currentUser.key);
+            
+            // Dedicated Mobile Context Switcher (Rendered in drawer for mobile viewports <= 960px)
+            let mobileSwitcherHtml = '';
+            if (currentUser) {
+                const availableRoles = new Set();
+                if (currentUser.role) availableRoles.add(currentUser.role);
+                if (currentUser.key && currentUser.key !== 'admin') availableRoles.add(currentUser.key);
+                if (Array.isArray(currentUser.roles)) currentUser.roles.forEach(r => availableRoles.add(r));
+                if (Array.isArray(currentUser.assignments)) currentUser.assignments.forEach(a => { if (a && a.role) availableRoles.add(a.role); });
+                const rolesList = Array.from(availableRoles).filter(Boolean);
+
+                let roleSelectHtml = '';
+                if (rolesList.length > 1) {
+                    roleSelectHtml = '<div style="margin-bottom:8px;">' +
+                        '<label style="display:block;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;"><i class="fa-solid fa-user-tag" style="color:var(--orange);margin-right:4px;"></i>Active Operational Role</label>' +
+                        '<select class="mobile-context-select" onchange="handleHeaderRoleSwitch(this.value);toggleMobileNav(false);" style="width:100%;min-height:44px;padding:8px 10px;border-radius:6px;border:1.5px solid #CBD5E1;background:#FFFFFF;font-size:13px;font-weight:700;color:var(--navy);outline:none;">' +
+                        rolesList.map(r => {
+                            const info = typeof roleInfo === 'function' ? roleInfo(r) : {};
+                            const isCur = (r === currentUser.role || r === currentUser.key || (r === 'project-admin' && currentUser.key === 'admin'));
+                            return '<option value="' + escapeHtml(r) + '" ' + (isCur ? 'selected' : '') + '>' + escapeHtml(info.label || r) + '</option>';
+                        }).join('') +
+                        '</select></div>';
+                }
+
+                let locSelectHtml = '';
+                if (currentUser.key === 'super-admin') {
+                    locSelectHtml = '<div>' +
+                        '<label style="display:block;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;"><i class="fa-solid fa-building" style="color:#0284C7;margin-right:4px;"></i>Worksite Scope</label>' +
+                        '<select class="mobile-context-select" onchange="handleHeaderLocationSwitch(this.value);toggleMobileNav(false);" style="width:100%;min-height:44px;padding:8px 10px;border-radius:6px;border:1.5px solid #CBD5E1;background:#FFFFFF;font-size:13px;font-weight:700;color:var(--navy);outline:none;">' +
+                        '<option value="ALL" ' + (!currentUser.projectId ? 'selected' : '') + '>All Sites (Global)</option>' +
+                        '<option value="PRJ-PEARL" ' + (currentUser.projectId === 'PRJ-PEARL' ? 'selected' : '') + '>The Pearl (PRJ-PEARL)</option>' +
+                        '<option value="PRJ-REGENT" ' + (currentUser.projectId === 'PRJ-REGENT' ? 'selected' : '') + '>The Regent (PRJ-REGENT)</option>' +
+                        '<option value="PRJ-SANSA" ' + (currentUser.projectId === 'PRJ-SANSA' ? 'selected' : '') + '>Sansa County (PRJ-SANSA)</option>' +
+                        '</select></div>';
+                } else {
+                    const locOptions = [];
+                    if (Array.isArray(currentUser.assignments) && currentUser.assignments.length > 1) {
+                        currentUser.assignments.forEach(a => {
+                            const val = a.locationName || a.locationId || a.projectId;
+                            if (val && !locOptions.find(o => o.val === val)) {
+                                locOptions.push({ val: val, label: (a.locationName || a.projectName) });
+                            }
+                        });
+                    }
+                    const prjTowers = (currentUser.projectId && typeof AUTHORITATIVE_PROJECT_TOWERS !== 'undefined' && AUTHORITATIVE_PROJECT_TOWERS[currentUser.projectId]) ? AUTHORITATIVE_PROJECT_TOWERS[currentUser.projectId] : [];
+                    if (locOptions.length <= 1 && prjTowers.length > 1 && (currentUser.key === 'admin' || currentUser.role === 'project-admin')) {
+                        locOptions.push({ val: 'Sector 1 (All Zones)', label: 'Sector 1 (All Zones)' });
+                        prjTowers.forEach(t => {
+                            if (!locOptions.find(o => o.val === t)) locOptions.push({ val: t, label: t });
+                        });
+                    }
+                    if (locOptions.length > 1) {
+                        locSelectHtml = '<div>' +
+                            '<label style="display:block;font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:3px;"><i class="fa-solid fa-location-dot" style="color:#0284C7;margin-right:4px;"></i>Tower / Zone</label>' +
+                            '<select class="mobile-context-select" onchange="handleHeaderLocationSwitch(this.value);toggleMobileNav(false);" style="width:100%;min-height:44px;padding:8px 10px;border-radius:6px;border:1.5px solid #CBD5E1;background:#FFFFFF;font-size:13px;font-weight:700;color:var(--navy);outline:none;">' +
+                            locOptions.map(opt => {
+                                const isCur = (opt.val === currentUser.locationName || opt.val === currentUser.locationId);
+                                return '<option value="' + escapeHtml(opt.val) + '" ' + (isCur ? 'selected' : '') + '>' + escapeHtml(opt.label) + '</option>';
+                            }).join('') +
+                            '</select></div>';
+                    }
+                }
+
+                if (roleSelectHtml || locSelectHtml) {
+                    mobileSwitcherHtml = '<div class="mobile-drawer-context" style="margin:10px 12px 14px;padding:10px;background:#F1F5F9;border-radius:8px;border:1px solid #CBD5E1;">' +
+                        '<div style="font-size:10px;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:8px;"><i class="fa-solid fa-sliders" style="margin-right:4px;"></i>Active Context</div>' +
+                        roleSelectHtml +
+                        locSelectHtml +
+                        '</div>';
+                }
+            }
+
             document.getElementById('navContainer').innerHTML =
+                mobileSwitcherHtml +
                 '<div class="nav-group-label">Permit-to-Work</div><ul class="nav-list">' +
                 items.map(it => {
                     let clickHandler = 'goTo(\'' + it.id + '\');return false;';
@@ -17137,6 +17260,11 @@
                             if (openModals.length > 0) {
                                 const topModal = openModals[openModals.length - 1];
                                 closeModal(topModal.id);
+                            } else {
+                                const sidebar = document.querySelector('.sidebar');
+                                if (sidebar && sidebar.classList.contains('open')) {
+                                    toggleMobileNav(false);
+                                }
                             }
                         } else if (e.key === 'Tab' || e.keyCode === 9) {
                             const activeModal = document.querySelector('.modal-overlay.show');
@@ -17315,7 +17443,7 @@
             });
         }
 
-        // Browser Back / Forward History Listener with Deep Linking Support
+        // Browser Back / Forward & URL Hash History Listener with Deep Linking Support (WCAG 2.2 AA)
         if (typeof window !== 'undefined' && typeof window.addEventListener === 'function') {
             window.addEventListener('popstate', function (e) {
                 if (!currentUser) return;
@@ -17336,6 +17464,14 @@
                     } else {
                         goTo('dashboard', true);
                     }
+                }
+            });
+
+            window.addEventListener('hashchange', function () {
+                if (!currentUser) return;
+                const parsed = parseCurrentRoute();
+                if (parsed && isRouteAllowedForRole(currentUser.key, parsed.view)) {
+                    navigateToRoute(parsed, true);
                 }
             });
         }
@@ -17391,7 +17527,7 @@
                     (currentUser && currentUser.key === 'super-admin') ? 'Statutory EHS Permit Governance & Real-Time Executive Oversight' : 'Role-based overview'
                 ],
                 projects: ['Projects & Sites Master', 'Enterprise Master: Register, configure, and manage ARPL construction worksites'],
-                'project-admins': ['Site Administrators Provisioning', 'Super Admin Governance: Provision and assign Site Administrators to projects'],
+                'project-admins': ['Project Admins Provisioning', 'Super Admin Governance: Provision and assign Project Admins to worksites'],
                 users: ['Enterprise Users Directory', 'Central directory of on-site engineers, supervisors, and safety personnel'],
                 'roles-permissions': ['Roles & Statutory Permissions Matrix', 'Dynamic RBAC governance across construction permit lifecycle'],
                 'approval-workflows': ['Permit-to-Work Approval Workflows', 'Multi-stage statutory verification topologies and SLA parameters'],
@@ -17965,10 +18101,10 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<span style="font-size:12px;color:#CBD1DA;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-globe" style="color:#22C55E;"></i> Global Enterprise Scope (All Sites) &bull; Live Firestore (asia-south1)</span>' +
                     '</div>' +
                     '<h2 style="margin:0;font-size:20px;font-weight:800;letter-spacing:-0.2px;">Auro Realty EHS Enterprise Statutory Governance</h2>' +
-                    '<p style="margin:4px 0 0;font-size:12.5px;color:#94A3B8;">Delegated Statutory Authority: Site Administrator Provisioning &bull; Projects &amp; Sites Master &bull; Statutory DPDP Act 2023 Compliance</p>' +
+                    '<p style="margin:4px 0 0;font-size:12.5px;color:#94A3B8;">Delegated Statutory Authority: Project Admin Provisioning &bull; Projects &amp; Sites Master &bull; Statutory DPDP Act 2023 Compliance</p>' +
                     '</div>' +
                     '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-                    '<button class="btn btn-primary" onclick="goTo(\'project-admins\')" style="font-size:12px;padding:8px 14px;"><i class="fa-solid fa-user-shield"></i> Provision Site Admin</button>' +
+                    '<button class="btn btn-primary" onclick="goTo(\'project-admins\')" style="font-size:12px;padding:8px 14px;"><i class="fa-solid fa-user-shield"></i> Provision Project Admin</button>' +
                     '<button class="btn btn-ghost" onclick="goTo(\'projects\')" style="background:rgba(255,255,255,0.1);color:#fff;border-color:rgba(255,255,255,0.2);font-size:12px;padding:8px 14px;"><i class="fa-solid fa-building"></i> Register Worksite</button>' +
                     '</div>' +
                     '</div>';
@@ -17977,7 +18113,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 html += '<div style="margin-bottom:20px;">' +
                     '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px;">' +
                     kpiCard('k-orange', 'fa-building', 'PROJECT SITES', totalProjects + ' Sites', activeProjects + ' Active Geofences · ' + pendingProjects + ' Pending Configuration', "goTo('projects')") +
-                    kpiCard('k-purple', 'fa-user-shield', 'SITE ADMINISTRATORS', projectAdminsCount + ' Empaneled', 'Delegated Site Governors in /users', "goTo('project-admins')") +
+                    kpiCard('k-purple', 'fa-user-shield', 'PROJECT ADMINS', projectAdminsCount + ' Empaneled', 'Delegated Project Admins in /users', "goTo('project-admins')") +
                     kpiCard('k-teal', 'fa-helmet-safety', 'CONTRACTORS', contractorsCount + ' Agencies', 'Empaneled worksite agencies', "goTo('system-settings')") +
                     kpiCard('k-blue', 'fa-file-shield', 'TOTAL SYSTEM PERMITS', String(totalPermits), activePermitsNow + ' currently active on sites', "goTo('register')") +
                     '</div>' +
@@ -17999,7 +18135,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div style="font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:10px;display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-compass" style="color:var(--orange);"></i> Governance Modules Quick Navigation:</div>' +
                     '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
                     '<button class="btn btn-sm btn-ghost" onclick="goTo(\'projects\')"><i class="fa-solid fa-building"></i> Projects Master</button>' +
-                    '<button class="btn btn-sm btn-ghost" onclick="goTo(\'project-admins\')"><i class="fa-solid fa-user-shield"></i> Site Admins Provisioning</button>' +
+                    '<button class="btn btn-sm btn-ghost" onclick="goTo(\'project-admins\')"><i class="fa-solid fa-user-shield"></i> Project Admins Provisioning</button>' +
                     '<button class="btn btn-sm btn-ghost" onclick="goTo(\'users\')"><i class="fa-solid fa-users"></i> Users Directory</button>' +
                     '<button class="btn btn-sm btn-ghost" onclick="goTo(\'roles-permissions\')"><i class="fa-solid fa-shield-halved"></i> Roles &amp; Permissions</button>' +
                     '<button class="btn btn-sm btn-ghost" onclick="goTo(\'approval-workflows\')"><i class="fa-solid fa-diagram-project"></i> Approval Workflows</button>' +
@@ -18081,7 +18217,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);text-align:left;">' +
                     '<th style="padding:10px 12px;">Project / Site Code</th>' +
                     '<th style="padding:10px 12px;">Towers &amp; Hierarchy</th>' +
-                    '<th style="padding:10px 12px;">Assigned Site Admin</th>' +
+                    '<th style="padding:10px 12px;">Assigned Project Admin</th>' +
                     '<th style="padding:10px 12px;">Geofence Boundary</th>' +
                     '<th style="padding:10px 12px;">Active Permits</th>' +
                     '<th style="padding:10px 12px;">Action</th>' +
@@ -18172,7 +18308,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 html += '<div class="grid-2"><div class="card card-pad"><div class="card-title">Worksite Status Distribution</div><div class="table-scroll"><table><thead><tr><th>Status</th><th>Count</th></tr></thead><tbody>' +
                     statusRowsHtml +
                     '</tbody></table></div></div>' +
-                    '<div class="card card-pad"><div class="card-title">Site Administrator Scope &amp; Controls</div>' +
+                    '<div class="card card-pad"><div class="card-title">Project Admin Scope &amp; Controls</div>' +
                     '<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px;">Site Administrator authority is strictly focused on tagging worksite physical GPS coordinates, locking geofence boundaries, and creating on-site user accounts for field staff (Site Supervisors, Site Engineers, Section Heads, EHS Officers).</p>' +
                     adminActions +
                     '</div></div>';
@@ -24190,7 +24326,7 @@ function trackerHtml(p) {
                 onConfirm: function (cap) {
                     actionModalCtx.photo = cap.dataUrl;
                     const wrap = document.getElementById('blastingAckPhotoWrap');
-                    if (wrap) wrap.innerHTML = '<div class="photo-preview" style="position:relative;display:inline-block;"><img src="' + cap.dataUrl + '" style="max-height:120px;border-radius:6px;border:1px solid var(--border);"><button class="rm" type="button" onclick="clearBlastingAckPhoto()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
+                    if (wrap) wrap.innerHTML = '<div class="photo-preview" style="position:relative;display:inline-block;"><img src="' + cap.dataUrl + '" style="max-height:120px;border-radius:6px;border:1px solid var(--border);"><button class="rm" type="button" onclick="clearBlastingAckPhoto()" title="Remove Confirmation Photo" aria-label="Remove Confirmation Photo" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
                 }
             });
         }
@@ -24205,7 +24341,7 @@ function trackerHtml(p) {
             ctx.font = '10px sans-serif'; ctx.fillText('Form PTW-007 · ' + fmtDateTime(nowTime()), 14, 160);
             actionModalCtx.photo = c.toDataURL('image/png');
             const wrap = document.getElementById('blastingAckPhotoWrap');
-            if (wrap) wrap.innerHTML = '<div class="photo-preview" style="position:relative;display:inline-block;"><img src="' + actionModalCtx.photo + '" style="max-height:120px;border-radius:6px;border:1px solid var(--border);"><button class="rm" type="button" onclick="clearBlastingAckPhoto()" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
+            if (wrap) wrap.innerHTML = '<div class="photo-preview" style="position:relative;display:inline-block;"><img src="' + actionModalCtx.photo + '" style="max-height:120px;border-radius:6px;border:1px solid var(--border);"><button class="rm" type="button" onclick="clearBlastingAckPhoto()" title="Remove Confirmation Photo" aria-label="Remove Confirmation Photo" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
         }
         function clearBlastingAckPhoto() {
             actionModalCtx.photo = null;
@@ -28021,8 +28157,8 @@ ptypeOf(p) === 'general' ?
                 }
 
                 let displayRole = u.roleLabel || u.role;
-                if (u.role === 'admin' || u.role === 'project-admin' || (typeof displayRole === 'string' && (displayRole.toLowerCase().includes('site admin') || displayRole.toLowerCase().includes('site administrator')))) {
-                    displayRole = 'Project Admin';
+                if (u.role === 'admin' || u.role === 'project-admin' || (typeof displayRole === 'string' && (displayRole.toLowerCase().includes('site admin') || displayRole.toLowerCase().includes('site administrator') || displayRole.toLowerCase().includes('project admin')))) {
+                    displayRole = 'Project Admin (Worksite Administrator)';
                 }
                 return '<tr style="border-bottom:1px solid var(--border);">' +
                     '<td style="padding:10px 12px;"><div style="font-weight:700;color:var(--navy);">' + escapeHtml(u.name) + '</div><div style="font-size:11px;color:var(--text-muted);">' + escapeHtml(u.email) + ' &bull; ' + escapeHtml(u.phone || '') + '</div></td>' +

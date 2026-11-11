@@ -681,7 +681,7 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
   let isCallerSuperAdmin =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
-    callerEmail === "aic1176@aurogroup.com";
+    callerEmail === "aic1176@aurogroup.com" || callerEmail === "ehs.superadmin@aurorealty.com";
 
   if (!isCallerSuperAdmin) {
     const callerDoc = await db.collection("users").doc(request.auth.uid).get();
@@ -1902,13 +1902,19 @@ exports.adminSyncAndPurgeOrphanAuthUsers = onCall({ region: REGION }, async (req
   let isCallerSuperAdmin =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
-    callerEmail === "aic1176@aurogroup.com";
+    callerEmail === "aic1176@aurogroup.com" ||
+    callerEmail === "ehs.superadmin@aurorealty.com";
 
-  if (!isCallerSuperAdmin) {
-    const callerDoc = await db.collection("users").doc(request.auth.uid).get();
-    if (callerDoc.exists && (callerDoc.data().role === "super-admin" || callerDoc.data().superAdmin === true)) {
-      isCallerSuperAdmin = true;
-    }
+  if (!isCallerSuperAdmin && request.auth.uid) {
+    try {
+      const callerDoc = await db.collection("users").doc(request.auth.uid).get();
+      if (callerDoc.exists) {
+        const cd = callerDoc.data() || {};
+        if (cd.role === "super-admin" || cd.superAdmin === true || cd.uiRole === "super-admin" || (cd.roleLabel && cd.roleLabel.toLowerCase().includes("super admin"))) {
+          isCallerSuperAdmin = true;
+        }
+      }
+    } catch (_e) {}
   }
 
   if (!isCallerSuperAdmin) {
