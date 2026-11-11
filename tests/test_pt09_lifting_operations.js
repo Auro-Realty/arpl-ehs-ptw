@@ -718,8 +718,9 @@ console.log('  ✓ PASS: Dynamic Statutory Signatories & DPDP Record dynamically
 console.log('\n--- 11. Extension Workflow (Supervisor -> Site Engineer -> Tower Incharge -> EHS, 20:30 Ceiling) ---');
 
 evalInVM(`
-const vt = new Date();
-vt.setHours(17, 0, 0, 0);
+nowTime = () => new Date(2026, 8, 9, 11, 0, 0);
+const vt = new Date(2026, 8, 9, 17, 0, 0);
+pRoutine.createdAt = new Date(2026, 8, 9, 9, 0, 0);
 pRoutine.validTill = vt;
 const e = new Date(pRoutine.validTill);
 const endMin = e.getHours() * 60 + e.getMinutes();

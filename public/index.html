@@ -6526,26 +6526,46 @@
             window.resetSimulatedDay = resetSimulatedDay;
         }
 
-        function nowTime(offsetMs) {
+        function getISTNow(offsetMs) {
             if (typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__) {
                 return new Date(new Date(window.__TEST_DATE_OVERRIDE__).getTime() + (typeof offsetMs === 'number' ? offsetMs : 0));
             }
             if (typeof window !== 'undefined' && window.__SIMULATED_TIME_MS__) {
                 return new Date(window.__SIMULATED_TIME_MS__ + (typeof offsetMs === 'number' ? offsetMs : 0));
             }
-            const d = new Date();
-            let t = d.getTime() + (typeof offsetMs === 'number' ? offsetMs : 0);
+            const realNow = new Date();
+            const istWall = new Date(realNow.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+            const base = isNaN(istWall.getTime()) ? realNow : istWall;
+            let t = base.getTime() + (typeof offsetMs === 'number' ? offsetMs : 0);
             const simDay = getSimulatedDay();
+            let simShiftMs = 0;
             if (simDay !== null && !isNaN(simDay)) {
                 const tempDate = new Date(t);
                 const currentDay = tempDate.getDay();
                 const diff = simDay - currentDay;
-                t += diff * 86400000;
+                simShiftMs = diff * 86400000;
+                t += simShiftMs;
             }
-            return new Date(t);
+            const res = new Date(t);
+            try {
+                Object.defineProperty(res, '__realUtcMs', {
+                    value: realNow.getTime() + (typeof offsetMs === 'number' ? offsetMs : 0) + simShiftMs,
+                    enumerable: false,
+                    configurable: true
+                });
+            } catch (_e) {}
+            return res;
+        }
+        function nowTime(offsetMs) {
+            return getISTNow(offsetMs);
         }
         function getISTTime(offsetMs) {
-            return nowTime(offsetMs);
+            return getISTNow(offsetMs);
+        }
+        function todayDate() {
+            const realNow = new Date();
+            const dateStr = realNow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            return dateStr;
         }
 
         function nowMs() {
@@ -6593,11 +6613,11 @@
         function updateTopbarClock() {
             const el = document.getElementById('tcTime'), ed = document.getElementById('tcDate');
             if (el && ed) {
-                const n = nowTime();
-                const dd = n.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
-                const tt = n.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
-                ed.textContent = dd;
-                el.textContent = tt + ' IST';
+                const realNow = new Date();
+                const dateStr = realNow.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+                const timeStr = realNow.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
+                ed.textContent = dateStr;
+                el.textContent = timeStr + ' IST';
             }
 
         }
@@ -7483,8 +7503,18 @@
                 commonTop: [
                     { id: 'inPermitNo', label: 'Permit Number', type: 'text', readonly: true, getValue: (d) => d.id },
                     { id: 'inActivity', label: 'Kind of Activity', type: 'text', readonly: true, getValue: (d) => d.confinedActivity || d.activity },
-                    { id: 'inDate', label: 'Date', type: 'text', readonly: true, getValue: (d) => fmtDate(d.createdAt) },
-                    { id: 'inTime', label: 'Time', type: 'text', readonly: true, getValue: (d) => fmtTime(d.createdAt) },
+                    { id: 'inDate', label: 'Date', type: 'text', readonly: true, getValue: (d) => {
+                        const realNow = (d && d.createdAt) ? ((typeof d.createdAt === 'object' && d.createdAt.__realUtcMs) ? new Date(d.createdAt.__realUtcMs) : new Date(d.createdAt)) : new Date();
+                        const cleanNow = isNaN(realNow.getTime()) ? new Date() : realNow;
+                        const dateStr = cleanNow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+                        return dateStr;
+                    } },
+                    { id: 'inTime', label: 'Time', type: 'text', readonly: true, getValue: (d) => {
+                        const realNow = (d && d.createdAt) ? ((typeof d.createdAt === 'object' && d.createdAt.__realUtcMs) ? new Date(d.createdAt.__realUtcMs) : new Date(d.createdAt)) : new Date();
+                        const cleanNow = isNaN(realNow.getTime()) ? new Date() : realNow;
+                        const timeStr = cleanNow.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
+                        return timeStr;
+                    } },
                     { id: 'inWeather', label: 'Current Weather', type: 'text', readonly: true, getValue: (d) => d.weather }
                 ],
                 excavation: [
@@ -9319,17 +9349,26 @@
         }
         function fmtDate(d) {
             if (!d) return '—';
-            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) { const p = d.split('-'); d = new Date(+p[0], +p[1] - 1, +p[2]); }
-            else d = new Date(d);
-            if (isNaN(d.getTime())) return '—';
-            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            let realNow;
+            if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) {
+                const p = d.split('-');
+                realNow = new Date(+p[0], +p[1] - 1, +p[2], 12, 0, 0);
+            } else if (typeof d === 'object' && d.__realUtcMs) {
+                realNow = new Date(d.__realUtcMs);
+            } else {
+                realNow = new Date(d);
+            }
+            if (isNaN(realNow.getTime())) return '—';
+            const dateStr = realNow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            return dateStr;
         }
         function formatDate(d) { return fmtDate(d); }
         function fmtTime(d) {
             if (!d) return '—';
-            d = new Date(d);
-            if (isNaN(d.getTime())) return '—';
-            return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+            const realNow = (typeof d === 'object' && d.__realUtcMs) ? new Date(d.__realUtcMs) : new Date(d);
+            if (isNaN(realNow.getTime())) return '—';
+            const timeStr = realNow.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
+            return timeStr;
         }
         function formatTime(d) { return fmtTime(d); }
         function fmtDateTime(d) { return fmtDate(d) + ', ' + fmtTime(d); }
@@ -9740,9 +9779,9 @@
            page reloads. Falls back gracefully if storage is unavailable
            or the quota is exceeded (e.g. very large photo evidence).
            ================================================================ */
-        const STORAGE_KEY = 'arpl_ehs_prod_clean_v4'; // Clean production persistence key
+        const STORAGE_KEY = 'arpl_ehs_prod_clean_v5'; // Clean production persistence key
         try {
-            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2', 'arpl_ehs_prod_clean_v3'].forEach(k => localStorage.removeItem(k));
+            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2', 'arpl_ehs_prod_clean_v3', 'arpl_ehs_prod_clean_v4'].forEach(k => localStorage.removeItem(k));
         } catch (_e) {}
         function saveState() {
             try {
@@ -16669,6 +16708,11 @@
             let resolvedCampusWide = claims.campusWide !== undefined ? !!claims.campusWide : null;
             let resolvedAllowedWorkflows = Array.isArray(claims.allowedWorkflows) ? claims.allowedWorkflows : null;
             let resolvedName = user.displayName || claims.name || null;
+            let resolvedRoles = Array.isArray(claims.roles) ? claims.roles.slice() : [];
+            let resolvedAssignments = Array.isArray(claims.assignments) ? claims.assignments.slice() : [];
+            let resolvedAssignedLocations = Array.isArray(claims.assignedLocations) ? claims.assignedLocations.slice() : [];
+            let resolvedAssignedTower = claims.assignedTower || null;
+            let resolvedEmployeeId = claims.employeeId || null;
 
             const applyDoc = (d) => {
                 if (!d) return;
@@ -16676,10 +16720,16 @@
                 if (!resolvedRoleLabel && d.roleLabel) resolvedRoleLabel = d.roleLabel;
                 if (!resolvedProjectId && d.projectId) resolvedProjectId = d.projectId;
                 if (!resolvedLocationId && d.locationId) resolvedLocationId = d.locationId;
-                if (!resolvedLocationName && (d.locationName || d.location)) resolvedLocationName = d.locationName || d.location;
+                if (!resolvedLocationName && (d.locationName || d.location || d.assignedTower)) resolvedLocationName = d.locationName || d.location || d.assignedTower;
                 if (resolvedCampusWide === null && d.campusWide !== undefined) resolvedCampusWide = !!d.campusWide;
                 if (!resolvedAllowedWorkflows && Array.isArray(d.allowedWorkflows)) resolvedAllowedWorkflows = d.allowedWorkflows;
                 if (!resolvedName && (d.name || d.displayName)) resolvedName = d.name || d.displayName;
+                if (Array.isArray(d.roles)) d.roles.forEach(r => { if (r && !resolvedRoles.includes(r)) resolvedRoles.push(r); });
+                if (d.role && !resolvedRoles.includes(d.role)) resolvedRoles.push(d.role);
+                if (Array.isArray(d.assignments)) d.assignments.forEach(a => { if (a) resolvedAssignments.push(a); });
+                if (Array.isArray(d.assignedLocations)) d.assignedLocations.forEach(loc => { if (loc && !resolvedAssignedLocations.includes(loc)) resolvedAssignedLocations.push(loc); });
+                if (!resolvedAssignedTower && (d.assignedTower || d.locationName || d.location)) resolvedAssignedTower = d.assignedTower || d.locationName || d.location;
+                if (!resolvedEmployeeId && d.employeeId) resolvedEmployeeId = d.employeeId;
             };
 
             if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -16801,15 +16851,21 @@
             }
             return {
                 key: uiRoleKey,
+                role: resolvedRole,
                 rawRole: resolvedRole,
                 label: resolvedRoleLabel || info.label || resolvedRole,
                 name: resolvedName || (emailLower ? emailLower.split('@')[0] : 'Authorized User'),
                 email: user.email,
                 uid: user.uid,
+                employeeId: resolvedEmployeeId || null,
                 projectId: finalProjId,
                 projectName: (uiRoleKey === 'super-admin') ? 'Global Enterprise Scope (All Sites)' : resolveProjectName(finalProjId),
                 locationId: resolvedLocationId || null,
                 locationName: resolvedLocationName || null,
+                assignedTower: resolvedAssignedTower || resolvedLocationName || null,
+                assignedLocations: resolvedAssignedLocations.length ? resolvedAssignedLocations : (resolvedLocationName ? [resolvedLocationName] : []),
+                roles: resolvedRoles.length ? resolvedRoles : [resolvedRole],
+                assignments: resolvedAssignments,
                 campusWide: resolvedCampusWide !== null ? resolvedCampusWide : (uiRoleKey === 'admin' || uiRoleKey === 'super-admin' || !resolvedLocationName),
                 allowedWorkflows: resolvedAllowedWorkflows || null
             };
@@ -17172,6 +17228,13 @@
                             const val = a.locationName || a.locationId || a.projectId;
                             if (val && !locOptions.find(o => o.val === val)) {
                                 locOptions.push({ val: val, label: (a.locationName || a.projectName) });
+                            }
+                        });
+                    }
+                    if (Array.isArray(safeUser.assignedLocations) && safeUser.assignedLocations.length > 1) {
+                        safeUser.assignedLocations.forEach(loc => {
+                            if (loc && !locOptions.find(o => o.val === loc)) {
+                                locOptions.push({ val: loc, label: loc });
                             }
                         });
                     }
