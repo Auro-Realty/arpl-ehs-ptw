@@ -138,8 +138,8 @@ console.log('\n--- 5. RBAC Capabilities Matrix Alignment ---');
 
 it('README.md RBAC matrix exactly matches 17-column specification', () => {
   assert(readmeMd.includes('| Capability | Permittee (Site Supervisor) | Electrician (Specialist Permittee) | Blasting In-charge (Specialist Permittee) | Lifting Supervisor (Specialist Permittee) | Site Engineer (Technical Inspector) | MEP (Technical Approver) | P&M (Plant & Machinery Approver) | IT in charge (Technical Approver) | Quality Engineer (Technical Approver) | Excavation Head (Section Head) | Tower Incharge (Section Head) | Project Manager (Executive Approver) | EHS Head (Statutory Endorser / Issuer) | EHS supervisor (Safety Endorser) | Project Admin (Worksite Administrator) | Super Admin (Enterprise Governance) |'), 'README.md header row must match');
-  assert(readmeMd.includes('| Cancel Permit (Stop-Work) | — | — | — | — | — *(No Authority)* | — | — | — | — | — | — | ✅ | ✅ | — | — | — |'), 'Cancel permit permissions must match');
-  assert(readmeMd.includes('| Statutory Declarations | — | ✅ *(PTW-006 Step 1)* | ✅ *(PTW-007 PESO)* | ✅ *(Pre-Location Sigs & Rigging Plan)* | — | ✅ *(PTW-006 Step 2, PTW-009 Clearance)* | — | ✅ *(PTW-006 Step 3)* | — | — | — | — | — | — | — | — |'), 'Statutory declarations must match');
+  assert(readmeMd.includes('| Cancel Permit (Stop-Work) | — | — | — | — | — *(No Authority)* | — | — | — | — | — | — | — | ✅ | ✅ | — | — |'), 'Cancel permit permissions must match');
+  assert(readmeMd.includes('| Statutory Declarations | — | ✅ *(PTW-006 Step 1)* | ✅ *(PTW-007 PESO)* | ✅ *(Pre-Location Sigs & Rigging Plan)* | — | — | ✅ *(PTW-006 Step 2, PTW-009 Clearance)* | — | ✅ *(PTW-006 Step 3)* | — | — | — | — | — | — | — |'), 'Statutory declarations must match');
 });
 
 // -----------------------------------------------------------------------------

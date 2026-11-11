@@ -484,17 +484,17 @@ graph TB
 | Capability | Permittee (Site Supervisor) | Electrician (Specialist Permittee) | Blasting In-charge (Specialist Permittee) | Lifting Supervisor (Specialist Permittee) | Site Engineer (Technical Inspector) | MEP (Technical Approver) | P&M (Plant & Machinery Approver) | IT in charge (Technical Approver) | Quality Engineer (Technical Approver) | Excavation Head (Section Head) | Tower Incharge (Section Head) | Project Manager (Executive Approver) | EHS Head (Statutory Endorser / Issuer) | EHS supervisor (Safety Endorser) | Project Admin (Worksite Administrator) | Super Admin (Enterprise Governance) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Create Permit | ✅ *(PTW-001–05, PTW-008)* | ✅ *(PTW-006)* | ✅ *(PTW-007)* | ✅ *(PTW-009A/B Unified Tile)* | — | — | — | — | — | — | — | — | — | — | — | — |
-| Statutory Declarations | — | ✅ *(PTW-006 Step 1)* | ✅ *(PTW-007 PESO)* | ✅ *(Pre-Location Sigs & Rigging Plan)* | — | ✅ *(PTW-006 Step 2, PTW-009 Clearance)* | — | ✅ *(PTW-006 Step 3)* | — | — | — | — | — | — | — | — |
+| Statutory Declarations | — | ✅ *(PTW-006 Step 1)* | ✅ *(PTW-007 PESO)* | ✅ *(Pre-Location Sigs & Rigging Plan)* | — | — | ✅ *(PTW-006 Step 2, PTW-009 Clearance)* | — | ✅ *(PTW-006 Step 3)* | — | — | — | — | — | — | — |
 | Acknowledge & Forward | — | — | — | — | ✅ *(Cannot Cancel)* | — | ✅ *(PTW-006 BP)* | — | — | — | — | — | — | — | — | — |
 | Parallel / Domain Clearance | — | — | — | — | — | ✅ | ✅ *(Plant, Rigging & Crane)* | ✅ | ✅ *(PTW-006 BP)* | — | — | — | — | — | — | — |
-| Section Head Approval | — | — | — | — | — | — | — | — | — | ✅ *(PTW-006 BP)* | ✅ *(PTW-001)* | ✅ *(PTW-002–05, 06 Site, 08, 09A/B)* | — | — | — | — |
+| Section Head Approval | — | — | — | — | — | — | — | — | — | ✅ *(PTW-001)* | ✅ *(PTW-002–05, 06 Site, 08, 09A/B)* | — | — | — | — | — |
 | Executive Review | — | — | — | — | — | — | — | — | — | — | — | ✅ *(PTW-009B Critical)* | — | — | — | — |
 | EHS Final Endorsement | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | — | — |
 | Raise Observation | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | — | — |
 | Respond to Observation | ✅ *(PTW-001–05, PTW-008)* | ✅ *(PTW-006)* | ✅ *(PTW-007)* | ✅ *(PTW-009A/B Permittee)* | — | — | — | — | — | — | — | — | — | — | — | — |
 | Request Extension | ✅ *(PTW-001–05, PTW-008)* | ✅ *(PTW-006)* | — *(Statutorily Disabled)* | ✅ *(PTW-009A/B, 20:30 Ceiling)* | — | — | — | — | — | — | — | — | — | — | — | — |
 | Close & Surrender | ✅ *(PTW-001–05, PTW-008)* | ✅ *(PTW-006 De-isolation)* | ✅ *(PTW-007 Permittee)* | ✅ *(PTW-009A/B Demobilization)* | — | — | — | — | — | — | — | — | — | — | — | — |
-| Cancel Permit (Stop-Work) | — | — | — | — | — *(No Authority)* | — | — | — | — | — | — | ✅ | ✅ | — | — | — |
+| Cancel Permit (Stop-Work) | — | — | — | — | — *(No Authority)* | — | — | — | — | — | — | — | ✅ | ✅ | — | — |
 | Download PDF | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | ✅ | — | — |
 | Configure Geofence | — | — | — | — | — | — | — | — | — | — | — | — | — | — | ✅ | — |
 | View Register & Flow Scoping | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(Flow Only)* | ✅ *(All)* | ✅ *(All)* | ✅ *(All)* | ✅ *(All)* |

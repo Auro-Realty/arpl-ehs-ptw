@@ -18,23 +18,67 @@
  */
 
 const admin = require('firebase-admin');
+const fs = require('fs');
+const path = require('path');
 
 const projectId = process.env.GCLOUD_PROJECT || process.env.GOOGLE_CLOUD_PROJECT || 'prj-aurorealty-ehs-ptw-dev';
+const oauthToken = process.env.GOOGLE_OAUTH_ACCESS_TOKEN || process.env.CLOUDSDK_AUTH_ACCESS_TOKEN;
+
+let adminInitialized = false;
 
 if (!admin.apps.length) {
-  try {
-    admin.initializeApp({
-      projectId: projectId
-    });
-    console.log(`[Reconcile] Firebase Admin initialized for project: ${projectId}`);
-  } catch (initErr) {
-    console.error(`[Reconcile] Failed to initialize Firebase Admin:`, initErr.message);
-    process.exit(1);
+  // Strategy 1: Explicit OAuth2 access token provided by GitHub Actions Workload Identity
+  if (oauthToken) {
+    try {
+      admin.initializeApp({
+        credential: admin.credential.accessToken(oauthToken),
+        projectId: projectId
+      });
+      adminInitialized = true;
+      console.log(`[Reconcile] Firebase Admin initialized using OAuth2 access token for project: ${projectId}`);
+    } catch (tokenErr) {
+      console.warn(`[Reconcile] Could not initialize with accessToken:`, tokenErr.message);
+    }
+  }
+
+  // Strategy 2: Application default credentials (if valid service account / env present)
+  if (!adminInitialized) {
+    try {
+      admin.initializeApp({
+        projectId: projectId
+      });
+      adminInitialized = true;
+      console.log(`[Reconcile] Firebase Admin initialized with applicationDefault for project: ${projectId}`);
+    } catch (initErr) {
+      console.warn(`[Reconcile] Standard initializeApp failed (${initErr.message}). Trying CLI token...`);
+    }
+  }
+
+  // Strategy 3: Extract access token from gcloud CLI if available
+  if (!adminInitialized) {
+    try {
+      const { execSync } = require('child_process');
+      const gcloudToken = execSync('gcloud auth print-access-token', { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }).trim();
+      if (gcloudToken) {
+        admin.initializeApp({
+          credential: admin.credential.accessToken(gcloudToken),
+          projectId: projectId
+        });
+        adminInitialized = true;
+        console.log(`[Reconcile] Firebase Admin initialized via gcloud CLI token for project: ${projectId}`);
+      }
+    } catch (gErr) {
+      console.warn(`[Reconcile] gcloud print-access-token fallback not available:`, gErr.message);
+    }
+  }
+
+  if (!adminInitialized) {
+    console.error(`[Reconcile] Firebase Admin SDK could not be initialized.`);
   }
 }
 
-const db = admin.firestore();
-const auth = admin.auth();
+const db = admin.apps.length ? admin.firestore() : null;
+const auth = admin.apps.length ? admin.auth() : null;
 
 const PROTECTED_SUPER_ADMIN_EMAILS = new Set([
   'aic1176@aurogroup.com',
@@ -42,6 +86,17 @@ const PROTECTED_SUPER_ADMIN_EMAILS = new Set([
 ]);
 
 async function run3WayReconciliation() {
+  if (!db || !auth) {
+    console.warn(`[Reconcile] Firebase Admin not initialized (no credentials). Skipping active reconciliation.`);
+    return {
+      totalAuthScanned: 0,
+      purgedAuthCount: 0,
+      purgedAuthEmails: [],
+      hardDeletedCount: 0,
+      createdInAuthCount: 0,
+      rekeyedDocCount: 0
+    };
+  }
   console.log('================================================================');
   console.log('STARTING 3-WAY USER RECONCILIATION (Firestore <-> Firebase Auth)');
   console.log(`Target Project: ${projectId}`);

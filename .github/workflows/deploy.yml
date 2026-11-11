@@ -29,10 +29,12 @@ jobs:
         run: npm install
 
       - name: 4. Authenticate to Google Cloud (Keyless Workload Identity)
+        id: auth
         uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: 'projects/1045760890879/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
           service_account: 'sa-github-deployer@prj-aurorealty-ehs-ptw-dev.iam.gserviceaccount.com'
+          token_format: 'access_token'
 
       - name: 4b. Synchronize Canonical Assets to Public
         run: node scripts/sync_public.js
@@ -73,6 +75,8 @@ jobs:
           GCLOUD_PROJECT: prj-aurorealty-ehs-ptw-dev
           GOOGLE_CLOUD_PROJECT: prj-aurorealty-ehs-ptw-dev
           FIREBASE_PROJECT: prj-aurorealty-ehs-ptw-dev
+          GOOGLE_OAUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
+          CLOUDSDK_AUTH_ACCESS_TOKEN: ${{ steps.auth.outputs.access_token }}
         run: |
           echo "=================================================================="
           echo "RUNNING 3-WAY RECONCILIATION & GHOST PURGE (Auth <-> Firestore)"
