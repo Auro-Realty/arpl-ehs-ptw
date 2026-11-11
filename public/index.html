@@ -14310,167 +14310,152 @@
         }
 
         async function unifiedDeleteUser(userOrIdOrEmail) {
-            let target = null;
-            if (userOrIdOrEmail && typeof userOrIdOrEmail === 'object') {
-                target = Object.assign({}, userOrIdOrEmail);
-            } else if (typeof userOrIdOrEmail === 'string') {
-                const key = userOrIdOrEmail.trim();
-                const keyLower = key.toLowerCase();
-                target = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && (s.id === key || s.uid === key || (s.email && s.email.toLowerCase() === keyLower))) ||
-                         (PROJECT_ADMINS || []).find(a => a && (a.id === key || a.uid === key || (a.email && a.email.toLowerCase() === keyLower)));
-                if (!target) {
-                    for (const p of (PROJECTS || [])) {
-                        if (p.staffRoles && p.staffRoles[key]) {
-                            target = Object.assign({ id: key, projectId: p.id }, p.staffRoles[key]);
-                            break;
+            try {
+                let target = null;
+                if (userOrIdOrEmail && typeof userOrIdOrEmail === 'object') {
+                    target = Object.assign({}, userOrIdOrEmail);
+                } else if (typeof userOrIdOrEmail === 'string') {
+                    const key = userOrIdOrEmail.trim();
+                    const keyLower = key.toLowerCase();
+                    target = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && (s.id === key || s.uid === key || (s.email && s.email.toLowerCase() === keyLower) || (s.empId && s.empId.toLowerCase() === keyLower) || (s.employeeId && s.employeeId.toLowerCase() === keyLower))) ||
+                             (PROJECT_ADMINS || []).find(a => a && (a.id === key || a.uid === key || (a.email && a.email.toLowerCase() === keyLower) || (a.empId && a.empId.toLowerCase() === keyLower) || (a.employeeId && a.employeeId.toLowerCase() === keyLower)));
+                    if (!target) {
+                        for (const p of (PROJECTS || [])) {
+                            if (p.staffRoles && p.staffRoles[key]) {
+                                target = Object.assign({ id: key, projectId: p.id }, p.staffRoles[key]);
+                                break;
+                            }
                         }
                     }
-                }
-                if (!target) {
-                    target = { id: key, uid: key, email: key.includes('@') ? key : '' };
-                }
-            }
-
-            if (!target) {
-                showToast('User record not found for deletion.', 'err');
-                return false;
-            }
-
-            const targetName = target.name || target.displayName || target.email || 'User';
-            const targetEmail = (target.email || '').toLowerCase().trim();
-            const targetUid = target.uid || target.id;
-            const targetProjectId = target.projectId || (currentUser && currentUser.projectId) || null;
-
-            const confirmed = confirm(
-                'PERMANENT ACCOUNT DELETION\n\n' +
-                'Are you sure you want to permanently delete the account for:\n' +
-                targetName + (targetEmail ? ' (' + targetEmail + ')' : '') + '?\n\n' +
-                'This action will permanently delete their Firebase Authentication credentials, revoke all worksite access, remove them from the User Directory, and clear all role assignments.'
-            );
-            if (!confirmed) return false;
-
-            // 1. Backend Cloud Function Deletion (Primary: adminAssignProjectRole with DELETE_USER, Fallback: adminDeleteUser)
-            let backendSuccess = false;
-            if (typeof firebase !== 'undefined') {
-                try {
-                    const functions = getFunctions(firebase.app(), 'asia-south1');
-                    const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
-                    const res = await assignFn({
-                        action: 'DELETE_USER',
-                        uid: targetUid,
-                        email: targetEmail,
-                        projectId: targetProjectId || 'PRJ-SANSA'
-                    });
-                    if (res && res.data && (res.data.success || res.data.ok)) {
-                        backendSuccess = true;
+                    if (!target) {
+                        target = { id: key, uid: key, email: key.includes('@') ? key : '' };
                     }
-                } catch (cfErr) {
-                    console.warn('[unifiedDeleteUser] adminAssignProjectRole DELETE_USER notice:', cfErr);
+                }
+
+                if (!target) {
+                    showToast('User record not found for deletion.', 'err');
+                    return false;
+                }
+
+                const targetName = target.name || target.displayName || target.email || 'User';
+                const targetEmail = (target.email || '').toLowerCase().trim();
+                const targetUid = target.uid || target.id;
+                const targetDocId = target.docId || target.id;
+                const targetEmpId = String(target.empId || target.employeeId || '').trim();
+                const targetProjectId = target.projectId || (currentUser && currentUser.projectId) || null;
+
+                const confirmed = confirm(
+                    'PERMANENT ACCOUNT DELETION\n\n' +
+                    'Are you sure you want to permanently delete the account for:\n' +
+                    targetName + (targetEmail ? ' (' + targetEmail + ')' : '') + '?\n\n' +
+                    'This action will permanently delete their Firebase Authentication credentials, revoke all worksite access, remove them from the User Directory, and clear all role assignments.'
+                );
+                if (!confirmed) return false;
+
+                // 1. Backend Cloud Function Deletion (Primary: adminAssignProjectRole with DELETE_USER, Fallback: adminDeleteUser)
+                let backendSuccess = false;
+                if (typeof firebase !== 'undefined') {
                     try {
                         const functions = getFunctions(firebase.app(), 'asia-south1');
-                        const delFn = httpsCallable(functions, 'adminDeleteUser');
-                        const res2 = await delFn({
+                        const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
+                        const res = await assignFn({
+                            action: 'DELETE_USER',
                             uid: targetUid,
+                            docId: targetDocId,
                             email: targetEmail,
-                            projectId: targetProjectId
+                            empId: targetEmpId,
+                            projectId: targetProjectId || 'PRJ-SANSA'
                         });
-                        if (res2 && res2.data && (res2.data.success || res2.data.ok)) {
+                        if (res && res.data && (res.data.success || res.data.ok)) {
                             backendSuccess = true;
                         }
-                    } catch (_dErr) {}
-                }
-            }
-
-            // 2. Direct Firestore fallback deletions
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                try {
-                    if (targetUid) {
-                        await db.collection('users').doc(targetUid).delete().catch(() => {});
-                        await db.collection('site_personnel').doc(targetUid).delete().catch(() => {});
-                        await db.collection('project_admins').doc(targetUid).delete().catch(() => {});
-                    }
-                    if (target.id && target.id !== targetUid) {
-                        await db.collection('users').doc(target.id).delete().catch(() => {});
-                        await db.collection('site_personnel').doc(target.id).delete().catch(() => {});
-                        await db.collection('project_admins').doc(target.id).delete().catch(() => {});
-                    }
-                    if (targetEmail) {
-                        const uSnap = await db.collection('users').where('email', '==', targetEmail).get().catch(() => null);
-                        if (uSnap && !uSnap.empty) {
-                            for (const d of uSnap.docs) await d.ref.delete().catch(() => {});
-                        }
-                        const spSnap = await db.collection('site_personnel').where('email', '==', targetEmail).get().catch(() => null);
-                        if (spSnap && !spSnap.empty) {
-                            for (const d of spSnap.docs) await d.ref.delete().catch(() => {});
-                        }
-                        const paSnap = await db.collection('project_admins').where('email', '==', targetEmail).get().catch(() => null);
-                        if (paSnap && !paSnap.empty) {
-                            for (const d of paSnap.docs) await d.ref.delete().catch(() => {});
-                        }
-                    }
-                } catch (fsErr) {
-                    console.warn('[unifiedDeleteUser] Firestore direct cleanup notice:', fsErr);
-                }
-            }
-
-            // 3. Remove from client local memory state
-            const emailMatch = (e) => targetEmail && e && e.toLowerCase() === targetEmail;
-            const idMatch = (id) => id && (id === targetUid || id === target.id);
-
-            for (let i = SITE_PERSONNEL_ACCOUNTS.length - 1; i >= 0; i--) {
-                const s = SITE_PERSONNEL_ACCOUNTS[i];
-                if (s && (idMatch(s.id) || idMatch(s.uid) || emailMatch(s.email))) {
-                    SITE_PERSONNEL_ACCOUNTS.splice(i, 1);
-                }
-            }
-
-            for (let i = PROJECT_ADMINS.length - 1; i >= 0; i--) {
-                const a = PROJECT_ADMINS[i];
-                if (a && (idMatch(a.id) || idMatch(a.uid) || emailMatch(a.email))) {
-                    PROJECT_ADMINS.splice(i, 1);
-                }
-            }
-
-            (PROJECTS || []).forEach(prj => {
-                if (prj.staffRoles) {
-                    for (const sKey of Object.keys(prj.staffRoles)) {
-                        const stf = prj.staffRoles[sKey];
-                        if (sKey === targetUid || sKey === target.id || (stf && (idMatch(stf.id) || idMatch(stf.uid) || emailMatch(stf.email)))) {
-                            delete prj.staffRoles[sKey];
+                    } catch (cfErr) {
+                        console.warn('[unifiedDeleteUser] adminAssignProjectRole DELETE_USER notice:', cfErr);
+                        try {
+                            const functions = getFunctions(firebase.app(), 'asia-south1');
+                            const delFn = httpsCallable(functions, 'adminDeleteUser');
+                            const res2 = await delFn({
+                                uid: targetUid,
+                                docId: targetDocId,
+                                email: targetEmail,
+                                empId: targetEmpId,
+                                projectId: targetProjectId
+                            });
+                            if (res2 && res2.data && (res2.data.success || res2.data.ok)) {
+                                backendSuccess = true;
+                            }
+                        } catch (_dErr) {
+                            console.warn('[unifiedDeleteUser] adminDeleteUser notice:', _dErr);
                         }
                     }
                 }
-                if (prj.roles && target.role && prj.roles[target.role]) {
-                    const rObj = prj.roles[target.role];
-                    if (idMatch(rObj.uid) || emailMatch(rObj.email)) {
-                        delete prj.roles[target.role];
+
+                // NOTE: We strictly DO NOT execute client-side db.collection('users').doc().delete()
+                // because firestore.rules intentionally disallows direct client deletions (allow delete: if false;).
+                // All permanent hard deletions are executed with Admin SDK authority in the Cloud Function above.
+
+                // 2. Remove immediately from client in-memory state
+                const emailMatch = (e) => targetEmail && e && e.toLowerCase().trim() === targetEmail;
+                const idMatch = (id) => id && (id === targetUid || id === target.id || id === targetDocId);
+                const empIdMatch = (em) => targetEmpId && em && String(em).trim().toLowerCase() === targetEmpId.toLowerCase();
+
+                for (let i = SITE_PERSONNEL_ACCOUNTS.length - 1; i >= 0; i--) {
+                    const s = SITE_PERSONNEL_ACCOUNTS[i];
+                    if (s && (idMatch(s.id) || idMatch(s.uid) || emailMatch(s.email) || empIdMatch(s.empId) || empIdMatch(s.employeeId))) {
+                        SITE_PERSONNEL_ACCOUNTS.splice(i, 1);
                     }
                 }
-                if (prj.adminEmail && emailMatch(prj.adminEmail)) {
-                    prj.adminEmail = null;
-                    prj.adminUid = null;
-                    prj.adminName = null;
+
+                for (let i = PROJECT_ADMINS.length - 1; i >= 0; i--) {
+                    const a = PROJECT_ADMINS[i];
+                    if (a && (idMatch(a.id) || idMatch(a.uid) || emailMatch(a.email) || empIdMatch(a.empId) || empIdMatch(a.employeeId))) {
+                        PROJECT_ADMINS.splice(i, 1);
+                    }
                 }
-            });
 
-            saveState();
+                (PROJECTS || []).forEach(prj => {
+                    if (prj.staffRoles) {
+                        for (const sKey of Object.keys(prj.staffRoles)) {
+                            const stf = prj.staffRoles[sKey];
+                            if (sKey === targetUid || sKey === target.id || sKey === targetDocId || (stf && (idMatch(stf.id) || idMatch(stf.uid) || emailMatch(stf.email) || empIdMatch(stf.empId) || empIdMatch(stf.employeeId)))) {
+                                delete prj.staffRoles[sKey];
+                            }
+                        }
+                    }
+                    if (prj.roles && target.role && prj.roles[target.role]) {
+                        const rObj = prj.roles[target.role];
+                        if (idMatch(rObj.uid) || emailMatch(rObj.email)) {
+                            delete prj.roles[target.role];
+                        }
+                    }
+                    if (prj.adminEmail && emailMatch(prj.adminEmail)) {
+                        prj.adminEmail = null;
+                        prj.adminUid = null;
+                        prj.adminName = null;
+                    }
+                });
 
-            if (typeof recordAuditLog === 'function') {
-                recordAuditLog('DELETE_USER_PERMANENT', 'Permanently deleted user account ' + targetName + ' (' + (targetEmail || targetUid) + ') from Firebase and directory.');
+                saveState();
+
+                if (typeof recordAuditLog === 'function') {
+                    recordAuditLog('DELETE_USER_PERMANENT', 'Permanently deleted user account ' + targetName + ' (' + (targetEmail || targetUid) + ') from Firebase and directory.');
+                }
+
+                // Immediately re-render all views so the user row vanishes without delay
+                if (typeof renderUsersDirectoryView === 'function') renderUsersDirectoryView();
+                if (typeof renderSitePersonnelTable === 'function') renderSitePersonnelTable();
+                if (typeof renderSuperAdminAdminsTab === 'function') renderSuperAdminAdminsTab();
+                if (typeof renderProjectAdminsView === 'function') renderProjectAdminsView();
+                if (typeof renderWorksiteGovernanceHeader === 'function') renderWorksiteGovernanceHeader();
+
+                showToast('Account for ' + targetName + ' permanently deleted from Firebase & system.', 'ok');
+                return true;
+            } catch (fatalErr) {
+                console.error('[unifiedDeleteUser] Error deleting user:', fatalErr);
+                showToast('Notice during user deletion: ' + (fatalErr.message || fatalErr), 'warn');
+                if (typeof renderUsersDirectoryView === 'function') renderUsersDirectoryView();
+                return false;
             }
-
-            if (typeof initFirestoreDataSync === 'function') {
-                try { await initFirestoreDataSync(); } catch (_syncErr) {}
-            }
-            if (typeof renderUsersDirectoryView === 'function') renderUsersDirectoryView();
-            if (typeof renderSitePersonnelTable === 'function') renderSitePersonnelTable();
-            if (typeof renderSuperAdminAdminsTab === 'function') renderSuperAdminAdminsTab();
-            if (typeof renderProjectAdminsView === 'function') renderProjectAdminsView();
-            if (typeof renderWorksiteGovernanceHeader === 'function') renderWorksiteGovernanceHeader();
-
-            showToast('Account for ' + targetName + ' permanently deleted from Firebase & system.', 'ok');
-            return true;
         }
 
         async function siteAdminRemoveStaff(staffId) {
@@ -28202,8 +28187,8 @@ ptypeOf(p) === 'general' ?
                 const rInfo = roleInfo(u.role);
                 let actionBtns = '';
                 const editBtn = '<button type="button" class="btn btn-xs btn-ghost" onclick="startEditUser(\'' + u.id + '\')" style="color:var(--orange);padding:2px 8px;font-size:11px;margin-right:6px;" title="Edit User Profile & Assignments"><i class="fa-solid fa-pen-to-square"></i> Edit</button>';
-                const userPayload = JSON.stringify({ id: u.id, uid: u.uid || u.id, email: u.email, projectId: u.projectId, name: u.name }).replace(/"/g, '&quot;');
-                const delBtnHtml = '<button class="btn btn-xs btn-ghost" onclick="unifiedDeleteUser(' + userPayload + ');" style="color:var(--red);padding:2px 6px;" title="Delete Account Permanently"><i class="fa-solid fa-trash-can"></i></button>';
+                const userPayload = JSON.stringify({ id: u.id, docId: u.id, uid: u.uid || u.id, email: u.email, empId: u.empId || u.employeeId || '', projectId: u.projectId, name: u.name }).replace(/"/g, '&quot;');
+                const delBtnHtml = '<button type="button" class="btn btn-xs btn-ghost" onclick="unifiedDeleteUser(' + userPayload + ');" style="color:var(--red);padding:2px 6px;" title="Delete Account Permanently"><i class="fa-solid fa-trash-can"></i></button>';
                 if (isSiteAdmin) {
                     actionBtns = editBtn +
                         '<button class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + u.id + '\'); renderUsersDirectoryView();" style="color:var(--blue);padding:2px 8px;font-size:11px;margin-right:6px;" title="Reset Login Password"><i class="fa-solid fa-key"></i> Reset</button>' +

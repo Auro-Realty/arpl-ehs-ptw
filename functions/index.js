@@ -1176,57 +1176,146 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
         return { ok: false, success: false, error: "Permission denied: Insufficient privileges to delete user." };
       }
 
-      // 1. Resolve Firebase Auth UID by BOTH uid and email
+      // 1. Step A — Safe Auth Deletion (Never Fail if Already Deleted!)
       let resolvedAuthUid = uid || null;
       if (normalizedEmail) {
         try {
           const authUser = await auth.getUserByEmail(normalizedEmail);
           if (authUser && authUser.uid) {
             resolvedAuthUid = authUser.uid;
+            try {
+              await auth.deleteUser(authUser.uid);
+              console.log("[DELETE_USER] Safely deleted Auth user by email: " + normalizedEmail + " (" + authUser.uid + ")");
+            } catch (delByEmailErr) {
+              if (delByEmailErr.code !== "auth/user-not-found" && delByEmailErr.code !== "auth/invalid-uid") {
+                console.log("[DELETE_USER] Notice deleting Auth user by email:", delByEmailErr.message);
+              }
+            }
           }
-        } catch (_notFound) {}
+        } catch (_notFound) {
+          // completely ignore auth/user-not-found
+        }
       }
 
-      // 2. Delete user from Firebase Authentication
-      if (resolvedAuthUid) {
+      if (uid) {
         try {
-          await auth.deleteUser(resolvedAuthUid);
+          await auth.deleteUser(uid);
+          console.log("[DELETE_USER] Safely deleted Auth user by UID: " + uid);
         } catch (authDelErr) {
-          if (authDelErr.code !== "auth/user-not-found") {
-            console.warn("[DELETE_USER] Notice deleting Auth user " + resolvedAuthUid + ":", authDelErr.message);
+          if (authDelErr.code !== "auth/user-not-found" && authDelErr.code !== "auth/invalid-uid" && authDelErr.code !== "auth/invalid-argument") {
+            console.log("[DELETE_USER] Notice deleting Auth user by UID:", authDelErr.message);
           }
         }
       }
-      if (uid && uid !== resolvedAuthUid) {
+      if (resolvedAuthUid && resolvedAuthUid !== uid) {
         try {
-          await auth.deleteUser(uid);
+          await auth.deleteUser(resolvedAuthUid);
         } catch (_ign) {}
       }
 
-      // 3. Delete ALL Firestore documents matching doc.id === uid, doc.id === resolvedAuthUid, or where('email', '==', normalizedEmail)
-      const uidsToDelete = new Set([uid, resolvedAuthUid].filter(Boolean));
-      for (const u of uidsToDelete) {
-        await db.collection("users").doc(u).delete().catch(() => {});
-        await db.collection("site_personnel").doc(u).delete().catch(() => {});
-        await db.collection("project_admins").doc(u).delete().catch(() => {});
-        await db.collection("rate_limits").doc("adminAssignProjectRole_" + u).delete().catch(() => {});
-        await db.collection("rate_limits").doc("adminDeleteUser_" + u).delete().catch(() => {});
+      // 2. Step B — Exhaustive Firestore Hard-Deletion (By Doc ID, uid field, and email field!)
+      const batch = db.batch();
+      const targetDocId = request.data?.docId ? String(request.data.docId).trim() : null;
+      const targetEmpId = String(request.data?.empId || request.data?.employeeId || "").trim().toLowerCase();
+
+      // Delete by direct document IDs
+      if (uid) {
+        batch.delete(db.collection("users").doc(String(uid)));
+        batch.delete(db.collection("site_personnel").doc(String(uid)));
+        batch.delete(db.collection("project_admins").doc(String(uid)));
+        batch.delete(db.collection("rate_limits").doc("adminAssignProjectRole_" + String(uid)));
+        batch.delete(db.collection("rate_limits").doc("adminDeleteUser_" + String(uid)));
+      }
+      if (targetDocId && targetDocId !== uid) {
+        batch.delete(db.collection("users").doc(targetDocId));
+        batch.delete(db.collection("site_personnel").doc(targetDocId));
+        batch.delete(db.collection("project_admins").doc(targetDocId));
+        batch.delete(db.collection("rate_limits").doc("adminAssignProjectRole_" + targetDocId));
+        batch.delete(db.collection("rate_limits").doc("adminDeleteUser_" + targetDocId));
+      }
+      if (resolvedAuthUid && resolvedAuthUid !== uid && resolvedAuthUid !== targetDocId) {
+        batch.delete(db.collection("users").doc(String(resolvedAuthUid)));
+        batch.delete(db.collection("site_personnel").doc(String(resolvedAuthUid)));
+        batch.delete(db.collection("project_admins").doc(String(resolvedAuthUid)));
       }
 
+      // Delete by exact indexed email query
       if (normalizedEmail) {
-        const uSnap = await db.collection("users").where("email", "==", normalizedEmail).get().catch(() => null);
-        if (uSnap && !uSnap.empty) {
-          for (const d of uSnap.docs) await d.ref.delete().catch(() => {});
-        }
-        const spSnap = await db.collection("site_personnel").where("email", "==", normalizedEmail).get().catch(() => null);
-        if (spSnap && !spSnap.empty) {
-          for (const d of spSnap.docs) await d.ref.delete().catch(() => {});
-        }
-        const paSnap = await db.collection("project_admins").where("email", "==", normalizedEmail).get().catch(() => null);
-        if (paSnap && !paSnap.empty) {
-          for (const d of paSnap.docs) await d.ref.delete().catch(() => {});
-        }
+        try {
+          const uSnap = await db.collection("users").where("email", "==", normalizedEmail).get();
+          uSnap.forEach(d => batch.delete(d.ref));
+        } catch (_e) {}
+        try {
+          const spSnap = await db.collection("site_personnel").where("email", "==", normalizedEmail).get();
+          spSnap.forEach(d => batch.delete(d.ref));
+        } catch (_e) {}
+        try {
+          const paSnap = await db.collection("project_admins").where("email", "==", normalizedEmail).get();
+          paSnap.forEach(d => batch.delete(d.ref));
+        } catch (_e) {}
       }
+
+      // Case-insensitive fallback scan over collections (handles capitalized emails, empId, mismatched doc IDs)
+      try {
+        const allUsersSnap = await db.collection("users").get();
+        allUsersSnap.forEach(d => {
+          const data = d.data() || {};
+          const dEmail = (data.email || "").toLowerCase().trim();
+          const dUid = data.uid || data.id;
+          const dEmp = (data.employeeId || data.empId || "").trim().toLowerCase();
+          if (
+            (normalizedEmail && dEmail === normalizedEmail) ||
+            (uid && (d.id === uid || dUid === uid)) ||
+            (targetDocId && d.id === targetDocId) ||
+            (resolvedAuthUid && (d.id === resolvedAuthUid || dUid === resolvedAuthUid)) ||
+            (targetEmpId && dEmp && dEmp === targetEmpId)
+          ) {
+            batch.delete(d.ref);
+          }
+        });
+      } catch (_scanErr) {
+        console.warn("[DELETE_USER] users collection fallback scan notice:", _scanErr);
+      }
+
+      try {
+        const allSpSnap = await db.collection("site_personnel").get();
+        allSpSnap.forEach(d => {
+          const data = d.data() || {};
+          const dEmail = (data.email || "").toLowerCase().trim();
+          const dUid = data.uid || data.id;
+          const dEmp = (data.employeeId || data.empId || "").trim().toLowerCase();
+          if (
+            (normalizedEmail && dEmail === normalizedEmail) ||
+            (uid && (d.id === uid || dUid === uid)) ||
+            (targetDocId && d.id === targetDocId) ||
+            (resolvedAuthUid && (d.id === resolvedAuthUid || dUid === resolvedAuthUid)) ||
+            (targetEmpId && dEmp && dEmp === targetEmpId)
+          ) {
+            batch.delete(d.ref);
+          }
+        });
+      } catch (_spScanErr) {}
+
+      try {
+        const allPaSnap = await db.collection("project_admins").get();
+        allPaSnap.forEach(d => {
+          const data = d.data() || {};
+          const dEmail = (data.email || "").toLowerCase().trim();
+          const dUid = data.uid || data.id;
+          const dEmp = (data.employeeId || data.empId || "").trim().toLowerCase();
+          if (
+            (normalizedEmail && dEmail === normalizedEmail) ||
+            (uid && (d.id === uid || dUid === uid)) ||
+            (targetDocId && d.id === targetDocId) ||
+            (resolvedAuthUid && (d.id === resolvedAuthUid || dUid === resolvedAuthUid)) ||
+            (targetEmpId && dEmp && dEmp === targetEmpId)
+          ) {
+            batch.delete(d.ref);
+          }
+        });
+      } catch (_paScanErr) {}
+
+      await batch.commit();
 
       await recordServerAuditLog(
         "USER_DELETED",
@@ -2107,8 +2196,8 @@ exports.adminDeleteUser = onCall({ region: REGION }, async (request) => {
       await auth.deleteUser(targetAuthUid);
       console.log(`[adminDeleteUser] Permanently deleted Auth user: ${targetAuthUid} (${targetEmail || targetDoc?.email || ""})`);
     } catch (authErr) {
-      if (authErr.code !== "auth/user-not-found") {
-        console.warn(`[adminDeleteUser] Non-fatal Auth delete notice for ${targetAuthUid}:`, authErr);
+      if (authErr.code !== "auth/user-not-found" && authErr.code !== "auth/invalid-uid") {
+        console.warn(`[adminDeleteUser] Non-fatal Auth delete notice for ${targetAuthUid}:`, authErr.message);
       }
     }
   }
@@ -2118,15 +2207,18 @@ exports.adminDeleteUser = onCall({ region: REGION }, async (request) => {
   if (targetDocId) docsToDelete.add(targetDocId);
   if (targetKey) docsToDelete.add(targetKey);
   if (targetAuthUid) docsToDelete.add(targetAuthUid);
+  if (request.data?.docId) docsToDelete.add(String(request.data.docId));
 
   const cleanEmail = (targetEmail || targetDoc?.email || targetAuthUser?.email || "").toLowerCase().trim();
+  const targetEmpId = String(request.data?.empId || request.data?.employeeId || targetDoc?.employeeId || targetDoc?.empId || "").trim().toLowerCase();
   const batchOps = [];
 
   for (const docId of docsToDelete) {
     batchOps.push(db.collection("users").doc(docId).delete().catch(() => {}));
     batchOps.push(db.collection("site_personnel").doc(docId).delete().catch(() => {}));
     batchOps.push(db.collection("project_admins").doc(docId).delete().catch(() => {}));
-    batchOps.push(db.collection("rate_limits").doc(docId).delete().catch(() => {}));
+    batchOps.push(db.collection("rate_limits").doc("adminAssignProjectRole_" + docId).delete().catch(() => {}));
+    batchOps.push(db.collection("rate_limits").doc("adminDeleteUser_" + docId).delete().catch(() => {}));
   }
 
   if (cleanEmail) {
@@ -2143,6 +2235,25 @@ exports.adminDeleteUser = onCall({ region: REGION }, async (request) => {
       paSnap.forEach(d => batchOps.push(d.ref.delete().catch(() => {})));
     } catch (_e) {}
   }
+
+  // Case-insensitive fallback scan for un-indexed or case-mismatched records
+  try {
+    const allUsersSnap = await db.collection("users").get();
+    allUsersSnap.forEach(d => {
+      const data = d.data() || {};
+      const dEmail = (data.email || "").toLowerCase().trim();
+      const dUid = data.uid || data.id;
+      const dEmp = (data.employeeId || data.empId || "").trim().toLowerCase();
+      if (
+        (cleanEmail && dEmail === cleanEmail) ||
+        (targetKey && (d.id === targetKey || dUid === targetKey)) ||
+        (targetAuthUid && (d.id === targetAuthUid || dUid === targetAuthUid)) ||
+        (targetEmpId && dEmp && dEmp === targetEmpId)
+      ) {
+        batchOps.push(d.ref.delete().catch(() => {}));
+      }
+    });
+  } catch (_scanErr) {}
 
   await Promise.all(batchOps);
 
