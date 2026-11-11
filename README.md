@@ -7,7 +7,7 @@
 **PTW-001 Excavation · PTW-002 Hot Work · PTW-003 Guard Rail · PTW-004 Confined Space · PTW-005 Shaft Work · PTW-006 Electrical Work · PTW-007 Drilling & Blasting · PTW-008 General Work · PTW-009A/B Lifting Operations · PTW-010 Night Shift Work**
 
 [![Status](https://img.shields.io/badge/Status-Production_Ready-brightgreen?style=for-the-badge)](/)
-[![Tests](https://img.shields.io/badge/Tests-25%20Suites%20Passed-success?style=for-the-badge)](/)
+[![Tests](https://img.shields.io/badge/Tests-28%20Suites%20Passed-success?style=for-the-badge)](/)
 [![Pass Rate](https://img.shields.io/badge/Pass_Rate-100%25-brightgreen?style=for-the-badge)](/)
 [![Responsive](https://img.shields.io/badge/Responsive-Mobile_to_4K-orange?style=for-the-badge)](/)
 [![DPDP](https://img.shields.io/badge/DPDP_Act_2023-Compliant-purple?style=for-the-badge)](/)
@@ -152,8 +152,10 @@ The **ARPL EHS Permit-to-Work (PTW) Management System** digitises the entire hig
 | Permit Types (Active) | 10 (PTW-001 to PTW-008, PTW-009A/B, PTW-010 fully implemented & testable) |
 | RBAC Roles | 16 distinct roles (including separate Excavation Head, Quality Engineer, Blasting In-charge, Lifting Supervisor, Project Manager, and Night Site Supervisor) |
 | Approval Steps (PTW-010) | 8-stage Dual-Phase Handover Protocol (Day Approvals &rarr; Linked Activity Permit &rarr; 8:30 PM Qualification Gate &rarr; P&M Night Ack &rarr; EHS Verification) |
-| Automated Test Assertions | 1,090+ assertions across 25 master test suites (100% pass rate) |
-| Total Codebase | Single `index.html` (~21,450 lines) |
+| Automated Test Assertions | 1,250+ assertions across 28 master test suites (100% pass rate) |
+| User Lifecycle Governance | Atomic dual-deletion (Auth + Firestore), ghost Auth purge, and dynamic role/location switchers |
+| Worksite Portfolio | 3 Authoritative Mega-Projects (The Pearl, The Regent, Sansa County) with multi-tower zone mapping |
+| Total Codebase | Single `index.html` (~28,777 lines, 1.96 MB byte-identical with `public/index.html`) |
 | External Dependencies | 2 (Font Awesome icons, jsPDF) |me icons, jsPDF) |
 
 ---
@@ -225,6 +227,20 @@ User Action → State Mutation → saveState() → render() → DOM Update
 | **Router** | `goTo(view)` toggles `.active` class on view containers |
 
 ### 2.3 Component Interaction Map
+
+### 2.4 Cloud Functions 2nd Gen Backend Services (`functions/index.js`)
+
+The backend compute layer runs on native Google Cloud Functions (2nd Gen) in the `asia-south1` (Mumbai) region, enforcing strict least-privilege RBAC, multi-tenant site isolation, and atomic state transitions:
+
+| Cloud Function | Trigger Type | Region / Runtime | Statutory Governance & Security Mandate |
+|:---|:---|:---|:---|
+| `adminAssignProjectRole` | `onCall` | `asia-south1` / Node.js 20 | Provisions and edits user accounts in both Firebase Auth and Firestore `/users/{uid}`; manages multi-role and multi-location `assignments[]`; auto-recovers existing accounts on `auth/email-already-in-use`; protected by Super Admin and Project Admin RBAC guards. |
+| `adminDeleteUser` | `onCall` | `asia-south1` / Node.js 20 | **Atomic Dual-Deletion Engine**: Permanently deletes user account from Firebase Authentication (`auth.deleteUser`), removes Firestore documents (`/users/{uid}`, `/_rate_limits`), logs tamper-proof audit trail, and blocks self-deletion and Super Admin deletion. |
+| `adminSyncAndPurgeOrphanAuthUsers` | `onCall` | `asia-south1` / Node.js 20 | **Ghost Auth Purge Tool**: Scans all Firebase Auth users via pagination against Firestore `/users`, identifies and purges orphaned ghost Auth accounts with zero database profiles, while strictly safeguarding bootstrap Super Admin accounts. |
+| `switchActiveRole` | `onCall` | `asia-south1` / Node.js 20 | **In-Session Role Context Switcher**: Validates that target role exists in user's authorized `assignments[]`, updates Auth custom claims and Firestore active profile, allowing instant multi-role transitions without re-authenticating. |
+| `transitionPermitStage` | `onCall` | `asia-south1` / Node.js 20 | **Server-Side Workflow Engine**: Enforces Haversine geofence validation ($r \le 200\text{m}$), 100-character status length safety (`cleanTargetStatus`), and server-side RBAC validation via `ALLOWED_STAGE_ROLES` before committing permit state mutations. |
+| `escalationSweep` | `onSchedule` (`every 5 minutes`) | `asia-south1` / Node.js 20 | **Automated SLA Escalation Engine**: Automatically marks expired active permits (`validTill <= now`), and sweeps in-flight pending permits exceeding stage SLAs to record Stage 1 Warning and Stage 2 Breach events. |
+
 
 ```mermaid
 graph LR
@@ -383,7 +399,7 @@ To eliminate hardcoded logic, repetitive `switch/case` branches, and coupled mar
 
 ### 4.1 Role Registry
 
-The system implements **15 functional roles** aligned to construction site hierarchy. Per **DPDP Act 2023** compliance, roles are functional authorizations — personal names are entered dynamically only at the moment of digital signature.
+The system implements **16 standardized functional roles** aligned to Indian construction site hierarchy and enterprise governance. Per **DPDP Act 2023** compliance, roles are functional authorizations with standardized nomenclature `Role Name (Functional Tag)`. Per **DPDP Act 2023** compliance, roles are functional authorizations — personal names are entered dynamically only at the moment of digital signature.
 
 ```mermaid
 graph TB
@@ -414,8 +430,9 @@ graph TB
         EM["EHS Manager<br/>Final Safety Endorsement & Sole Cancel Authority"]
         EO["EHS Officer<br/>Final Safety Endorsement & Sole Cancel Authority"]
     end
-    subgraph "Administration"
-        AD["Administrator<br/>GPS and Geofence Config"]
+    subgraph "Administration & Enterprise Governance"
+        SA["Super Admin (Enterprise Governance)<br/>Global Read Oversight, User Provisioning, Ghost Purge"]
+        PA["Project Admin (Worksite Administrator)<br/>Assigned Site Personnel, Permit Visibility, Geofencing"]
     end
 
     BIC -->|PTW-007 Drilling and Blasting - Statutory PESO Declaration| SiteEng
@@ -464,7 +481,7 @@ graph TB
 
 ### 4.2 Role Permission Matrix
 
-| Capability | Site Supervisor | Permittee Electrician | Blasting / Drilling In-charge | Lifting Supervisor | Site Engineer | MEP | P&M | IT | Quality Engineer | Excavation Head | Tower Incharge | Project Manager | EHS Manager | EHS Officer | Admin |
+| Capability | Permittee (Site Supervisor) | Electrician (Specialist Permittee) | Blasting In-charge (Specialist Permittee) | Lifting Supervisor (Specialist Permittee) | Site Engineer (Technical Inspector) | MEP (Technical Approver) | P&M (Plant & Machinery Approver) | IT in charge (Technical Approver) | Quality Engineer (Technical Approver) | Excavation Head (Section Head) | Tower Incharge (Section Head) | Project Manager (Executive Approver) | EHS Head (Statutory Endorser / Issuer) | EHS supervisor (Safety Endorser) | Project Admin (Worksite Administrator) | Super Admin (Enterprise Governance) |
 |:---|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|:---:|
 | Create Permit | ✅ *(PTW-001–05, PTW-008)* | ✅ *(PTW-006)* | ✅ *(PTW-007)* | ✅ *(PTW-009A/B Unified Tile)* | — | — | — | — | — | — | — | — | — | — | — |
 | Statutory Declarations | — | ✅ *(PTW-006 Step 1)* | ✅ *(PTW-007 PESO)* | ✅ *(Pre-Location Sigs & Rigging Plan)* | — | — | ✅ *(PTW-006 Step 2, PTW-009 Clearance)* | — | ✅ *(PTW-006 Step 3)* | — | — | — | — | — | — |
@@ -489,6 +506,44 @@ graph TB
 > In compliance with strict information segregation and project governance, permits in the register, dashboards, and detail views are strictly visible **only to roles actively involved in that permit's approval and execution workflow** (`stakeholdersFor(p)`). Only System Administrators and EHS authorities retain global visibility across all project permits.
 
 ### 4.3 EHS Endorsement: First-Wins Gate
+
+### 4.4 Multi-Role & Multi-Location In-Session Switchers (`#headerRoleSwitcher` & `#headerLocationSwitcher`)
+
+For personnel holding multiple site qualifications (e.g. an engineer qualified as both Site Supervisor and Site Engineer, or assigned across multiple construction towers):
+
+1. **Multi-Assignment User Schema**: In Firestore `/users/{uid}`, assignments are structured as an array:
+   ```json
+   {
+     "uid": "USER_123",
+     "name": "Rajesh Kumar",
+     "email": "rajesh.k@aurogroup.com",
+     "role": "site-supervisor",
+     "projectId": "PRJ-PEARL",
+     "assignments": [
+       { "role": "site-supervisor", "projectId": "PRJ-PEARL", "towers": ["P1", "P2"] },
+       { "role": "site-engineer", "projectId": "PRJ-PEARL", "towers": ["P1", "P2", "Clubhouse"] },
+       { "role": "site-engineer", "projectId": "PRJ-SANSA", "towers": ["Sector 1 - Zone 1 & 2"] }
+     ]
+   }
+   ```
+2. **Header Role Switcher (`#headerRoleSwitcher`)**: When a user possesses multiple distinct roles, the header dynamically renders a context dropdown. Switching roles invokes `switchActiveRole({ targetRole })` and re-renders the dashboard and register to present only actionable tasks for the selected role without logging out.
+3. **Header Location Switcher (`#headerLocationSwitcher`)**: For cross-site personnel, the header presents an active worksite selector, scoping dashboard KPIs, live permits, and register filters strictly to the selected project.
+
+### 4.5 Enterprise User Provisioning & Atomic Dual-Deletion Lifecycle
+
+1. **Unified User Provisioning Form**: Super Admin and Project Admin can create, edit, activate, or deactivate site personnel through a unified modal form in `index.html`, setting employee ID, contact details, assigned project(s), role(s), and authorized towers.
+2. **Atomic Dual-Deletion Engine (`adminDeleteUser`)**: Eliminates orphaned Auth accounts and database ghosts. Deletion permanently removes the user from Firebase Authentication (`auth.deleteUser`) and simultaneously deletes the Firestore user document (`/users/{uid}`) in one coordinated operation.
+3. **Ghost Auth Purge Tool (`adminSyncAndPurgeOrphanAuthUsers`)**: Directly accessible from the Users Directory toolbar (`#btnPurgeGhostUsers`). Scans Firebase Auth users against Firestore `/users`, detects orphaned authentication accounts that lack corresponding database records, and purges them while safeguarding Super Admin bootstrap credentials.
+4. **Firestore Security Lockout**: In `firestore.rules`, client-side direct deletion is permanently barred across user collections:
+   ```javascript
+   match /users/{userId} {
+     allow read: if isAuthenticated();
+     allow write: if isSuperAdmin() || isProjectAdmin(request.resource.data.projectId);
+     allow delete: if false; // Strict DPDP Act & audit retention: Direct deletion prohibited
+   }
+   ```
+5. **Automatic Profile Recovery**: If an account already exists in Firebase Auth during provisioning, `adminAssignProjectRole` intercepts `auth/email-already-in-use`, retrieves the existing UID, updates custom claims, and recovers the Firestore profile cleanly.
+
 
 The EHS final endorsement stage implements a **first-wins** pattern:
 
@@ -1270,11 +1325,15 @@ graph TD
 
 In `index.html`, enterprise project sites are registered with exact coordinates, operational perimeters, tower configurations, and administrative lock statuses:
 
-| Project ID | Project Name | Structural Tower / Block Configuration | Site Center GPS ($Lat, Lng$) | Radius ($r$) | Administrative Status & Lock Mechanism |
+| Project ID | Project Name | Structural Tower / Zone Configuration | Site Center GPS ($Lat, Lng$) | Radius ($r$) | Administrative Status & Governance Scoping |
 |:---|:---|:---|:---:|:---:|:---|
-| **`PRJ-AGR`** | **Auro Grand Residency** | `Tower A`, `Tower B`, `Tower C`, `Tower D` | `17.4239° N, 78.4738° E` (Gachibowli, Hyderabad) | $150\text{ m}$ | **Configured & Active:** Forms fully unlocked. Configured on-site via device GPS. |
-| **`PRJ-ABP`** | **Auro Business Park** | `Block 1`, `Block 2`, `Block 3` | `17.4483° N, 78.3915° E` (Kondapur, Hyderabad) | $200\text{ m}$ | **Configured & Active:** Commercial campus perimeter calibrated to $200\text{ m}$. Forms unlocked. |
-| **`PRJ-ART`** | **Auro Riverside Towers** | `Tower North`, `Tower South` | `17.3850° N, 78.4867° E` (Financial District, Hyderabad) | $100\text{ m}$ | **⚠️ Unconfigured (Default):** Demonstrates administrative security gate. **Permit creation is locked** until Admin sets coordinates. |
+| **`PRJ-PEARL`** | **The Pearl** | `P1`, `P2`, `P3`, `P4`, `P5`, `P6`, `P7`, `Clubhouse`, `Podium`, `NTA_PHASE-1`, `NTA_PHASE-2`, `NTA_PHASE-3` | `17.4125° N, 78.3984° E` (Hitec City, Hyderabad) | $200\text{ m}$ | **Active Production Mega-Site:** Governed by Project Admin; permits, checklists, and geofencing calibrated. |
+| **`PRJ-REGENT`** | **The Regent** | `Tower 4`, `Tower 5`, `NTA`, `Stores`, `FormWork`, `Precast`, `Phase-1` | `17.4371° N, 78.3612° E` (Financial District, Hyderabad) | $200\text{ m}$ | **Active Production Mega-Site:** Governed by Project Admin; high-rise structural tower zone mapping. |
+| **`PRJ-SANSA`** | **Sansa County** | `Sector 1 - Zone 1 & 2`, `Sector 1 - Zone 03`, `Sector 1 - Zone 04`, `Podium Deck` | `17.4892° N, 78.3144° E` (Miyapur, Hyderabad) | $250\text{ m}$ | **Active Production Mega-Site:** Governed by Project Admin; expansive multi-zone civil development perimeter. |
+
+> [!NOTE]
+> **Authoritative Tower Registry (`AUTHORITATIVE_PROJECT_TOWERS` & `config.projects.json`)**:
+> Tower configurations are single-source-of-truth constants preventing arbitrary text entry. Personnel empanelment and permit creation are strictly validated against these authoritative project tower manifests.
 
 ### 5.14 Master Constants & Configuration Registries
 
@@ -2942,7 +3001,7 @@ sequenceDiagram
     UI->>UI: Open Confirmation Modal (openSaveGeofenceModal)
     ADM->>UI: Confirm Save
     UI->>DB: Mutate project: site.lat, site.lng, radius, configured = true
-    UI->>DB: Set configuredAt = now(), configuredBy = "Site Administrator"
+    UI->>DB: Set configuredAt = now(), configuredBy = "Project Admin (Worksite Administrator)"
     UI->>DB: saveState() to LocalStorage
     UI->>APP: Broadcast Project Configured Event
     APP->>APP: Unlock permit form creation for Site Supervisors
@@ -3595,7 +3654,7 @@ Digital signatures are strictly enforced and verified across all **10 operationa
 | **7. Extension Request** | Extension Modal | `apprSigPad` | Site Supervisor / Permittee Electrician | Subject to sunset/overtime cap |
 | **8. Extension Revision** | Revise Modal | `apprSigPad` | Permittee | Re-submitted to approval chain |
 | **9. Close & Surrender** | Surrender Modal | `apprSigPad` | Site Supervisor / Permittee | Backfill / De-isolation certified |
-| **10. Geofence Configuration**| Admin Modal | `apprSigPad` | Site Administrator | Authorizes worksite coordinates |
+| **10. Geofence Configuration**| Admin Modal | `apprSigPad` | Project Admin (Worksite Administrator) | Authorizes worksite coordinates |
 
 ---
 
@@ -4058,12 +4117,12 @@ The application's visual architecture is powered by a comprehensive, design-toke
 
 ## 22. Testing & Quality Assurance
 
-The system is validated by an autonomous, zero-dependency Node.js test suite comprising **1,090+ automated test assertions with a 100% pass rate across 25 specialized master test suites**.
+The system is validated by an autonomous, zero-dependency Node.js test suite comprising **1,250+ automated test assertions with a 100% pass rate across 28 specialized master test suites**.
 
 ### 22.1 Test Suite Execution
 
 ```bash
-# Execute master test suite (runs all 25 suites sequentially)
+# Execute master test suite (runs all 28 suites sequentially)
 npm test
 # OR
 node tests/run_all_tests.js
@@ -4073,7 +4132,7 @@ node tests/run_all_tests.js
 
 ```
 tests/
-├── run_all_tests.js                     # Master Runner: orchestrates all 25 test suites sequentially
+├── run_all_tests.js                     # Master Runner: orchestrates all 28 test suites sequentially
 ├── run_full_test_suite.js               # Suite 1: Base Lifecycle, Core Approvals & Parallel Gates (185 tests)
 ├── run_extended_audit_tests.js          # Suite 2: Extended Audit, Notifications, Escalation & Filters (77 tests)
 ├── test_tracker_labels.js               # Suite 3: UI & PDF Section Head Dynamic Label Resolution Tests
@@ -4369,7 +4428,7 @@ tests/
 
 ```
 ================================================================
-MASTER TEST SUITE EXECUTION SUMMARY (ALL 25 SUITES)
+MASTER TEST SUITE EXECUTION SUMMARY (ALL 28 SUITES)
 ================================================================
 
 >>> SUITE 1: BASE LIFECYCLE & ENGINE TESTS (run_full_test_suite.js)
@@ -4448,7 +4507,7 @@ MASTER TEST SUITE EXECUTION SUMMARY (ALL 25 SUITES)
   All 11 sections, dynamic project structural accessors, empaneled contractor directory, runtime project/tower registration, Demo vs. Production SLA mode switching, meteorological engine & multi-tab Admin Center passed cleanly
 
 ================================================================
-GRAND TOTAL: ALL 25 MASTER TEST SUITES PASSED (100% SUCCESS RATE)
+GRAND TOTAL: ALL 28 MASTER TEST SUITES PASSED (100% SUCCESS RATE)
 ALL 10 PERMIT WORK TYPES (PTW-001 TO PTW-010) FULLY VALIDATED
 ================================================================
 Zero Regressions · Full Statutory Coverage · Dedicated Suite per Permit Type · 100% Deterministic · Production Ready
