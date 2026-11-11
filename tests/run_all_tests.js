@@ -44,7 +44,8 @@ const suites = [
     { num: 26, name: 'PERMIT-SPECIFIC MASTER DATA & MANUAL CONTRACTOR/SUBCONTRACTOR ENTRY', file: 'test_master_data_updates.js' },
     { num: 27, name: 'ATOMIC DUAL-DELETION & GHOST AUTH CLEANUP', file: 'test_dual_deletion_and_auth_cleanup.js' },
     { num: 28, name: 'ROLE SWITCHER, LOCATION SWITCHER & PROJECT ADMIN NOMENCLATURE', file: 'test_role_switcher_and_project_admin.js' },
-    { num: 29, name: 'UNIVERSAL RESPONSIVE DESIGN, NAVIGATION & ACCESSIBILITY AUDIT', file: 'test_universal_responsive_and_navigation.js' }
+    { num: 29, name: 'UNIVERSAL RESPONSIVE DESIGN, NAVIGATION & ACCESSIBILITY AUDIT', file: 'test_universal_responsive_and_navigation.js' },
+    { num: 30, name: 'WORKSITE GPS CALIBRATION, AUTHORITATIVE TOWERS & GEOFENCE RADII AUDIT', file: 'test_gps_calibration_and_projects.js' }
 ];
 
 console.log('================================================================');

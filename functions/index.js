@@ -982,6 +982,19 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     }
   }
 
+  // Check if caller is super-admin via Firestore doc if claims not yet refreshed
+  if (!isSuperAdminCaller && request.auth.uid) {
+    try {
+      const sDoc = await db.collection("users").doc(request.auth.uid).get();
+      if (sDoc.exists) {
+        const sd = sDoc.data() || {};
+        if (sd.role === "super-admin" || sd.superAdmin === true || sd.uiRole === "super-admin" || (sd.roleLabel && sd.roleLabel.toLowerCase().includes("super admin"))) {
+          isSuperAdminCaller = true;
+        }
+      }
+    } catch (_e) {}
+  }
+
   let isProjAdmin =
     isSuperAdminCaller ||
     ((request.auth.token.role === "project-admin" ||
