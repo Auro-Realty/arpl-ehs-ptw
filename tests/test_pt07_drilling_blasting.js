@@ -332,16 +332,23 @@ assert(ackPermit.blastingInchargeAck && ackPermit.blastingInchargeAck.acknowledg
 assert.strictEqual(ackPermit.signatories['blasting-incharge'].name, 'PESO Blaster Khan', "Blasting In-charge signatory must be recorded");
 console.log('  ✓ PASS: Blasting In-charge acknowledgment routes cleanly to Site Engineer');
 
-// --- 7. Scenario 8: Direct Route from Site Engineer to EHS Approval ---
-console.log('\n--- 7. Site Engineer Direct Routing to EHS Approval ---');
+// --- 7. Scenario 8: Route from Site Engineer to Tower In-Charge / Section Head -> EHS Approval ---
+console.log('\n--- 7. Site Engineer -> Tower In-Charge / Section Head -> EHS Approval ---');
 
 evalInVM("currentUser = { key: 'site-engineer', name: 'Engineer Suresh', role: 'Site Engineer' };");
 evalInVM("acknowledgeSiteEngineer(PERMITS[PERMITS.length - 1], { gps: { lat: 17.44, lng: 78.38, within: true }, comment: 'Site layout and sentry placement verified on-site.', sig: makeSimSignature('Engineer Suresh') });");
 
 const engAckPermit = evalInVM("PERMITS[PERMITS.length - 1]");
-assert.strictEqual(engAckPermit.status, 'Pending EHS Approval', "Site Engineer acknowledgment must route PTW-007 directly to EHS Approval");
+assert.strictEqual(engAckPermit.status, 'Pending Section Head', "Site Engineer acknowledgment must route PTW-007 to Tower In-Charge / Section Head (Pending Section Head)");
 assert(engAckPermit.siteEngineerAck && engAckPermit.siteEngineerAck.acknowledged, "siteEngineerAck must be recorded");
-console.log('  ✓ PASS: Site Engineer acknowledgment routes directly to Pending EHS Approval (skips parallel gate & section head)');
+console.log('  ✓ PASS: Site Engineer acknowledgment routes to Pending Section Head (Tower In-Charge / Section Head)');
+
+// Tower Incharge approves -> routes to Pending EHS Approval
+evalInVM("currentUser = { key: 'hw-section-head', name: 'Tower Incharge Rao', role: 'Tower In-Charge / Section Head (Approver)' };");
+evalInVM("approvePermitStage(PERMITS[PERMITS.length - 1], 'hw-section-head', { gps: { lat: 17.44, lng: 78.38, within: true }, comment: 'Tower In-Charge sectional blast safety verified.', sig: makeSimSignature('Tower Incharge Rao'), signerName: 'Tower Incharge Rao' });");
+const shAckPermit = evalInVM("PERMITS[PERMITS.length - 1]");
+assert.strictEqual(shAckPermit.status, 'Pending EHS Approval', "Tower In-Charge approval must route PTW-007 to Pending EHS Approval");
+console.log('  ✓ PASS: Tower In-Charge / Section Head approval routes to Pending EHS Approval');
 
 // EHS Manager activates permit
 evalInVM("currentUser = { key: 'ehs-manager', name: 'Manager EHS Vikram', role: 'EHS Safety Manager' };");

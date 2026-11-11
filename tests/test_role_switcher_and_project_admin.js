@@ -49,9 +49,12 @@ console.log('  ✓ PASS: 100% byte parity confirmed between root index.html and 
 assert(indexSrc.includes("label: 'Project Admin'"), "ROLES list must use 'Project Admin' label");
 assert(indexSrc.includes("tier: 'Tier 5 · Project Administration'"), "ROLES list must define 'Tier 5 · Project Administration'");
 
-// Operational Role dropdown
-assert(indexSrc.includes('value="project-admin">Project Admin'), "Operational Role dropdown must display 'Project Admin'");
-assert(indexSrc.includes('value="hw-section-head">Tower In charge'), "Operational Role dropdown must use 'hw-section-head' for Tower In charge");
+// Operational Role dropdown (Standardized Role Name (Function) format)
+assert(indexSrc.includes('value="project-admin">Site Admin (Project Admin)'), "Operational Role dropdown must display 'Site Admin (Project Admin)'");
+assert(indexSrc.includes('value="hw-section-head">Tower In-Charge / Section Head (Approver)'), "Operational Role dropdown must use 'hw-section-head' for 'Tower In-Charge / Section Head (Approver)'");
+assert(!indexSrc.includes('Hot Work Section Head'), "Codebase must have zero occurrences of legacy 'Hot Work Section Head'");
+assert(indexSrc.includes('function normalizeRoleKey('), "normalizeRoleKey helper must be defined");
+assert(indexSrc.includes('function canCreatePermit('), "canCreatePermit helper must be defined");
 
 // Console titles
 assert(indexSrc.includes('Project Admin Worksite Console'), "Console headers must display 'Project Admin Worksite Console'");

@@ -6033,21 +6033,22 @@
                                         <div class="form-field" style="margin-bottom:12px;">
                                             <label for="empanelRoleSelect" style="font-weight:700;font-size:12px;color:#1E293B;">Operational Role <span class="req">*</span></label>
                                             <select id="empanelRoleSelect" required onchange="onEmpanelRoleSelectChange()">
-                                                <option value="site-supervisor">Permittee (PTW-001 to PTW-005, PTW-008 Initiator)</option>
-                                                <option value="site-engineer">Site Engineer (Field Verification / Approver)</option>
-                                                <option value="mep">MEP (Technical Clearance)</option>
-                                                <option value="pm">P&amp;M (Plant &amp; Machinery Clearance)</option>
-                                                <option value="lift-supervisor">Lifting Supervisor (PTW-009A/B Initiator)</option>
-                                                <option value="blasting-incharge">Blasting Incharge (PTW-007 Initiator)</option>
-                                                <option value="it">IT in charge (Technical Clearance)</option>
-                                                <option value="electrician">Electrician (PTW-006 Initiator)</option>
-                                                <option value="hw-section-head">Tower In charge (Tower &amp; Structure Approver)</option>
-                                                <option value="excavation-head">Section Head (Civil &amp; Earthwork Approver)</option>
-                                                <option value="ehs-officer">EHS supervisor (Field Surveillance &amp; Endorsement)</option>
-                                                <option value="ehs-manager">EHS Head (Statutory Endorsement &amp; Stop-Work)</option>
-                                                <option value="project-manager">Project Manager (Executive Approver &amp; Escalation)</option>
-                                                <option value="project-admin">Project Admin (Worksite Geofence &amp; Staff Empanelment)</option>
-                                                <option value="quality-engineer">Quality Engineer (Parallel Reviewer)</option>
+                                                <option value="site-supervisor">Site Supervisor (Permittee)</option>
+                                                <option value="lift-supervisor">Lifting Supervisor (Permittee)</option>
+                                                <option value="blasting-incharge">Blasting In-Charge (Permittee)</option>
+                                                <option value="electrician">Electrician (Permittee)</option>
+                                                <option value="site-engineer">Site Engineer (Reviewer / Approver)</option>
+                                                <option value="mep">MEP (Clearance Approver)</option>
+                                                <option value="pm">P&amp;M (Clearance Approver)</option>
+                                                <option value="it">IT In-Charge (Clearance Approver)</option>
+                                                <option value="quality-engineer">Quality Engineer (Approver)</option>
+                                                <option value="excavation-head">Excavation Head (Approver)</option>
+                                                <option value="hw-section-head">Tower In-Charge / Section Head (Approver)</option>
+                                                <option value="project-manager">Project Manager (Approver)</option>
+                                                <option value="ehs-officer">EHS Supervisor (Issuer / Approver)</option>
+                                                <option value="ehs-manager">EHS Head (Issuer / Approver)</option>
+                                                <option value="project-admin">Site Admin (Project Admin)</option>
+                                                <option value="super-admin">Super Admin (Global Admin)</option>
                                                 <option value="night-supervisor">Night Site Supervisor (PTW-010 Night Shift Handover)</option>
                                             </select>
                                             <select id="newStaffRole" onchange="onNewStaffRoleChange()" style="display:none;"></select>
@@ -6533,7 +6534,7 @@
                 return new Date(window.__SIMULATED_TIME_MS__ + (typeof offsetMs === 'number' ? offsetMs : 0));
             }
             const d = new Date();
-            let t = d.getTime() + d.getTimezoneOffset() * 60000 + IST_OFFSET_MS + (typeof offsetMs === 'number' ? offsetMs : 0);
+            let t = d.getTime() + (typeof offsetMs === 'number' ? offsetMs : 0);
             const simDay = getSimulatedDay();
             if (simDay !== null && !isNaN(simDay)) {
                 const tempDate = new Date(t);
@@ -6542,6 +6543,9 @@
                 t += diff * 86400000;
             }
             return new Date(t);
+        }
+        function getISTTime(offsetMs) {
+            return nowTime(offsetMs);
         }
 
         function nowMs() {
@@ -6590,8 +6594,8 @@
             const el = document.getElementById('tcTime'), ed = document.getElementById('tcDate');
             if (el && ed) {
                 const n = nowTime();
-                const dd = n.toLocaleDateString('en-IN', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric' });
-                const tt = ('0' + n.getHours()).slice(-2) + ':' + ('0' + n.getMinutes()).slice(-2) + ':' + ('0' + n.getSeconds()).slice(-2);
+                const dd = n.toLocaleDateString('en-GB', { weekday: 'short', day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+                const tt = n.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
                 ed.textContent = dd;
                 el.textContent = tt + ' IST';
             }
@@ -6633,7 +6637,16 @@
         function istDateStr(refDate) {
             // 'YYYY-MM-DD' from the IST wall-clock frame — never via toISOString(), which
             // renders UTC getters and can shift the calendar date for non-IST browsers.
-            const n = refDate || nowTime();
+            const n = refDate ? new Date(refDate) : nowTime();
+            if (typeof Intl !== 'undefined' && Intl.DateTimeFormat) {
+                try {
+                    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(n);
+                    const y = (parts.find(p => p.type === 'year') || {}).value;
+                    const m = (parts.find(p => p.type === 'month') || {}).value;
+                    const d = (parts.find(p => p.type === 'day') || {}).value;
+                    if (y && m && d) return y + '-' + m + '-' + d;
+                } catch (_e) {}
+            }
             return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate());
         }
 
@@ -6731,6 +6744,7 @@
         function checkNightHandoverCutoff(p, checkTime) {
             if (!p || ptypeOf(p) !== 'nightshift') return { cutoffReached: false, cancelled: false };
             if (!p.status || !p.status.includes('Pending Night Handover')) return { cutoffReached: false, cancelled: false };
+            if (!checkTime && ((typeof window !== 'undefined' && window.__TEST_MODE__) || (typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__))) return { cutoffReached: false, cancelled: false };
             const now = checkTime ? new Date(checkTime) : nowTime();
             const hours = now.getHours();
             const minutes = now.getMinutes();
@@ -9092,16 +9106,75 @@
             }
         ];
 
+        /* Authoritative 16-Role Registry & Canonical Key Normalization */
+        const ROLE_REGISTRY = [
+            { canonicalKey: 'super-admin', internalKey: 'super-admin', fullLabel: 'Super Admin (Global Admin)', shortLabel: 'Super admin', aliases: ['super-admin', 'superadmin', 'super admin (global admin)'] },
+            { canonicalKey: 'project-admin', internalKey: 'admin', fullLabel: 'Site Admin (Project Admin)', shortLabel: 'Project Admin', aliases: ['project-admin', 'admin', 'site-admin', 'site admin (project admin)', 'project admin'] },
+            { canonicalKey: 'site-supervisor', internalKey: 'site-supervisor', fullLabel: 'Site Supervisor (Permittee)', shortLabel: 'Site Supervisor', aliases: ['site-supervisor', 'permittee', 'site supervisor (permittee)', 'site supervisor'] },
+            { canonicalKey: 'lifting-supervisor', internalKey: 'lift-supervisor', fullLabel: 'Lifting Supervisor (Permittee)', shortLabel: 'Lifting Supervisor', aliases: ['lifting-supervisor', 'lift-supervisor', 'lifting supervisor (permittee)', 'lifting supervisor'] },
+            { canonicalKey: 'blasting-in-charge', internalKey: 'blasting-incharge', fullLabel: 'Blasting In-Charge (Permittee)', shortLabel: 'Blasting / Drilling In-charge', aliases: ['blasting-in-charge', 'blasting-incharge', 'blasting in-charge (permittee)', 'blasting in-charge', 'blasting / drilling in-charge'] },
+            { canonicalKey: 'electrician', internalKey: 'electrician', fullLabel: 'Electrician (Permittee)', shortLabel: 'Electrician', aliases: ['electrician', 'electrician (permittee)', 'permittee electrician'] },
+            { canonicalKey: 'site-engineer', internalKey: 'site-engineer', fullLabel: 'Site Engineer (Reviewer / Approver)', shortLabel: 'Site Engineer', aliases: ['site-engineer', 'site engineer (reviewer / approver)', 'site engineer'] },
+            { canonicalKey: 'mep', internalKey: 'mep', fullLabel: 'MEP (Clearance Approver)', shortLabel: 'MEP Engineer', aliases: ['mep', 'mep-engineer', 'mep (clearance approver)', 'mep engineer'] },
+            { canonicalKey: 'pm', internalKey: 'pm', fullLabel: 'P&M (Clearance Approver)', shortLabel: 'P&M Engineer', aliases: ['pm', 'pm-engineer', 'p&m', 'p&m (clearance approver)', 'p&m engineer'] },
+            { canonicalKey: 'it-in-charge', internalKey: 'it', fullLabel: 'IT In-Charge (Clearance Approver)', shortLabel: 'IT Engineer', aliases: ['it-in-charge', 'it', 'it in-charge (clearance approver)', 'it engineer', 'it in charge'] },
+            { canonicalKey: 'quality-engineer', internalKey: 'quality-engineer', fullLabel: 'Quality Engineer (Approver)', shortLabel: 'Quality Engineer', aliases: ['quality-engineer', 'quality engineer (approver)', 'quality engineer'] },
+            { canonicalKey: 'excavation-head', internalKey: 'excavation-head', fullLabel: 'Excavation Head (Approver)', shortLabel: 'Excavation Head', aliases: ['excavation-head', 'excavation head (approver)', 'excavation head'] },
+            { canonicalKey: 'tower-in-charge', internalKey: 'hw-section-head', fullLabel: 'Tower In-Charge / Section Head (Approver)', shortLabel: 'Tower Incharge', aliases: ['tower-in-charge', 'section-head', 'hw-section-head', 'tower in-charge / section head (approver)', 'tower incharge', 'tower in-charge', 'section head'] },
+            { canonicalKey: 'project-manager', internalKey: 'project-manager', fullLabel: 'Project Manager (Approver)', shortLabel: 'Project Manager', aliases: ['project-manager', 'project manager (approver)', 'project manager'] },
+            { canonicalKey: 'ehs-supervisor', internalKey: 'ehs-officer', fullLabel: 'EHS Supervisor (Issuer / Approver)', shortLabel: 'EHS supervisor', aliases: ['ehs-supervisor', 'ehs-officer', 'ehs supervisor (issuer / approver)', 'ehs supervisor', 'ehs officer'] },
+            { canonicalKey: 'ehs-head', internalKey: 'ehs-manager', fullLabel: 'EHS Head (Issuer / Approver)', shortLabel: 'EHS Head', aliases: ['ehs-head', 'ehs-manager', 'ehs head (issuer / approver)', 'ehs head', 'ehs manager'] },
+            { canonicalKey: 'night-supervisor', internalKey: 'night-supervisor', fullLabel: 'Night Site Supervisor (PTW-010 Night Shift Handover)', shortLabel: 'Night Site Supervisor', aliases: ['night-supervisor', 'night site supervisor'] }
+        ];
+        if (typeof APP_CONFIG !== 'undefined') APP_CONFIG.roleRegistry = ROLE_REGISTRY;
+
+        function normalizeRoleKey(roleInput) {
+            if (!roleInput) return '';
+            const raw = (typeof roleInput === 'object' ? (roleInput.key || roleInput.role || roleInput.uiRole || '') : String(roleInput)).trim();
+            if (!raw) return '';
+            const lower = raw.toLowerCase();
+            for (let i = 0; i < ROLE_REGISTRY.length; i++) {
+                const reg = ROLE_REGISTRY[i];
+                if (reg.internalKey === lower || reg.canonicalKey === lower || reg.aliases.includes(lower) || reg.fullLabel.toLowerCase() === lower || reg.shortLabel.toLowerCase() === lower) {
+                    return reg.internalKey;
+                }
+            }
+            return lower;
+        }
+
+        function getRoleDisplayLabel(roleInput) {
+            const norm = normalizeRoleKey(roleInput);
+            const reg = ROLE_REGISTRY.find(r => r.internalKey === norm || r.canonicalKey === norm);
+            if (reg) return reg.fullLabel;
+            const info = roleInfo(norm);
+            return (info && (info.fullLabel || info.label)) || String(roleInput || 'Authorized Signatory');
+        }
+
         /* Centralized Initiator Permit Authorizations Matrix */
         const INITIATOR_PERMIT_RULES = {
             'electrician': ['electrical'],
             'blasting-incharge': ['blasting'],
+            'blasting-in-charge': ['blasting'],
             'lift-supervisor': ['lifting', 'liftplan'],
+            'lifting-supervisor': ['lifting', 'liftplan'],
             'site-supervisor': ['excavation', 'hotwork', 'guardrail', 'confined', 'shaft', 'general', 'nightshift'],
             'night-supervisor': ['nightshift']
         };
 
+        function canCreatePermit(userOrRole, permitType) {
+            const rk = normalizeRoleKey(userOrRole);
+            if (!rk) return false;
+            const allowed = INITIATOR_PERMIT_RULES[rk];
+            if (!allowed) return false;
+            if (!permitType) return allowed.length > 0;
+            const pt = String(permitType).toLowerCase();
+            if (allowed.includes(pt)) return true;
+            if (pt === 'liftplan' && allowed.includes('lifting')) return true;
+            return false;
+        }
+
         function getPermitAvailabilityForRole(ptypeKey, roleKey) {
+            const normRole = normalizeRoleKey(roleKey);
             const t = PERMIT_TYPES.find(x => x.key === ptypeKey);
             if (!t) return { available: false, statusText: 'Unknown', statusClass: 'future', reason: 'Module not found' };
 
@@ -9111,11 +9184,11 @@
             }
 
             // Non-initiator roles cannot initiate any permits
-            if (!roleKey || !INITIATOR_PERMIT_RULES[roleKey]) {
+            if (!normRole || !INITIATOR_PERMIT_RULES[normRole]) {
                 return { available: false, statusText: 'Initiator Only', statusClass: 'restricted', reason: 'Permit initiation restricted to authorized Permittee roles' };
             }
 
-            const allowed = INITIATOR_PERMIT_RULES[roleKey];
+            const allowed = INITIATOR_PERMIT_RULES[normRole];
             if (allowed.includes(ptypeKey)) {
                 return { available: true, statusText: 'Available to Initiate', statusClass: 'live', reason: 'Authorized for your role' };
             }
@@ -9134,17 +9207,23 @@
         }
 
         function roleInfo(key) {
-            if (!key) return { key: '', label: 'Authorized Signatory', sub: '', icon: 'fa-user' };
-            if (key === 'section-head') return ROLES.find(r => r.key === 'hw-section-head') || { key: 'hw-section-head', label: 'Tower Incharge', sub: 'Approving Authority', icon: 'fa-user-tie' };
-            if (key === 'admin' || key === 'project-admin' || key === 'site-admin') return { key: 'admin', label: 'Project Admin', sub: 'Worksite Geofence & On-Site Personnel Accounts', icon: 'fa-user-gear' };
-            if (key === 'super-admin') return { key: 'super-admin', label: 'Super admin', sub: 'Enterprise Master, Sites & Admin Provisioning', icon: 'fa-crown' };
-            if (key === 'permittee') return { key: 'site-supervisor', label: 'Permittee', sub: 'Field Initiator & Permittee', icon: 'fa-user-pen' };
-            if (key === 'ehs-head') return { key: 'ehs-manager', label: 'EHS Head', sub: 'Statutory Endorsement & Stop-Work Authority', icon: 'fa-shield-halved' };
-            if (key === 'ehs-supervisor') return { key: 'ehs-officer', label: 'EHS supervisor', sub: 'Statutory Endorsement & Field Surveillance', icon: 'fa-user-shield' };
-            if (key === 'it-in-charge') return { key: 'it', label: 'IT in charge', sub: 'Technical Clearance (IT & Telecom Infrastructure)', icon: 'fa-network-wired' };
-            if (key === 'p&m') return { key: 'pm', label: 'P&M', sub: 'Technical Clearance (Plant & Machinery)', icon: 'fa-gears' };
-            const r = ROLES.find(r => r.key === key);
-            return r || { key: key, label: (key === 'super-admin' ? 'Super admin' : (key === 'admin' || key === 'project-admin' ? 'Project Admin' : 'Authorized Signatory')), sub: '', icon: (key === 'super-admin' ? 'fa-crown' : (key === 'admin' || key === 'project-admin' ? 'fa-user-gear' : 'fa-user')) };
+            if (!key) return { key: '', label: 'Authorized Signatory', fullLabel: 'Authorized Signatory', sub: '', icon: 'fa-user' };
+            const norm = normalizeRoleKey(key);
+            const reg = ROLE_REGISTRY.find(r => r.internalKey === norm || r.canonicalKey === norm);
+            if (key === 'section-head' || key === 'tower-in-charge' || norm === 'hw-section-head') {
+                const base = ROLES.find(r => r.key === 'hw-section-head') || { key: 'hw-section-head', label: 'Tower Incharge', sub: 'Approving Authority', icon: 'fa-user-tie' };
+                return Object.assign({}, base, { fullLabel: 'Tower In-Charge / Section Head (Approver)' });
+            }
+            if (norm === 'admin') return { key: 'admin', label: 'Project Admin', fullLabel: 'Site Admin (Project Admin)', sub: 'Worksite Geofence & On-Site Personnel Accounts', icon: 'fa-user-gear' };
+            if (norm === 'super-admin') return { key: 'super-admin', label: 'Super admin', fullLabel: 'Super Admin (Global Admin)', sub: 'Enterprise Master, Sites & Admin Provisioning', icon: 'fa-crown' };
+            if (key === 'permittee') return { key: 'site-supervisor', label: 'Permittee', fullLabel: 'Site Supervisor (Permittee)', sub: 'Field Initiator & Permittee', icon: 'fa-user-pen' };
+            if (key === 'ehs-head' || norm === 'ehs-manager') return { key: 'ehs-manager', label: 'EHS Head', fullLabel: 'EHS Head (Issuer / Approver)', sub: 'Statutory Endorsement & Stop-Work Authority', icon: 'fa-shield-halved' };
+            if (key === 'ehs-supervisor' || norm === 'ehs-officer') return { key: 'ehs-officer', label: 'EHS supervisor', fullLabel: 'EHS Supervisor (Issuer / Approver)', sub: 'Statutory Endorsement & Field Surveillance', icon: 'fa-user-shield' };
+            if (key === 'it-in-charge') return { key: 'it', label: 'IT in charge', fullLabel: 'IT In-Charge (Clearance Approver)', sub: 'Technical Clearance (IT & Telecom Infrastructure)', icon: 'fa-network-wired' };
+            if (key === 'p&m') return { key: 'pm', label: 'P&M', fullLabel: 'P&M (Clearance Approver)', sub: 'Technical Clearance (Plant & Machinery)', icon: 'fa-gears' };
+            const r = ROLES.find(r => r.key === norm || r.key === key);
+            if (r) return Object.assign({}, r, { fullLabel: reg ? reg.fullLabel : r.label });
+            return { key: norm || key, label: reg ? reg.shortLabel : 'Authorized Signatory', fullLabel: reg ? reg.fullLabel : 'Authorized Signatory', sub: '', icon: 'fa-user' };
         }
 
         /* ---------------- DATA ACCESS LAYER (STORAGE SERVICE) ---------------- */
@@ -9239,11 +9318,20 @@
             return pwd.join('');
         }
         function fmtDate(d) {
+            if (!d) return '—';
             if (typeof d === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(d)) { const p = d.split('-'); d = new Date(+p[0], +p[1] - 1, +p[2]); }
             else d = new Date(d);
-            return d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+            if (isNaN(d.getTime())) return '—';
+            return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
         }
-        function fmtTime(d) { d = new Date(d); return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Kolkata' }); }
+        function formatDate(d) { return fmtDate(d); }
+        function fmtTime(d) {
+            if (!d) return '—';
+            d = new Date(d);
+            if (isNaN(d.getTime())) return '—';
+            return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+        }
+        function formatTime(d) { return fmtTime(d); }
         function fmtDateTime(d) { return fmtDate(d) + ', ' + fmtTime(d); }
         function pad(n) { return n < 10 ? '0' + n : '' + n; }
         function minutesToHHMM(m) { return pad(Math.floor(m / 60)) + ':' + pad(m % 60); }
@@ -9764,7 +9852,20 @@
                     window.AUDIT_LOGS = s.auditLogs.filter(a => a && !['aud-001', 'aud-002', 'aud-003', 'aud-004', 'aud-005'].includes(a.id));
                 }
                 // Migration: records stored before the Hot Work module get explicit type + chain kind.
+                const realNowMs = Date.now();
                 PERMITS.forEach(function (p) {
+                    if (p.createdAt) {
+                        const ca = new Date(p.createdAt);
+                        if (!isNaN(ca.getTime()) && ca.getTime() > realNowMs + 60000) {
+                            p.createdAt = new Date(realNowMs);
+                        }
+                    }
+                    if (p.submittedAt) {
+                        const sa = new Date(p.submittedAt);
+                        if (!isNaN(sa.getTime()) && sa.getTime() > realNowMs + 60000) {
+                            p.submittedAt = new Date(realNowMs);
+                        }
+                    }
                     if (!p.ptype) p.ptype = 'excavation';
                     if (p.approvals && !p.approvals.kind) p.approvals.kind = p.approvals.mep ? 'exc' : 'hw';
                     if (p.extension) {
@@ -10143,11 +10244,26 @@
            Hot Work: section-head (hw-section-head) -> ehs (either) -> complete
            ================================================================ */
         function newChain(type, draftOrSub) {
+            if (type && typeof type === 'object') {
+                draftOrSub = type;
+                type = ptypeOf(type);
+            }
             const pend = () => ({ status: 'pending', by: null, at: null, gps: null, comment: null });
             if (type === 'nightshift') {
                 return { kind: 'nightshift', sectionHead: pend(), nightHandover: pend(), pmNight: pend(), ehsManager: pend(), ehsOfficer: pend() };
             }
             if (type === 'lifting' || type === 'lifting-routine') {
+                const isCritFromDraft = (draftOrSub && typeof draftOrSub === 'object') && (
+                    draftOrSub.liftingClassification === 'critical' ||
+                    parseFloat(draftOrSub.loadWeight || draftOrSub.craneLoadWeight || 0) > 5 ||
+                    draftOrSub.liftingTandemLift === 'yes' ||
+                    draftOrSub.craneTandemLift === 'yes' ||
+                    draftOrSub.tandemLift === true ||
+                    draftOrSub.tandemLift === 'yes'
+                );
+                if (isCritFromDraft && type === 'lifting') {
+                    return { kind: 'lifting-critical', pm: pend(), sectionHead: pend(), projectManager: pend(), ehsManager: pend(), ehsOfficer: pend() };
+                }
                 return { kind: 'lifting-routine', pm: pend(), sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() };
             }
             if (type === 'liftplan' || type === 'lifting-critical') {
@@ -10169,11 +10285,11 @@
                 return { kind: 'shaft', mep: pend(), sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() };
             }
             if (type === 'blasting') {
-                return { kind: 'blasting', ehsManager: pend(), ehsOfficer: pend() };
+                return { kind: 'blasting', sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() };
             }
             if (type === 'electrical') {
                 const isBatching = (draftOrSub && typeof draftOrSub === 'object')
-                    ? (draftOrSub.electricalSiteType === 'batching_plant')
+                    ? (draftOrSub.electricalSiteType === 'batching_plant' || draftOrSub.facilityScope === 'batching_plant')
                     : (draftOrSub === 'batching_plant' || draftOrSub === 'batching');
                 if (isBatching) {
                     return { kind: 'electrical-batching', pm: pend(), qualityEngineer: pend(), ehsManager: pend(), ehsOfficer: pend() };
@@ -10227,8 +10343,11 @@
                 return 'complete';
             }
             if (chain.kind === 'blasting') {
+                if (chain.sectionHead && (chain.sectionHead.status === 'cancelled')) return 'cancelled-sectionhead';
+                if (chain.sectionHead && (chain.sectionHead.status === 'rejected')) return 'rejected-sectionhead';
                 if ((chain.ehsManager && chain.ehsManager.status === 'cancelled') || (chain.ehsOfficer && chain.ehsOfficer.status === 'cancelled')) return 'cancelled-ehs';
                 if ((chain.ehsManager && chain.ehsManager.status === 'rejected') || (chain.ehsOfficer && chain.ehsOfficer.status === 'rejected')) return 'rejected-ehs';
+                if (chain.sectionHead && chain.sectionHead.status !== 'approved') return 'section-head';
                 if ((!chain.ehsManager || chain.ehsManager.status !== 'approved') && (!chain.ehsOfficer || chain.ehsOfficer.status !== 'approved')) return 'ehs';
                 return 'complete';
             }
@@ -10318,9 +10437,10 @@
                 p = chain;
                 chain = chain.approvals;
             }
-            const rk = roleKey || (currentUser && currentUser.key);
+            const rawRk = String(roleKey || (currentUser && currentUser.key) || '').trim().toLowerCase();
+            const rk = normalizeRoleKey(rawRk);
             if (!rk) return false;
-            if (p && (p.status === 'Night Shift Approved – Awaiting Linked Permit')) return rk === targetInitiatorForNightLinked(p);
+            if (p && (p.status === 'Night Shift Approved – Awaiting Linked Permit')) return rk === normalizeRoleKey(targetInitiatorForNightLinked(p));
             if (p && (p.status === 'Approved – Pending Night Handover')) return rk === 'night-supervisor';
             if (p && p.status === 'Pending P&M Night Acknowledgment') return rk === 'pm';
             if (p && p.status === 'Returned to Night Supervisor') return rk === 'night-supervisor';
@@ -10364,6 +10484,7 @@
                 return false;
             }
             if (chain.kind === 'blasting') {
+                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10437,9 +10558,9 @@
             }
             if (stage === 'section-head') {
                 if (chain.kind === 'exc') {
-                    return (rk === 'excavation-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                    return (rk === 'excavation-head' || rawRk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
                 }
-                return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                return (rk === 'hw-section-head' || rawRk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
             }
             if (stage === 'ehs') {
                 if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
@@ -10448,7 +10569,56 @@
             }
             return false;
         }
-        const CHAIN_ROLE_FIELD = { 'site-engineer': 'siteEngineer', 'mep': 'mep', 'pm': 'pm', 'it': 'it', 'section-head': 'sectionHead', 'hw-section-head': 'sectionHead', 'excavation-head': 'sectionHead', 'project-manager': 'projectManager', 'ehs-manager': 'ehsManager', 'ehs-officer': 'ehsOfficer', 'quality-engineer': 'qualityEngineer', 'night-supervisor': 'nightHandover', 'pm-night': 'pmNight' };
+        const CHAIN_ROLE_FIELD = {
+            'site-engineer': 'siteEngineer',
+            'mep': 'mep',
+            'mep-engineer': 'mep',
+            'pm': 'pm',
+            'pm-engineer': 'pm',
+            'p&m': 'pm',
+            'it': 'it',
+            'it-in-charge': 'it',
+            'section-head': 'sectionHead',
+            'hw-section-head': 'sectionHead',
+            'tower-in-charge': 'sectionHead',
+            'excavation-head': 'sectionHead',
+            'project-manager': 'projectManager',
+            'ehs-manager': 'ehsManager',
+            'ehs-head': 'ehsManager',
+            'ehs-officer': 'ehsOfficer',
+            'ehs-supervisor': 'ehsOfficer',
+            'quality-engineer': 'qualityEngineer',
+            'night-supervisor': 'nightHandover',
+            'pm-night': 'pmNight'
+        };
+
+        function getNextApproverLabel(p) {
+            if (!p || !p.status) return '';
+            const st = p.status;
+            if (st === 'Pending Site Engineer Acknowledgment' || st === 'Pending Site Engineer Re-Acknowledgment') return 'Site Engineer (Reviewer / Approver)';
+            if (st === 'Pending Blasting In-charge Acknowledgment' || st === 'Pending Blasting In-charge Re-Acknowledgment') return 'Blasting In-Charge (Permittee)';
+            if (st === 'Pending P&M Acknowledgment' || st === 'Pending P&M Re-Acknowledgment' || st === 'Pending P&M Approval' || st === 'Pending P&M Night Acknowledgment') return 'P&M (Clearance Approver)';
+            if (st === 'Pending Quality Engineer Approval') return 'Quality Engineer (Approver)';
+            if (st === 'Pending MEP Clearance') return 'MEP (Clearance Approver)';
+            if (st === 'Pending MEP or P&M Approval' || st === 'Pending MEP & P&M Clearance') return 'MEP / P&M (Clearance Approver)';
+            if (st === 'Pending Parallel Approval') {
+                const a = p.approvals || {};
+                const pends = [];
+                if (!a.mep || a.mep.status === 'pending') pends.push('MEP');
+                if (!a.pm || a.pm.status === 'pending') pends.push('P&M');
+                if (!a.it || a.it.status === 'pending') pends.push('IT In-Charge');
+                return (pends.length ? pends.join(', ') : 'MEP, P&M, IT In-Charge') + ' (Clearance Approver)';
+            }
+            if (st === 'Pending Section Head' || st === 'Pending Tower Incharge' || st === 'Pending Excavation Head') {
+                return ptypeOf(p) === 'excavation' ? 'Excavation Head (Approver)' : 'Tower In-Charge / Section Head (Approver)';
+            }
+            if (st === 'Pending Project Manager Acknowledgment' || st === 'Pending Project Manager Re-Acknowledgment') return 'Project Manager (Approver)';
+            if (st === 'Pending EHS Approval') return 'EHS Supervisor / EHS Head (Issuer / Approver)';
+            if (st === 'Night Shift Approved – Awaiting Linked Permit') return 'Site Supervisor (Permittee)';
+            if (st === 'Approved – Pending Night Handover' || st === 'Returned to Night Supervisor') return 'Night Site Supervisor (PTW-010 Night Shift Handover)';
+            if (st === 'Returned for Correction') return getRoleDisplayLabel(p.createdByRole || 'site-supervisor');
+            return '';
+        }
 
         function snapshotDisciplineFields(p) {
             if (!p) return {};
@@ -10476,7 +10646,8 @@
 
         function actOnChain(chain, roleKey, decision, payload) {
             // decision: 'approved' | 'rejected' | 'cancelled'
-            const field = CHAIN_ROLE_FIELD[roleKey] || roleKey;
+            const normKey = normalizeRoleKey(roleKey);
+            const field = CHAIN_ROLE_FIELD[roleKey] || CHAIN_ROLE_FIELD[normKey] || roleKey;
             const signer = (payload && payload.signerName) || (currentUser && currentUser.name) || (roleInfo(roleKey) ? roleInfo(roleKey).label : roleKey);
             if (chain && field) {
                 chain[field] = { status: decision, by: signer, at: nowTime(), gps: (payload && payload.gps) || null, comment: (payload && payload.comment) || null, sig: (payload && payload.sig) || null, consent: (payload && payload.consent) || false };
@@ -10796,13 +10967,12 @@
             }
 
             if (ptypeOf(p) === 'blasting') {
-                p.status = 'Pending EHS Approval';
+                p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('blasting');
-                const stepNum = p.dbOperationType === 'Blasting' ? 'Step 4' : 'Step 3';
-                logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Drilling & Blasting permit to EHS Safety for final verification & activation (' + stepNum + ').' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
-                notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' acknowledged by Site Engineer — EHS Safety verification required.', 'info', p.id);
-                notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to EHS for activation.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to EHS Review.', 'ok');
+                logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Drilling & Blasting permit to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
+                notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
+                notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
+                showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
                 saveState();
                 return;
             }
@@ -13684,21 +13854,22 @@
             const roleSel = document.getElementById('newStaffRole');
             if (roleSel) {
                 const baseOpts = [
-                    { v: 'site-supervisor', t: 'Site Supervisor (Permit Initiator / Permittee)' },
-                    { v: 'site-engineer', t: 'Site Engineer / Tower Incharge (Stage 2 Reviewer)' },
-                    { v: 'excavation-head', t: 'Excavation Execution Head (Conditional Reviewer)' },
-                    { v: 'hw-section-head', t: 'Hot Work Section Head (Conditional Reviewer)' },
-                    { v: 'mep', t: 'MEP Engineer (Parallel Technical Reviewer)' },
-                    { v: 'pm', t: 'Plant & Machinery / P&M Head (Parallel Reviewer)' },
-                    { v: 'quality-engineer', t: 'Quality Engineer (Parallel Reviewer)' },
-                    { v: 'it', t: 'IT / Systems Engineer (Parallel Reviewer)' },
-                    { v: 'ehs-officer', t: 'Site EHS Officer (Stage 3 Safety Approver & PDF Custody)' },
-                    { v: 'ehs-manager', t: 'Project EHS Manager (Stage 3 Final Approver & PDF Custody)' },
-                    { v: 'project-manager', t: 'Project Head / Project Manager (Escalation & Oversight)' },
-                    { v: 'electrician', t: 'Permittee Electrician (Electrical)' },
-                    { v: 'blasting-incharge', t: 'Blasting In-charge (PTW-007)' },
-                    { v: 'lift-supervisor', t: 'Lifting Supervisor (PTW-009)' },
-                    { v: 'night-supervisor', t: 'Night Site Supervisor (PTW-010)' }
+                    { v: 'site-supervisor', t: 'Site Supervisor (Permittee)' },
+                    { v: 'lift-supervisor', t: 'Lifting Supervisor (Permittee)' },
+                    { v: 'blasting-incharge', t: 'Blasting In-Charge (Permittee)' },
+                    { v: 'electrician', t: 'Electrician (Permittee)' },
+                    { v: 'site-engineer', t: 'Site Engineer (Reviewer / Approver)' },
+                    { v: 'mep', t: 'MEP (Clearance Approver)' },
+                    { v: 'pm', t: 'P&M (Clearance Approver)' },
+                    { v: 'it', t: 'IT In-Charge (Clearance Approver)' },
+                    { v: 'quality-engineer', t: 'Quality Engineer (Approver)' },
+                    { v: 'excavation-head', t: 'Excavation Head (Approver)' },
+                    { v: 'hw-section-head', t: 'Tower In-Charge / Section Head (Approver)' },
+                    { v: 'project-manager', t: 'Project Manager (Approver)' },
+                    { v: 'ehs-officer', t: 'EHS Supervisor (Issuer / Approver)' },
+                    { v: 'ehs-manager', t: 'EHS Head (Issuer / Approver)' },
+                    { v: 'project-admin', t: 'Site Admin (Project Admin)' },
+                    { v: 'night-supervisor', t: 'Night Site Supervisor (PTW-010 Night Shift Handover)' }
                 ];
                 const customRoles = (window.PROJECT_ROLES || []).filter(r => r.projectId === prj.id);
                 let html = '';
@@ -13858,6 +14029,7 @@
                     '<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;background:#ECFDF5;color:#047857;border:1px solid #A7F3D0;">&bull; Active (Firebase Auth)</span>' +
                     '</td>' +
                     '<td style="padding:11px 12px;white-space:nowrap;">' +
+                    '<button type="button" class="btn btn-xs btn-ghost" onclick="siteAdminEditStaff(\'' + escapeHtml(stf.id) + '\')" style="color:#0F172A;padding:4px 8px;font-size:11px;margin-right:6px;border:1px solid #CBD5E1;background:#F8FAFC;" title="Edit Staff Profile &amp; Role Assignments"><i class="fa-solid fa-pen-to-square"></i> Edit</button>' +
                     '<button type="button" class="btn btn-xs btn-ghost" onclick="siteAdminResetStaffPassword(\'' + escapeHtml(stf.id) + '\')" style="color:#1D4ED8;padding:4px 8px;font-size:11px;margin-right:6px;border:1px solid #BFDBFE;background:#EFF6FF;" title="Send Firebase Password Reset Email"><i class="fa-solid fa-key"></i> Reset Password</button>' +
                     '<button type="button" class="btn btn-xs btn-ghost" onclick="siteAdminRemoveStaff(\'' + escapeHtml(stf.id) + '\')" style="color:#DC2626;padding:4px 8px;font-size:11px;border:1px solid #FECACA;background:#FEF2F2;" title="Revoke &amp; Remove Role"><i class="fa-solid fa-trash-can"></i> Revoke / Remove</button>' +
                     '</td>' +
@@ -13872,6 +14044,47 @@
                 if (isCampusWide) towerSel.title = 'Campus-Wide user operates across all locations.';
                 else towerSel.title = '';
             }
+        }
+
+        function siteAdminEditStaff(staffId) {
+            const stf = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && (s.id === staffId || s.uid === staffId));
+            if (!stf) return;
+            window.editingEmpanelStaffId = stf.uid || stf.id;
+            const empanelNameEl = document.getElementById('empanelFullName');
+            const nameEl = document.getElementById('newStaffName');
+            const empanelEmailEl = document.getElementById('empanelEmail');
+            const emailEl = document.getElementById('newStaffEmail');
+            const empanelEmpIdEl = document.getElementById('empanelEmpId');
+            const empIdEl = document.getElementById('newStaffEmpId');
+            const empanelRoleEl = document.getElementById('empanelRoleSelect');
+            const roleSel = document.getElementById('newStaffRole');
+            const empanelTowerEl = document.getElementById('empanelTowerSelect');
+            const towerSel = document.getElementById('newStaffTower');
+            const prjSel = document.getElementById('newStaffProject');
+            const submitBtn = document.getElementById('empanelSubmitBtn');
+
+            if (prjSel && stf.projectId && !prjSel.disabled) {
+                prjSel.value = stf.projectId;
+                onStaffProjectChange();
+            }
+            if (empanelNameEl) empanelNameEl.value = stf.name || stf.displayName || '';
+            if (nameEl) nameEl.value = stf.name || stf.displayName || '';
+            if (empanelEmailEl) empanelEmailEl.value = stf.email || '';
+            if (emailEl) emailEl.value = stf.email || '';
+            if (empanelEmpIdEl) empanelEmpIdEl.value = stf.employeeId || stf.empId || '';
+            if (empIdEl) empIdEl.value = stf.employeeId || stf.empId || '';
+            if (empanelRoleEl && stf.role) empanelRoleEl.value = stf.role;
+            if (roleSel && stf.role) roleSel.value = stf.role;
+            if (empanelTowerEl && (stf.assignedTower || stf.location)) empanelTowerEl.value = stf.assignedTower || stf.location;
+            if (towerSel && (stf.assignedTower || stf.location)) towerSel.value = stf.assignedTower || stf.location;
+            if (submitBtn) {
+                submitBtn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Update Staff Profile &amp; Role';
+            }
+            if (empanelNameEl && typeof empanelNameEl.scrollIntoView === 'function') {
+                empanelNameEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                empanelNameEl.focus();
+            }
+            showToast('Editing ' + (stf.name || stf.email) + ' — modify fields and click Update.', 'info');
         }
 
         async function handleEmpanelSiteRoleSubmit(e) {
@@ -13932,19 +14145,14 @@
                 : (prjSel && prjSel.value ? prjSel.value : (PROJECTS[adminConfigState.selectedProjectIndex] ? PROJECTS[adminConfigState.selectedProjectIndex].id : PROJECTS[0].id));
             const targetPrj = PROJECTS.find(p => p.id === lockedPrjId) || PROJECTS[0];
 
-            // Prevent duplicate creation with same email across this project
-            const existingInSamePrj = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && s.email && s.email.toLowerCase() === rawEmail && s.projectId === targetPrj.id);
-            if (existingInSamePrj) {
-                showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Duplicate Account:</b> A staff member with email <b>' + escapeHtml(rawEmail) + '</b> is already empaneled on ' + escapeHtml(targetPrj.name) + ' (' + escapeHtml(existingInSamePrj.roleLabel || existingInSamePrj.role) + '). Use the action buttons in the directory table to update their credentials or revoke their role.');
-                showToast('User already empaneled: ' + rawEmail, 'warn');
-                return;
-            }
+            // Check if editing an existing account or appending a new role assignment
+            const existingInSamePrj = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && ((window.editingEmpanelStaffId && (s.id === window.editingEmpanelStaffId || s.uid === window.editingEmpanelStaffId)) || (s.email && s.email.toLowerCase() === rawEmail && s.projectId === targetPrj.id)));
 
             const activeRoleSel = empanelRoleEl || roleSel;
             const roleKey = activeRoleSel ? activeRoleSel.value : 'site-supervisor';
             const baseRoleText = activeRoleSel && activeRoleSel.options[activeRoleSel.selectedIndex]
-                ? activeRoleSel.options[activeRoleSel.selectedIndex].text.split('(')[0].split('[')[0].trim()
-                : 'Site Supervisor';
+                ? activeRoleSel.options[activeRoleSel.selectedIndex].text.split('[')[0].trim()
+                : getRoleDisplayLabel(roleKey);
             const roleText = (customTitleEl && customTitleEl.value.trim()) ? customTitleEl.value.trim() : baseRoleText;
 
             const assignedTower = (empanelTowerEl && empanelTowerEl.value)
@@ -14038,14 +14246,29 @@
                     console.warn('Secondary auth provision notice:', secErr);
                 }
 
-                finalUid = authUid || ('stf-' + uid());
+                finalUid = window.editingEmpanelStaffId || (existingInSamePrj && (existingInSamePrj.uid || existingInSamePrj.id)) || authUid || ('stf-' + uid());
 
-                let staffSig = window.empanelStaffSig || null;
+                let staffSig = window.empanelStaffSig || (existingInSamePrj && existingInSamePrj.signature) || null;
                 if (!staffSig) {
                     const cv = document.getElementById('empanelSigPad');
                     const st = (typeof SIG_PADS !== 'undefined') ? SIG_PADS['empanelSigPad'] : null;
                     if (st && st.inked && cv) staffSig = cv.toDataURL('image/png');
                 }
+
+                const prevAssignments = (existingInSamePrj && Array.isArray(existingInSamePrj.assignments)) ? existingInSamePrj.assignments.slice() : [];
+                const newAssignmentEntry = {
+                    projectId: targetPrj.id,
+                    projectName: targetPrj.name,
+                    locationId: isCampusWide ? 'CAMPUS-WIDE' : (locObj ? locObj.id : assignedTower),
+                    locationName: isCampusWide ? 'All Site Towers' : assignedTower,
+                    role: roleKey,
+                    roleLabel: roleText
+                };
+                const dupAssIdx = prevAssignments.findIndex(a => a.projectId === newAssignmentEntry.projectId && a.role === newAssignmentEntry.role && a.locationName === newAssignmentEntry.locationName);
+                if (dupAssIdx >= 0) prevAssignments[dupAssIdx] = newAssignmentEntry;
+                else prevAssignments.push(newAssignmentEntry);
+                const mergedRoles = Array.from(new Set([roleKey].concat((existingInSamePrj && Array.isArray(existingInSamePrj.roles)) ? existingInSamePrj.roles : [])));
+                const mergedLocs = Array.from(new Set([assignedTower].concat((existingInSamePrj && Array.isArray(existingInSamePrj.assignedLocations)) ? existingInSamePrj.assignedLocations : [])));
 
                 // Persist to Cloud Firestore with strict asynchronous confirmation
                 if (typeof firebase !== 'undefined' && firebase.firestore) {
@@ -14062,6 +14285,9 @@
                         uiRole: roleKey,
                         ptwRole: roleKey,
                         roleLabel: roleText,
+                        roles: mergedRoles,
+                        assignedLocations: mergedLocs,
+                        assignments: prevAssignments,
                         projectId: targetPrj.id,
                         projectName: targetPrj.name,
                         assignedTower: assignedTower,
@@ -14231,6 +14457,7 @@
             if (typeof clearSigPad === 'function') clearSigPad('empanelSigPad');
             window.empanelStaffSig = null;
 
+            window.editingEmpanelStaffId = null;
             if (submitBtn) {
                 submitBtn.disabled = false;
                 submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
@@ -18568,17 +18795,22 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     ? cfg.detailsSummary(p)
                     : (pt === 'confined' ? (p.confinedActivity || p.activity || 'Confined Space Entry') : pt === 'guardrail' ? (p.locationStructure === 'Tower' ? (p.tower + (p.grFloor ? ' &middot; ' + p.grFloor : '')) : (p.grBasementPodium || 'Podium/Basement')) : pt === 'shaft' ? ((p.shaftLocationType || 'Tower') + ' &middot; ' + (p.shaftFloor || '')) : pt === 'hotwork' ? ((p.hotworkTypes || []).join(', ')) : (pt === 'electrical' ? ((p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' ? 'Batching Plant' : 'Site') + ' &middot; ' + (Array.isArray(p.electricalApparatus) ? p.electricalApparatus.join(', ') : (p.apparatus || 'HT/LT Work'))) : (pt === 'blasting' ? ((p.dbOperationType || 'Drilling') + (p.dbOperationType === 'Blasting' ? (' &middot; ' + (p.dbChargeAmount || '—') + ' kg') : (' &middot; ' + (p.dbMachineType || 'Machine')))) : (p.depth + ' m'))));
                 const sunBadge = p.sundayWork ? ' <span class="badge" style="background:#FEF3C7;color:#B45309;border:1px solid #FCD34D;font-size:9.5px;margin-left:3px;" title="Pre-authorized for Sunday Work"><i class="fa-solid fa-sun"></i> SUN</span>' : '';
+                const awaitingLbl = getNextApproverLabel(p);
+                const awaitingBadge = awaitingLbl ? ('<div style="margin-top:4px;"><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;"><i class="fa-solid fa-hourglass-half" style="font-size:9px;"></i> Awaiting: ' + escapeHtml(awaitingLbl) + '</span></div>') : '';
+                const canActNow = currentUser && roleCanActOnChain(p, currentUser.key);
                 return '<tr style="cursor:pointer;" onclick="' + (p.status === 'Draft' ? 'resumeDraft(PERMITS.find(x => x.id === \'' + p.id + '\'))' : 'viewDetail(\'' + p.id + '\')') + '"><td class="mono">' + p.id + (p.extension && ['Pending Site Engineer', 'Pending Parallel Approval', 'Pending Section Head', 'Pending EHS Approval'].includes(p.extension.status) ? ' <span class="badge st-sectionhead" style="margin-left:4px;">EXT</span>' : '') + sunBadge + '</td>' +
                     '<td><span class="badge" style="font-size:10px;' + pBadgeStyle + '"><i class="fa-solid ' + pIcon + '"></i> ' + pMeta(p).code + '</span></td>' +
                     '<td>' + p.project + '<br><span style="color:var(--text-muted);font-size:11.5px;">' + (p.tower || (p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.tower ? p.locationStructure.tower : 'Site Wide')) + '</span></td>' +
                     '<td><span style="font-size:11.5px;">' + pSubText + '</span></td>' +
-                    '<td>' + statusBadge(p.status, p) + '</td>' +
+                    '<td>' + statusBadge(p.status, p) + awaitingBadge + '</td>' +
                     '<td><span style="font-size:11.5px;font-weight:600;">' + shLabelFor(p) + '</span></td>' +
                     '<td>' + (p.validTill ? fmtDateTime(p.validTill) : '<span style="color:var(--text-faint);">&mdash; Draft</span>') + '</td>' +
                     '<td>' + requestedByDisplayFor(p) + '</td>' +
                     (p.status === 'Draft'
                         ? '<td><button class="btn btn-sm btn-primary" title="Resume Draft" onclick="event.stopPropagation();resumeDraft(PERMITS.find(x => x.id === \'' + p.id + '\'))" style="padding:4px 10px;font-size:11.5px;white-space:nowrap;"><i class="fa-solid fa-pen-to-square"></i> Resume</button></td>'
-                        : '<td><button class="btn btn-sm btn-ghost" title="View Detail" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')"><i class="fa-solid fa-arrow-right"></i></button></td>') +
+                        : (canActNow
+                            ? '<td><div style="display:flex;gap:5px;align-items:center;"><button class="btn btn-sm btn-primary" title="Approve / Review Permit" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')" style="padding:4px 9px;font-size:11px;background:#16A34A;border-color:#15803D;white-space:nowrap;"><i class="fa-solid fa-check"></i> Approve</button><button class="btn btn-sm btn-ghost" title="View Detail" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')"><i class="fa-solid fa-arrow-right"></i></button></div></td>'
+                            : '<td><button class="btn btn-sm btn-ghost" title="View Detail" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')"><i class="fa-solid fa-arrow-right"></i></button></td>')) +
                     '</tr>';
             }).join('');
         }
@@ -22841,16 +23073,16 @@ function trackerHtml(p) {
             html += node('Site Engineer', (isEngAckDone && !isPendingEng) ? 'Step 2 · Ground Checked' : (isPendingEng ? 'Step 2 · Action Req.' : 'Step 2 · Field Ack'), engState, '', 'Site Engineer physical route verification & switchgear inspection');
             html += '<div class="tr-line ' + ((isEngAckDone && !isPendingEng) ? 'done' : '') + '"></div>';
 
-            // Step 3: Dual Clearance Gate (MEP · P&M)
+            // Step 3: First-Wins Domain Clearance Gate (MEP / P&M)
             const isMepDone = !!(a.mep && a.mep.status === 'approved');
             const isPmDone = !!(a.pm && a.pm.status === 'approved');
-            const dualDone = isMepDone && isPmDone;
+            const dualDone = isMepDone || isPmDone;
             const isDualActive = p.status === 'Pending MEP & P&M Clearance' || p.status === 'Pending MEP or P&M Approval';
             html += '<div class="tr-parallel-wrap"><div class="tr-parallel-row">' +
-                node('MEP', isMepDone ? 'Approved' : (a.mep && a.mep.status === 'rejected' ? 'Rejected' : (isDualActive ? 'Action Req.' : 'Pending')), isMepDone ? 'done' : (a.mep && a.mep.status === 'rejected' ? 'rejected' : (isDualActive ? 'current' : '')), '', 'MEP utility clearance status') +
-                '<div class="tr-line ' + (isMepDone ? 'done' : '') + '" style="min-width:14px;max-width:24px;"></div>' +
-                node('P&M', isPmDone ? 'Approved' : (a.pm && a.pm.status === 'rejected' ? 'Rejected' : (isDualActive ? 'Action Req.' : 'Pending')), isPmDone ? 'done' : (a.pm && a.pm.status === 'rejected' ? 'rejected' : (isDualActive ? 'current' : '')), '', 'P&M plant clearance status') +
-                '</div><div class="tr-parallel-label">Step 3 &middot; Dual Domain Clearance Gate (Both Req.)</div></div>';
+                node('MEP', isMepDone ? 'Approved' : (a.mep && a.mep.status === 'rejected' ? 'Rejected' : (isDualActive ? 'Action Req.' : (dualDone ? 'Bypassed (First-Wins)' : 'Pending'))), isMepDone ? 'done' : (a.mep && a.mep.status === 'rejected' ? 'rejected' : (isDualActive ? 'current' : (dualDone ? 'done' : ''))), '', 'MEP utility clearance status (First-Wins with P&M)') +
+                '<div class="tr-line ' + (dualDone ? 'done' : '') + '" style="min-width:14px;max-width:24px;"></div>' +
+                node('P&M', isPmDone ? 'Approved' : (a.pm && a.pm.status === 'rejected' ? 'Rejected' : (isDualActive ? 'Action Req.' : (dualDone ? 'Bypassed (First-Wins)' : 'Pending'))), isPmDone ? 'done' : (a.pm && a.pm.status === 'rejected' ? 'rejected' : (isDualActive ? 'current' : (dualDone ? 'done' : ''))), '', 'P&M plant clearance status (First-Wins with MEP)') +
+                '</div><div class="tr-parallel-label">Step 3 &middot; MEP / P&amp;M Clearance Gate (First-Wins)</div></div>';
             html += '<div class="tr-line ' + (dualDone ? 'done' : '') + '"></div>';
 
             // Step 4: Tower Incharge
@@ -22876,26 +23108,34 @@ function trackerHtml(p) {
 
     } else if (pt === 'blasting') {
         // =========================================================================
-        // PTW-007: DRILLING & BLASTING (3-STAGE DIRECT STATUTORY SPINE TO EHS)
+        // PTW-007: DRILLING & BLASTING (4-STAGE STATUTORY SPINE: BLASTING IN-CHARGE -> SITE ENGINEER -> TOWER INCHARGE -> EHS)
         // =========================================================================
         // Step 1: Blasting / Drilling In-charge (PESO Declaration)
         const supState = p.status === 'Draft' ? 'current' : (p.status === 'Returned for Correction' ? 'current' : 'done');
         const supSub = p.status === 'Draft' ? 'Step 1 · In Progress' : (p.status === 'Returned for Correction' ? 'Step 1 · Correcting' : 'Step 1 · PESO Declared');
-        html += node('Blasting In-charge', supSub, supState, '', 'Certified Blasting In-charge statutory PESO declaration, rig parameters, and misfire verification');
+        html += node('Blasting In-Charge', supSub, supState, '', 'Certified Blasting In-Charge statutory PESO declaration, rig parameters, and misfire verification');
         html += '<div class="tr-line ' + (p.status !== 'Draft' ? 'done' : '') + '"></div>';
 
         // Step 2: Site Engineer Technical Acknowledgment
         const isPendingEng = (p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment');
         const engState = (isEngAckDone && !isPendingEng) ? 'done' : (isPendingEng ? 'current' : '');
-        html += node('Site Engineer', (isEngAckDone && !isPendingEng) ? 'Step 2 · Tech Ack' : (isPendingEng ? 'Step 2 · Action Req.' : 'Step 2 · Technical Ack'), engState, '', 'Site Engineer ground check and technical acknowledgment (Cannot Cancel)');
+        html += node('Site Engineer', (isEngAckDone && !isPendingEng) ? 'Step 2 · Tech Ack' : (isPendingEng ? 'Step 2 · Action Req.' : 'Step 2 · Technical Ack'), engState, '', 'Site Engineer ground check and technical acknowledgment');
         html += '<div class="tr-line ' + ((isEngAckDone && !isPendingEng) ? 'done' : '') + '"></div>';
 
-        // Step 3: EHS Safety Endorsement (Direct Statutory Bypass of Section Head & Parallel Gates)
+        // Step 3: Tower In-Charge / Section Head
+        const isSectionHeadActive = p.status === 'Pending Section Head';
+        const isSectionHeadDone = !!(a.sectionHead && a.sectionHead.status === 'approved');
+        const isSectionHeadRejected = !!(a.sectionHead && (a.sectionHead.status === 'rejected' || a.sectionHead.status === 'cancelled'));
+        const shState = isSectionHeadDone ? 'done' : (isSectionHeadRejected ? 'rejected' : (isSectionHeadActive ? 'current' : ''));
+        html += node('Tower Incharge', isSectionHeadDone ? 'Step 3 · Approved' : (isSectionHeadRejected ? 'Cancelled' : (isSectionHeadActive ? 'Step 3 · Action Req.' : 'Step 3 · Review')), shState, '', 'Tower In-Charge / Section Head sectional blast perimeter review');
+        html += '<div class="tr-line ' + (isSectionHeadDone ? 'done' : '') + '"></div>';
+
+        // Step 4: EHS Safety Endorsement
         const isEhsActive = p.status === 'Pending EHS Approval';
         const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved'));
         const isEhsRejected = !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
         const ehsState = isEhsDone ? 'done' : (isEhsRejected ? 'rejected' : (isEhsActive ? 'current' : ''));
-        html += node('EHS Safety', isEhsDone ? 'Step 3 · Direct Bypass' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 3 · Action Req.' : 'Step 3 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement with 500m siren perimeter verification (Direct to EHS)');
+        html += node('EHS Safety', isEhsDone ? 'Step 4 · Endorsed' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 4 · Action Req.' : 'Step 4 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement with 500m siren perimeter verification (First-Wins)');
         html += '<div class="tr-line ' + (isEhsDone ? 'done' : '') + '"></div>';
 
         // Final Step: Active (with 18:30 Sunset Stop Rule)
@@ -23147,6 +23387,14 @@ function trackerHtml(p) {
             (p.observation.shRejection ? ('<div style="font-size:12px;color:#C62828;margin-top:4px;"><i class="fa-solid fa-rotate-left"></i> <b>Previous Rectification Rejected by ' + shApproverTitle + ':</b> "' + escapeHtml(p.observation.shRejection.comment || '') + '" &mdash; please re-rectify and submit fresh evidence.</div>') : '') +
             (p.observation.ehsRejection ? ('<div style="font-size:12px;color:#C62828;margin-top:4px;"><i class="fa-solid fa-rotate-left"></i> <b>Previous Rectification Rejected by EHS:</b> "' + escapeHtml(p.observation.ehsRejection.comment || '') + '" &mdash; please re-rectify and submit fresh evidence.</div>') : '') +
             '</div>';
+    }
+
+    const nextApproverBanner = getNextApproverLabel(p);
+    if (nextApproverBanner) {
+        html = '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:10px;padding:8px 12px;border-radius:8px;background:#EFF6FF;border:1px solid #BFDBFE;">' +
+            '<span style="font-size:12px;font-weight:700;color:#1E40AF;"><i class="fa-solid fa-hourglass-half" style="margin-right:6px;color:#2563EB;"></i>Awaiting: ' + escapeHtml(nextApproverBanner) + '</span>' +
+            '<span style="font-size:11px;font-weight:600;color:#475569;">Stage: ' + escapeHtml(p.status) + '</span>' +
+            '</div>' + html;
     }
 
     return html;
@@ -23543,9 +23791,9 @@ function trackerHtml(p) {
                     const pReturnTarget = (p.createdByRole === 'blasting-incharge') ? 'In-charge' : (isElectrical ? 'Electrician' : (isLifting ? 'Lifting Supervisor' : 'Supervisor'));
                     html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(21,101,192,0.06);">' +
                         '<div class="aa-title"><i class="fa-solid fa-clipboard-check" style="color:var(--blue);"></i> ' + (isReack ? 'Re-Acknowledgment &amp; Approval Required' : 'Step 2: Site Engineer Approval &amp; Acknowledgment') + '</div>' +
-                        '<div class="aa-desc">' + (isReack ? (pCreatorName + ' resubmitted the permit with corrected checklist/details. Review changes and approve to forward (your signature on file will be reused without re-entry).') : (isLifting ? ('Lifting Supervisor (Permittee) submitted the lifting operations permit (' + (p.liftingClassification === 'critical' || ptypeOf(p) === 'liftplan' ? 'Critical Lift Plan PTW-009B' : 'Routine Lifting PTW-009A') + '). Review load specifications, rigging arrangement, operator/rigger qualifications, and approve to forward to P&M Engineer.') : isElectrical ? 'Permittee Electrician submitted the PTW-006 electrical work permit. Review site conditions, electrical apparatus isolation, and approve to forward to MEP or P&amp;M Engineer for domain review.' : isShaft ? 'Site Supervisor (Permittee) submitted the shaft work permit. Review shaft safety arrangements, floor level, and approve to forward to MEP Engineer for clearance.' : isHw ? 'Site Supervisor (Permittee) submitted the hot work permit. Review safety arrangements, verify worksite conditions, and approve to forward to Tower Incharge.' : isGeneral ? 'Site Supervisor (Permittee) submitted the general work permit. Review site conditions, safety checklist, wind speed restrictions, and approve to forward to Tower Incharge.' : isGr ? 'Site Supervisor (Permittee) submitted the guard rail &amp; floor protection removal permit. Review safety arrangements, edge protections/opening covers, and approve to forward to Tower Incharge.' : isConfined ? 'Site Supervisor (Permittee) submitted the confined space entry permit. Review ventilation, watcher presence, multi-gas readings, and approve to forward to Tower Incharge.' : isBlasting ? (pCreatorName + ' submitted the drilling &amp; blasting permit. Review safety arrangements, manual work area boundaries, and approve to forward directly to EHS Safety for verification.') : 'Site Supervisor (Permittee) submitted the excavation permit. Review and approve to forward to parallel discipline clearance (MEP &middot; P&amp;M &middot; IT).')) + '</div>' +
+                        '<div class="aa-desc">' + (isReack ? (pCreatorName + ' resubmitted the permit with corrected checklist/details. Review changes and approve to forward (your signature on file will be reused without re-entry).') : (isLifting ? ('Lifting Supervisor (Permittee) submitted the lifting operations permit (' + (p.liftingClassification === 'critical' || ptypeOf(p) === 'liftplan' ? 'Critical Lift Plan PTW-009B' : 'Routine Lifting PTW-009A') + '). Review load specifications, rigging arrangement, operator/rigger qualifications, and approve to forward to P&M Engineer.') : isElectrical ? 'Permittee Electrician submitted the PTW-006 electrical work permit. Review site conditions, electrical apparatus isolation, and approve to forward to MEP or P&amp;M Engineer for domain review.' : isShaft ? 'Site Supervisor (Permittee) submitted the shaft work permit. Review shaft safety arrangements, floor level, and approve to forward to MEP Engineer for clearance.' : isHw ? 'Site Supervisor (Permittee) submitted the hot work permit. Review safety arrangements, verify worksite conditions, and approve to forward to Tower Incharge.' : isGeneral ? 'Site Supervisor (Permittee) submitted the general work permit. Review site conditions, safety checklist, wind speed restrictions, and approve to forward to Tower Incharge.' : isGr ? 'Site Supervisor (Permittee) submitted the guard rail &amp; floor protection removal permit. Review safety arrangements, edge protections/opening covers, and approve to forward to Tower Incharge.' : isConfined ? 'Site Supervisor (Permittee) submitted the confined space entry permit. Review ventilation, watcher presence, multi-gas readings, and approve to forward to Tower Incharge.' : isBlasting ? (pCreatorName + ' submitted the drilling &amp; blasting permit. Review safety arrangements, manual work area boundaries, and approve to forward to Tower Incharge.') : 'Site Supervisor (Permittee) submitted the excavation permit. Review and approve to forward to parallel discipline clearance (MEP &middot; P&amp;M &middot; IT).')) + '</div>' +
                         '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-                        renderActionButton('ack-engineer', p.id, (isReack ? 'Approve &amp; Forward' : (isLifting ? 'Approve &amp; Forward to P&amp;M Engineer' : isElectrical ? 'Approve &amp; Forward to MEP or P&amp;M Engineer' : isShaft ? 'Approve &amp; Forward to MEP Engineer' : (isHw || isGr || isConfined || isGeneral) ? 'Approve &amp; Forward to Tower Incharge' : isBlasting ? 'Approve &amp; Forward to EHS Safety' : 'Approve &amp; Forward to Parallel Gate'))) +
+                        renderActionButton('ack-engineer', p.id, (isReack ? 'Approve &amp; Forward' : (isLifting ? 'Approve &amp; Forward to P&amp;M Engineer' : isElectrical ? 'Approve &amp; Forward to MEP or P&amp;M Engineer' : isShaft ? 'Approve &amp; Forward to MEP Engineer' : (isHw || isGr || isConfined || isGeneral || isBlasting) ? 'Approve &amp; Forward to Tower Incharge' : 'Approve &amp; Forward to Parallel Gate'))) +
                         renderActionButton('reject-engineer', p.id, 'Reject &amp; Return to ' + pReturnTarget) +
                         '</div>' +
                         '</div>';
@@ -23721,15 +23969,15 @@ function trackerHtml(p) {
             // ---- Tower Incharge Review ----
             if (p.status === 'Pending Section Head') {
                 const targetShRole = shRoleFor(p);
-                const isShRole = (rk === targetShRole) || ((isShaft || isGr || isHw || isConfined || isGeneral || isElectrical || isLifting) && (rk === 'hw-section-head' || rk === 'section-head'));
-                const shStepNum = (isHw || isGr || isConfined || isGeneral) ? 'Step 3' : 'Step 4';
+                const isShRole = (rk === targetShRole) || ((isShaft || isGr || isHw || isConfined || isGeneral || isElectrical || isLifting || isBlasting) && (rk === 'hw-section-head' || rk === 'section-head'));
+                const shStepNum = (isHw || isGr || isConfined || isGeneral || isBlasting) ? 'Step 3' : 'Step 4';
                 if (isShRole && roleCanActOnChain(p.approvals, rk)) {
                     html += '<div class="approval-action-card">' +
                         '<div class="aa-title"><i class="fa-solid fa-gavel"></i> ' + shStepNum + ': ' + shTitle + ' Review</div>' +
-                        '<div class="aa-desc">' + (isLifting ? ('P&amp;M Engineer has cleared the technical lifting review. Review site perimeter, drop zones, ground stability, and crane setup. Approve to route to ' + (p.liftingClassification === 'critical' || ptypeOf(p) === 'liftplan' ? 'Project Manager for executive acknowledgment (Step 5)' : 'EHS Safety for final verification') + ', Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.') : isElectrical ? 'MEP / P&amp;M Engineer has cleared the electrical domain review. Review site electrical work scope, isolation boundaries, and safety arrangements. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isConfined ? 'Site Engineer has acknowledged. Review safety measures, authorized entrants count, multi-gas detector test readings, and pre-task safety checklist. Approve to route to EHS Safety (either Manager or Officer), Reject to return to Supervisor for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS geofencing (' + getProjectRadius(p) + 'm), DPDP consent, and digital signature.' : isShaft ? 'MEP Engineer has cleared the permit. Review shaft safety conditions, working platforms, and fall protection arrangements. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isHw ? 'Site Engineer has acknowledged. Review hot work safety precautions and conditions. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isGr ? 'Site Engineer has acknowledged. Review guard rail & floor opening removal safety precautions and fall protection arrangements. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : 'All parallel disciplines have approved. Review permit conditions and drawings. Approve to route to EHS, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.') + '</div>' +
+                        '<div class="aa-desc">' + (isLifting ? ('P&amp;M Engineer has cleared the technical lifting review. Review site perimeter, drop zones, ground stability, and crane setup. Approve to route to ' + (p.liftingClassification === 'critical' || ptypeOf(p) === 'liftplan' ? 'Project Manager for executive acknowledgment (Step 5)' : 'EHS Safety for final verification') + ', Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.') : isElectrical ? 'MEP / P&amp;M Engineer has cleared the electrical domain review. Review site electrical work scope, isolation boundaries, and safety arrangements. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isBlasting ? 'Site Engineer has acknowledged the Drilling &amp; Blasting permit. Review PESO statutory compliance, blast exclusion zone, and safety arrangements. Approve to route to EHS Safety, Reject to return to Blasting In-Charge for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isConfined ? 'Site Engineer has acknowledged. Review safety measures, authorized entrants count, multi-gas detector test readings, and pre-task safety checklist. Approve to route to EHS Safety (either Manager or Officer), Reject to return to Supervisor for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS geofencing (' + getProjectRadius(p) + 'm), DPDP consent, and digital signature.' : isShaft ? 'MEP Engineer has cleared the permit. Review shaft safety conditions, working platforms, and fall protection arrangements. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isHw ? 'Site Engineer has acknowledged. Review hot work safety precautions and conditions. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : isGr ? 'Site Engineer has acknowledged. Review guard rail & floor opening removal safety precautions and fall protection arrangements. Approve to route to EHS Safety, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.' : 'All parallel disciplines have approved. Review permit conditions and drawings. Approve to route to EHS, Reject to return for correction, or Cancel permit with comment (terminal &mdash; stops work and generates PDF). Gated by GPS, DPDP consent, and digital signature.') + '</div>' +
                         '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
                         renderActionButton('approve', p.id, 'Approve') +
-                        renderActionButton('reject', p.id, 'Reject (Return to Supervisor)') +
+                        renderActionButton('reject', p.id, isBlasting ? 'Reject (Return to Blasting In-Charge)' : 'Reject (Return to Supervisor)') +
                         renderActionButton('cancel', p.id, 'Cancel Permit + Comment (Terminal)') +
                         '</div></div>';
                 } else if (rk !== 'admin' && rk !== 'super-admin') {
@@ -23763,7 +24011,7 @@ function trackerHtml(p) {
             if (p.status === 'Pending EHS Approval') {
                 const isElecBatching = isElectrical && (p.electricalSiteType === 'batching_plant' || (p.approvals && p.approvals.kind === 'electrical-batching'));
                 const isCritLift = isLifting && (p.liftingClassification === 'critical' || ptypeOf(p) === 'liftplan');
-                const ehsStepNum = (isCritLift || isNightShift) ? 'Step 6' : ((isHw || isGr || isConfined || isGeneral || isElecBatching) ? 'Step 4' : 'Step 5');
+                const ehsStepNum = (isCritLift || isNightShift) ? 'Step 6' : ((isHw || isGr || isConfined || isGeneral || isBlasting || isElecBatching) ? 'Step 4' : 'Step 5');
                 if (['ehs-manager', 'ehs-officer'].includes(rk) && roleCanActOnChain(p.approvals, rk)) {
                     html += '<div class="approval-action-card">' +
                         '<div class="aa-title"><i class="fa-solid fa-shield-halved"></i> ' + ehsStepNum + ': EHS Verification (Manager / Officer)</div>' +
@@ -28076,6 +28324,7 @@ ptypeOf(p) === 'general' ?
         let editingStaffUserId = null;
         function startEditUser(userId) {
             editingStaffUserId = userId;
+            window.editingEmpanelStaffId = userId;
             const u = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && (s.id === userId || s.uid === userId)) ||
                       (PROJECT_ADMINS || []).find(a => a && (a.id === userId || a.uid === userId));
             if (!u) {
@@ -28111,8 +28360,8 @@ ptypeOf(p) === 'general' ?
 
             const roleEl = document.getElementById('empanelRoleSelect');
             if (roleEl) {
-                const normRole = (u.role === 'hw-section-head' || u.role === 'tower-incharge') ? 'section-head' : u.role;
-                roleEl.value = normRole || 'site-supervisor';
+                const normRole = normalizeRoleKey(u.role) || u.role || 'site-supervisor';
+                roleEl.value = (normRole === 'admin') ? 'project-admin' : normRole;
             }
             const hiddenRole = document.getElementById('newStaffRole');
             if (hiddenRole) hiddenRole.value = roleEl ? roleEl.value : '';
@@ -28586,8 +28835,12 @@ ptypeOf(p) === 'general' ?
         }
 
         function exportMisReport() {
+            const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
+            const scopedList = isSuperAdmin
+                ? PERMITS
+                : PERMITS.filter(p => !currentUser || !currentUser.projectId || p.projectId === currentUser.projectId || p.project === currentUser.projectName);
             let csv = 'Permit ID,Type,Project,Location,Status,Created At,Valid Till\n';
-            PERMITS.forEach(p => {
+            scopedList.forEach(p => {
                 csv += '"' + p.id + '","' + (pMeta(p).name || ptypeOf(p)) + '","' + (p.project || p.projectId || '') + '","' + (p.location || '') + '","' + p.status + '","' + (p.createdAt || '') + '","' + (p.validTill || '') + '"\n';
             });
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
@@ -28803,10 +29056,17 @@ ptypeOf(p) === 'general' ?
             const container = document.getElementById('view-audit-logs');
             if (!container) return;
 
+            const isSuperAdmin = currentUser && currentUser.key === 'super-admin';
             let logs = window.AUDIT_LOGS || [];
             let q = (document.getElementById('auditSearchInput') ? document.getElementById('auditSearchInput').value : '').toLowerCase();
 
             let filtered = logs.filter(l => {
+                if (!isSuperAdmin && currentUser && currentUser.projectId) {
+                    const logPrj = (l.projectId || '').toLowerCase();
+                    const usrPrj = (currentUser.projectId || '').toLowerCase();
+                    const usrPrjName = (currentUser.projectName || '').toLowerCase();
+                    if (logPrj && logPrj !== 'global' && !logPrj.includes(usrPrj) && (!usrPrjName || !logPrj.includes(usrPrjName))) return false;
+                }
                 if (q && !(l.action.toLowerCase().includes(q) || l.actorEmail.toLowerCase().includes(q) || l.details.toLowerCase().includes(q) || (l.projectId || '').toLowerCase().includes(q))) return false;
                 return true;
             });
