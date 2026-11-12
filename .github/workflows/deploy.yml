@@ -10,6 +10,9 @@ permissions:
   contents: read
   id-token: write
 
+env:
+  TZ: Asia/Kolkata
+
 jobs:
   build_and_deploy:
     name: Build & Deploy Serverless Stack

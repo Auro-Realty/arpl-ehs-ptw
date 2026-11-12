@@ -6586,7 +6586,13 @@
                 };
                 res[Symbol.toPrimitive] = function(hint) {
                     if (hint === 'string') return this.toString();
-                    return this.getTime();
+                    return (typeof this.__realUtcMs === 'number') ? this.__realUtcMs : this.getTime();
+                };
+                res.valueOf = function() {
+                    return (typeof this.__realUtcMs === 'number') ? this.__realUtcMs : this.getTime();
+                };
+                res.getTime = function() {
+                    return (typeof this.__realUtcMs === 'number') ? this.__realUtcMs : Date.prototype.getTime.call(this);
                 };
             } catch (_e) {}
             return res;
@@ -6608,7 +6614,39 @@
         }
 
         function nowMs() {
-            return nowTime().getTime();
+            if (typeof window !== 'undefined' && typeof window.__SIMULATED_TIME_MS__ === 'number') {
+                return window.__SIMULATED_TIME_MS__;
+            }
+            if (typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__) {
+                return new Date(window.__TEST_DATE_OVERRIDE__).getTime();
+            }
+            return Date.now();
+        }
+
+        function getEpochMs(input) {
+            if (!input) return 0;
+            if (typeof input === 'number') return input;
+            if (input instanceof Date) {
+                if (typeof input.__realUtcMs === 'number') return input.__realUtcMs;
+                return input.getTime();
+            }
+            if (typeof input.toDate === 'function') return input.toDate().getTime();
+            if (typeof input === 'string') {
+                const s = input.trim();
+                if (/^\d+$/.test(s)) return parseInt(s, 10);
+                if (/Z|[+-]\d{2}:?\d{2}$/i.test(s)) {
+                    const d = new Date(s);
+                    if (!isNaN(d.getTime())) return d.getTime();
+                }
+                const hasTz = /GMT|UTC|[+-]\d{2}:?\d{2}/i.test(s);
+                if (!hasTz && /^\d{1,2}\s+[A-Za-z]{3}\s+\d{4}/.test(s)) {
+                    const d = new Date(s + ' GMT+0530');
+                    if (!isNaN(d.getTime())) return d.getTime();
+                }
+                const d = new Date(s);
+                return isNaN(d.getTime()) ? 0 : d.getTime();
+            }
+            return 0;
         }
 
         function getOperationalDate() {
@@ -6804,9 +6842,22 @@
             if (!p || ptypeOf(p) !== 'nightshift') return { cutoffReached: false, cancelled: false };
             if (!p.status || !p.status.includes('Pending Night Handover')) return { cutoffReached: false, cancelled: false };
             if (!checkTime && ((typeof window !== 'undefined' && window.__TEST_MODE__) || (typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__))) return { cutoffReached: false, cancelled: false };
-            const now = checkTime ? new Date(checkTime) : nowTime();
-            const hours = now.getHours();
-            const minutes = now.getMinutes();
+            let hours, minutes;
+            if (checkTime) {
+                const ct = (checkTime instanceof Date) ? checkTime : new Date(checkTime);
+                const parts = new Intl.DateTimeFormat('en-GB', {
+                    timeZone: 'Asia/Kolkata',
+                    hour: 'numeric',
+                    minute: 'numeric',
+                    hour12: false
+                }).formatToParts(ct);
+                hours = parseInt(parts.find(pt => pt.type === 'hour')?.value || '0', 10);
+                minutes = parseInt(parts.find(pt => pt.type === 'minute')?.value || '0', 10);
+            } else {
+                const now = nowTime();
+                hours = now.getHours();
+                minutes = now.getMinutes();
+            }
             if (hours > 21 || (hours === 21 && minutes >= 0)) {
                 p.status = 'Cancelled';
                 p.cancellationReason = 'No-Show Auto-Cancel: Handover was not completed by a qualified supervisor before the 9:00 PM (21:00 IST) statutory cutoff.';
@@ -15166,12 +15217,20 @@
         }
         function runEscalationTick() {
             if (!Array.isArray(PERMITS) || PERMITS.length === 0) return;
-            // Real IST time drives all windows now — no simulated clock advancement.
-            const t = nowTime();
+            // Real epoch timestamp drives all duration math — universal across UTC and IST
+            const nowEpoch = (typeof window !== 'undefined' && typeof window.__SIMULATED_TIME_MS__ === 'number')
+                ? window.__SIMULATED_TIME_MS__
+                : ((typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__)
+                    ? new Date(window.__TEST_DATE_OVERRIDE__).getTime()
+                    : ((typeof nowTime === 'function' && typeof nowTime().__realUtcMs === 'number')
+                        ? nowTime().__realUtcMs
+                        : Date.now()));
+
             PERMITS.forEach(p => {
                 // Pending-stage escalation (Stage 1 / Stage 2)
                 if (['Pending Site Engineer Acknowledgment', 'Pending Parallel Approval', 'Pending Section Head', 'Pending EHS Approval', 'Pending P&M Acknowledgment', 'Pending Quality Engineer Approval', 'Pending MEP Clearance', 'Pending MEP or P&M Approval', 'Pending P&M Night Acknowledgment'].includes(p.status) && p.stageEnteredAt) {
-                    const elapsed = t - new Date(p.stageEnteredAt);
+                    const stageMs = getEpochMs(p.stageEnteredAt);
+                    const elapsed = nowEpoch - stageMs;
                     if (!p.escalation) p.escalation = { stage1: false, stage2: false };
                     if (elapsed > STAGE1_MS && !p.escalation.stage1) {
                         p.escalation.stage1 = true;
@@ -15183,28 +15242,29 @@
                     }
                 }
                 // Observation auto-escalate to Cancel if validity expires while open
-                if (['Active – Observation Open', 'Observation Pending EHS Clearance'].includes(p.status) && t > new Date(p.validTill)) {
+                const validTillMs = getEpochMs(p.validTill);
+                if (['Active – Observation Open', 'Observation Pending EHS Clearance'].includes(p.status) && nowEpoch > validTillMs) {
                     p.status = 'Cancelled';
                     p.isCancelled = true;
                     p.cancelReason = 'Auto-escalated to Cancel: Validity expired while EHS Site Observation remained unrectified / open.';
                     p.cancelledBy = 'System Escalation Engine';
                     p.cancelledByRole = 'EHS Automation';
-                    p.cancelledAt = t;
+                    p.cancelledAt = new Date(nowEpoch);
                     logActivity(p, 'Permit AUTO-CANCELLED: validity expired while EHS Site Observation was still open. Stop work immediately. Official PDF generated.');
                     notify(stakeholdersFor(p), pLabel(p) + ' AUTO-CANCELLED: validity expired with open EHS Observation. Stop work & generate PDF.', 'error', p.id);
                 }
                 // 30-minute expiry warning / close reminder (fires 30 min before expiry to supervisor & engineer)
                 if (['Active', 'Active – Observation Open'].includes(p.status)) {
-                    const remMs = new Date(p.validTill) - t;
+                    const remMs = validTillMs - nowEpoch;
                     if (remMs > 0 && remMs <= 30 * 60000 && !p.warned30) {
                         p.warned30 = true;
                         notify(['site-supervisor', 'site-engineer'], 'CLOSE REMINDER (T-30 min): ' + pLabel(p) + ' expires in 30 minutes. Request an extension before 06:30 PM, or complete work and close & surrender the permit.', 'warn', p.id);
                     }
                 }
                 // Auto-expiry of active permits
-                if (p.status === 'Active' && t > new Date(p.validTill)) {
+                if (p.status === 'Active' && nowEpoch > validTillMs) {
                     p.status = 'Expired';
-                    p.expiredAt = t;
+                    p.expiredAt = new Date(nowEpoch);
                     p.surrenderEscalations = 0;
                     logActivity(p, 'Permit auto-EXPIRED at end of validity period without closure.');
                     notify(stakeholdersFor(p), 'ESCALATION WITH PDF: ' + pLabel(p) + ' has EXPIRED without closure. Work must stop immediately. Formal closure & surrender or extension required.', 'error', p.id);
@@ -15217,9 +15277,12 @@
                     }
                 }
             });
-            if (document.getElementById('view-dashboard').classList.contains('active')) buildDashboard();
-            if (document.getElementById('view-register').classList.contains('active')) buildRegisterTable();
-            if (document.getElementById('view-detail').classList.contains('active') && currentDetailId) viewDetail(currentDetailId, true);
+            const vDash = document.getElementById('view-dashboard');
+            if (vDash && vDash.classList.contains('active')) buildDashboard();
+            const vReg = document.getElementById('view-register');
+            if (vReg && vReg.classList.contains('active')) buildRegisterTable();
+            const vDet = document.getElementById('view-detail');
+            if (vDet && vDet.classList.contains('active') && currentDetailId) viewDetail(currentDetailId, true);
             saveState();
         }
         let escalationIntervalId = null;
