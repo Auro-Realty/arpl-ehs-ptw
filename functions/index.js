@@ -79,6 +79,48 @@ function validateProjectId(id) {
 }
 
 /**
+ * Sanitize text for pdf-lib standard fonts to prevent WinAnsi encoding crashes
+ */
+function sanitizePdfText(str) {
+  if (str === null || str === undefined) return "";
+  return String(str)
+    .replace(/[≤]/g, "<=")
+    .replace(/[≥]/g, ">=")
+    .replace(/O₂/g, "O2")
+    .replace(/H₂S/g, "H2S")
+    .replace(/CO₂/g, "CO2")
+    .replace(/CO/g, "CO")
+    .replace(/CH₄/g, "CH4")
+    .replace(/[°]/g, " deg")
+    .replace(/[→]/g, "->")
+    .replace(/[←]/g, "<-")
+    .replace(/[✓✔]/g, "[YES]")
+    .replace(/[✗✘✕]/g, "[NO]")
+    .replace(/[•●]/g, "-")
+    .replace(/[\u2018\u2019]/g, "'")
+    .replace(/[\u201C\u201D]/g, '"')
+    .replace(/[\u2013\u2014]/g, "-")
+    .replace(/[^\x00-\x7F]/g, "");
+}
+
+/**
+ * Canonical 16-Role Normalizer
+ */
+function normalizeRoleKey(role) {
+  if (!role) return "";
+  const r = String(role).trim().toLowerCase().replace(/[_\s]+/g, "-");
+  if (r === "section-head" || r === "hw-section-head" || r === "tower-incharge" || r === "tower-in-charge") return "tower-in-charge";
+  if (r === "lift-supervisor" || r === "lifting-supervisor") return "lifting-supervisor";
+  if (r === "blasting-incharge" || r === "blasting-in-charge") return "blasting-in-charge";
+  if (r === "it" || r === "it-incharge" || r === "it-in-charge") return "it-in-charge";
+  if (r === "ehs" || r === "ehs-manager" || r === "ehs-officer" || r === "ehs-head" || r === "safety-incharge") return "ehs-head";
+  if (r === "ehs-supervisor") return "ehs-supervisor";
+  if (r === "admin" || r === "site-admin" || r === "project-admin") return "project-admin";
+  if (r === "superadmin" || r === "super-admin") return "super-admin";
+  return r;
+}
+
+/**
  * Authoritative Project-Specific Tower & Zone Mapping
  * Business & Data Integrity Mandate:
  * - The Pearl (PRJ-PEARL): P1, P2, P3, P4, P5, P6, P7, Clubhouse, Podium, NTA_PHASE-1, NTA_PHASE-2, NTA_PHASE-3
@@ -497,8 +539,8 @@ exports.downloadStatutoryPdf = onRequest(
         const pdfDoc = await PDFDocument.create();
         const page = pdfDoc.addPage([595.28, 841.89]);
         const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-        page.drawText(`ARPL EHS STATUTORY PERMIT: ${downloadResult.permitId}`, { x: 50, y: 800, size: 16, font });
-        page.drawText(`Generated for single-use compliance download.`, { x: 50, y: 770, size: 12 });
+        page.drawText(sanitizePdfText(`ARPL EHS STATUTORY PERMIT: ${downloadResult.permitId}`), { x: 50, y: 800, size: 16, font });
+        page.drawText(sanitizePdfText(`Generated for single-use compliance download.`), { x: 50, y: 770, size: 12 });
         const pdfBytes = await pdfDoc.save({ useObjectStreams: true });
         res.send(Buffer.from(pdfBytes));
         return;
@@ -616,13 +658,13 @@ exports.compileStatutoryPdf = onCall(
 
     // Page 1: Statutory Summary & Approvals
     let page = pdfDoc.addPage([595.28, 841.89]);
-    page.drawText("AURO REALTY PRIVATE LIMITED", { x: 50, y: 800, size: 14, font: helveticaBold, color: rgb(0.1, 0.2, 0.4) });
-    page.drawText("ENVIRONMENTAL HEALTH & SAFETY DIVISION - PERMIT TO WORK", { x: 50, y: 780, size: 10, font: helveticaBold });
-    page.drawText(`Permit ID: ${p.id}  |  Type: ${(p.ptype || "").toUpperCase()}`, { x: 50, y: 750, size: 11, font: helveticaBold });
-    page.drawText(`Project: ${p.project} (${p.projectId})`, { x: 50, y: 730, size: 10, font: helvetica });
-    page.drawText(`Location: ${p.location || "N/A"}  |  Contractor: ${p.contractor || "N/A"}`, { x: 50, y: 710, size: 10, font: helvetica });
-    page.drawText(`Validity: ${p.validFrom?.toDate?.()?.toISOString() || ""} to ${p.validTill?.toDate?.()?.toISOString() || ""}`, { x: 50, y: 690, size: 10, font: helvetica });
-    page.drawText(`Status: ${p.status}`, { x: 50, y: 670, size: 10, font: helveticaBold, color: rgb(0.8, 0.1, 0.1) });
+    page.drawText(sanitizePdfText("AURO REALTY PRIVATE LIMITED"), { x: 50, y: 800, size: 14, font: helveticaBold, color: rgb(0.1, 0.2, 0.4) });
+    page.drawText(sanitizePdfText("ENVIRONMENTAL HEALTH & SAFETY DIVISION - PERMIT TO WORK"), { x: 50, y: 780, size: 10, font: helveticaBold });
+    page.drawText(sanitizePdfText(`Permit ID: ${p.id}  |  Type: ${(p.ptype || "").toUpperCase()}`), { x: 50, y: 750, size: 11, font: helveticaBold });
+    page.drawText(sanitizePdfText(`Project: ${p.project} (${p.projectId})`), { x: 50, y: 730, size: 10, font: helvetica });
+    page.drawText(sanitizePdfText(`Location: ${p.location || "N/A"}  |  Contractor: ${p.contractor || "N/A"}`), { x: 50, y: 710, size: 10, font: helvetica });
+    page.drawText(sanitizePdfText(`Validity: ${p.validFrom?.toDate?.()?.toISOString() || ""} to ${p.validTill?.toDate?.()?.toISOString() || ""}`), { x: 50, y: 690, size: 10, font: helvetica });
+    page.drawText(sanitizePdfText(`Status: ${p.status}`), { x: 50, y: 670, size: 10, font: helveticaBold, color: rgb(0.8, 0.1, 0.1) });
 
     // Page 2: Safety Evidence Photos
     if (p.media && p.media.sitePhotoPath) {
@@ -637,7 +679,7 @@ exports.compileStatutoryPdf = onCall(
         const imgDims = embeddedImg.scale(0.5);
 
         const photoPage = pdfDoc.addPage([595.28, 841.89]);
-        photoPage.drawText("MANDATORY SAFETY INSPECTION EVIDENCE", { x: 50, y: 800, size: 12, font: helveticaBold });
+        photoPage.drawText(sanitizePdfText("MANDATORY SAFETY INSPECTION EVIDENCE"), { x: 50, y: 800, size: 12, font: helveticaBold });
         photoPage.drawImage(embeddedImg, {
           x: 50,
           y: 800 - imgDims.height - 20,
@@ -772,6 +814,10 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
     campusWide: true
   });
 
+  const adminAssignments = Array.isArray(request.data?.assignments) && request.data.assignments.length > 0
+    ? request.data.assignments
+    : [{ role: "project-admin", roleLabel: "Site Administrator", projectId: projectId, projectName: sanitizeString(projectName || projectId, 100), campusWide: true }];
+
   const adminDoc = {
     id: userRecord.uid,
     uid: userRecord.uid,
@@ -788,6 +834,7 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
     phone: cleanPhone,
     campusWide: true,
     status: "Active",
+    assignments: adminAssignments,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     createdBy: callerEmail || request.auth.uid
   };
@@ -1837,7 +1884,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "it in charge", "it-in-charge", "it", "it-engineer",
     "quality-engineer",
     "excavation-head", "section head", "section-head",
-    "tower in charge", "tower-incharge", "hw-section-head",
+    "tower in charge", "tower-incharge", "tower-in-charge", "hw-section-head",
     "project manager", "project-manager",
     "ehs supervisor", "ehs-supervisor", "ehs-officer", "ehs", "safety-officer",
     "ehs head", "ehs-head", "ehs-manager", "safety-incharge",
@@ -1864,18 +1911,32 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "p&m": "pm",
     "pm-engineer": "pm",
     "pnm": "pm",
-    "it in charge": "it",
-    "it-in-charge": "it",
-    "it-engineer": "it",
-    "tower in charge": "hw-section-head",
-    "tower-incharge": "hw-section-head",
-    "section head": "section-head",
-    "ehs supervisor": "ehs-officer",
-    "ehs-supervisor": "ehs-officer",
-    "safety-officer": "ehs-officer",
-    "ehs": "ehs-officer",
-    "ehs head": "ehs-manager",
-    "ehs-head": "ehs-manager",
+    "it in charge": "it-in-charge",
+    "it-in-charge": "it-in-charge",
+    "it": "it-in-charge",
+    "it-engineer": "it-in-charge",
+    "tower in charge": "tower-in-charge",
+    "tower-incharge": "tower-in-charge",
+    "tower-in-charge": "tower-in-charge",
+    "hw-section-head": "tower-in-charge",
+    "section head": "tower-in-charge",
+    "section-head": "tower-in-charge",
+    "ehs supervisor": "ehs-supervisor",
+    "ehs-supervisor": "ehs-supervisor",
+    "ehs-officer": "ehs-supervisor",
+    "safety-officer": "ehs-supervisor",
+    "ehs": "ehs-head",
+    "ehs head": "ehs-head",
+    "ehs-head": "ehs-head",
+    "ehs-manager": "ehs-head",
+    "safety-incharge": "ehs-head",
+    "blasting incharge": "blasting-in-charge",
+    "blasting-incharge": "blasting-in-charge",
+    "blasting-in-charge": "blasting-in-charge",
+    "lifting supervisor": "lifting-supervisor",
+    "lifting-supervisor": "lifting-supervisor",
+    "lift-supervisor": "lifting-supervisor",
+    "lifting-incharge": "lifting-supervisor",
     "project manager": "project-manager",
     "site admin": "project-admin",
     "site-admin": "project-admin",
@@ -2592,39 +2653,45 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
     // State machine & role authorization validation (README Section 4.2 & 6.1)
     // Super Admins bypass stage role restrictions for enterprise oversight
     const ALLOWED_STAGE_ROLES = {
-      "Pending Site Engineer Acknowledgment": ["site-supervisor", "blasting-incharge", "site-engineer"],
-      "Pending Site Engineer Re-Acknowledgment": ["site-supervisor", "blasting-incharge", "site-engineer"],
-      "Pending Blasting In-charge Acknowledgment": ["blasting-incharge"],
-      "Pending Blasting In-charge Re-Acknowledgment": ["blasting-incharge"],
-      "Pending P&M Acknowledgment": ["electrician", "pm"],
-      "Pending P&M Re-Acknowledgment": ["electrician", "pm"],
+      "Pending Site Engineer Acknowledgment": ["site-supervisor", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "electrician", "site-engineer"],
+      "Pending Site Engineer Re-Acknowledgment": ["site-supervisor", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "electrician", "site-engineer"],
+      "Pending Blasting In-charge Acknowledgment": ["blasting-incharge", "blasting-in-charge"],
+      "Pending Blasting In-charge Re-Acknowledgment": ["blasting-incharge", "blasting-in-charge"],
+      "Pending P&M Acknowledgment": ["electrician", "pm", "mep"],
+      "Pending P&M Re-Acknowledgment": ["electrician", "pm", "mep"],
       "Pending Quality Engineer Approval": ["pm", "quality-engineer"],
-      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it"],
+      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it", "it-in-charge"],
       "Pending MEP Clearance": ["site-engineer", "mep"],
-      "Pending MEP or P&M Approval": ["site-engineer", "mep", "pm"],
-      "Pending Section Head": ["site-engineer", "mep", "pm", "it", "quality-engineer", "hw-section-head", "excavation-head", "section-head"],
-      "Pending Project Manager Acknowledgment": ["hw-section-head", "project-manager"],
-      "Pending EHS Approval": ["site-engineer", "hw-section-head", "excavation-head", "section-head", "project-manager", "quality-engineer", "pm", "ehs-manager", "ehs-officer"],
-      "Night Shift Approved – Awaiting Linked Permit": ["hw-section-head", "section-head"],
-      "Approved – Pending Night Handover": ["hw-section-head", "section-head", "site-supervisor"],
+      "Pending MEP or P&M Approval": ["site-engineer", "mep", "pm", "electrician"],
+      "Pending Section Head": ["site-engineer", "mep", "pm", "it", "it-in-charge", "quality-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "section-head"],
+      "Pending Project Manager Acknowledgment": ["hw-section-head", "tower-in-charge", "project-manager", "pm"],
+      "Pending EHS Approval": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "section-head", "project-manager", "quality-engineer", "pm", "mep", "it", "it-in-charge", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
+      "Night Shift Approved – Awaiting Linked Permit": ["hw-section-head", "tower-in-charge", "section-head"],
+      "Approved – Pending Night Handover": ["hw-section-head", "tower-in-charge", "section-head", "site-supervisor"],
       "Pending P&M Night Acknowledgment": ["night-supervisor", "pm"],
-      "Active": ["ehs-manager", "ehs-officer"],
-      "Active – Observation Open": ["ehs-manager", "ehs-officer"],
+      "Active": ["ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
+      "Active – Observation Open": ["ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
       "Observation Pending Site Engineer Acknowledgment": ["site-supervisor", "site-engineer"],
-      "Observation Pending Section Head Review": ["site-engineer", "hw-section-head", "excavation-head"],
-      "Observation Pending EHS Clearance": ["hw-section-head", "excavation-head", "ehs-manager", "ehs-officer"],
-      "Pending Site Engineer": ["site-supervisor", "lift-supervisor", "blasting-incharge", "site-engineer"],
-      "Returned for Correction": ["site-engineer", "hw-section-head", "excavation-head", "mep", "pm", "it", "quality-engineer", "project-manager", "ehs-manager", "ehs-officer"],
-      "Returned to Night Supervisor": ["ehs-manager", "ehs-officer", "night-supervisor"],
-      "Completed (Surrendered)": ["site-supervisor", "electrician", "blasting-incharge", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer"],
-      "Closed – Pending Surrender": ["site-supervisor", "electrician", "blasting-incharge", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer"],
-      "Cancelled": ["site-engineer", "hw-section-head", "excavation-head", "ehs-manager", "ehs-officer", "project-admin", "super-admin"],
-      "Expired": ["system", "site-supervisor", "ehs-manager", "ehs-officer", "super-admin"]
+      "Observation Pending Section Head Review": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head"],
+      "Observation Pending EHS Clearance": ["hw-section-head", "tower-in-charge", "excavation-head", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
+      "Pending Site Engineer": ["site-supervisor", "lifting-supervisor", "lift-supervisor", "blasting-incharge", "blasting-in-charge", "site-engineer"],
+      "Returned for Correction": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "mep", "pm", "it", "it-in-charge", "quality-engineer", "project-manager", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
+      "Returned to Night Supervisor": ["ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head", "night-supervisor"],
+      "Completed (Surrendered)": ["site-supervisor", "electrician", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
+      "Closed – Pending Surrender": ["site-supervisor", "electrician", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
+      "Cancelled": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head", "project-admin", "super-admin"],
+      "Expired": ["system", "site-supervisor", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head", "super-admin"]
     };
 
     if (!isSuperAdmin && ALLOWED_STAGE_ROLES[cleanTargetStatus]) {
       const allowedRoles = ALLOWED_STAGE_ROLES[cleanTargetStatus];
-      if (!allowedRoles.includes(userRole) && !allowedRoles.includes("super-admin")) {
+      const normRole = normalizeRoleKey(userRole);
+      const isAuthorized = allowedRoles.includes(userRole) ||
+                           allowedRoles.includes(normRole) ||
+                           allowedRoles.includes("super-admin") ||
+                           (normRole === "ehs-head" && (allowedRoles.includes("ehs-manager") || allowedRoles.includes("ehs-officer") || allowedRoles.includes("ehs-head"))) ||
+                           (normRole === "tower-in-charge" && (allowedRoles.includes("hw-section-head") || allowedRoles.includes("tower-in-charge") || allowedRoles.includes("section-head")));
+      if (!isAuthorized) {
         throw new HttpsError(
           "permission-denied",
           `Role '${userRole}' is not authorized to transition permit to '${cleanTargetStatus}'.`

@@ -37,9 +37,9 @@ service cloud.firestore {
     function isProjectAdmin(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
-        (request.auth.token.role in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.projectId == projectId || request.auth.token.projectId == null || (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds))) ||
+        (request.auth.token.role in ['project-admin', 'site-admin', 'admin', 'ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.projectId == projectId || request.auth.token.projectId == null || (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds))) ||
         (userDocExists() && (
-          userDocRole() in ['project-admin', 'site-admin', 'admin', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
+          userDocRole() in ['project-admin', 'site-admin', 'admin', 'ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
           userDocData().get('uiRole', '') in ['admin', 'project-admin']
         ) && (
           userDocData().get('projectId', '') == projectId ||
@@ -81,8 +81,11 @@ service cloud.firestore {
 
     function isEhsRole(projectId) {
       return hasProjectAccess(projectId) && (
-        request.auth.token.role in ['ehs-manager', 'ehs-officer', 'safety-incharge'] ||
-        (userDocExists() && userDocRole() in ['ehs-manager', 'ehs-officer', 'safety-incharge'])
+        request.auth.token.role in ['ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge', 'EHS Supervisor', 'EHS Head'] ||
+        (userDocExists() && (
+          userDocRole() in ['ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
+          userDocData().get('roleLabel', '') in ['EHS Supervisor', 'EHS Head', 'EHS Safety Officer', 'EHS Manager']
+        ))
       );
     }
 

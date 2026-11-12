@@ -147,7 +147,7 @@ const mockDoc = {
     createElement: (tag) => new MockElement('', tag),
     getElementById: (id) => getOrCreateElem(id),
     querySelector: (sel) => {
-        if (sel === '.modal-overlay.show') {
+        if (sel.includes('.modal-overlay.show')) {
             for (let el of mockElementsMap.values()) {
                 if (el.classList.contains('modal-overlay') && el.classList.contains('show')) return el;
             }

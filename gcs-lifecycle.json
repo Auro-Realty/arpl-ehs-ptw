@@ -8,7 +8,20 @@
         "condition": {
           "age": 1,
           "matchesPrefix": [
+            "temp_uploads/",
             "temp-images/"
+          ]
+        }
+      },
+      {
+        "action": {
+          "type": "Delete"
+        },
+        "condition": {
+          "age": 2555,
+          "matchesPrefix": [
+            "permits/",
+            "statutory-pdfs/"
           ]
         }
       }

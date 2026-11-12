@@ -5,6 +5,7 @@
   "main": "server.js",
   "scripts": {
     "sync": "node scripts/sync_public.js",
+    "sync:public": "node scripts/sync_public.js",
     "pretest": "node scripts/sync_public.js",
     "predeploy": "node scripts/sync_public.js",
     "start": "node server.js",
