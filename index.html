@@ -1116,6 +1116,18 @@
             color: #fff;
         }
 
+        .btn-secondary {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text);
+        }
+
+        .btn-secondary:hover {
+            background: var(--bg);
+            border-color: var(--border-strong);
+            color: var(--navy);
+        }
+
         .btn-ghost {
             background: transparent;
             border-color: transparent;
@@ -6526,6 +6538,21 @@
             window.resetSimulatedDay = resetSimulatedDay;
         }
 
+        function getISTDate(input) {
+            if (input !== undefined && input !== null) {
+                return new Date(input);
+            }
+            if (typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__) {
+                return new Date(window.__TEST_DATE_OVERRIDE__);
+            }
+            if (typeof window !== 'undefined' && window.__SIMULATED_TIME_MS__) {
+                return new Date(window.__SIMULATED_TIME_MS__);
+            }
+            const realNow = new Date();
+            const istWall = new Date(realNow.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
+            return isNaN(istWall.getTime()) ? realNow : istWall;
+        }
+
         function getISTNow(offsetMs) {
             if (typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__) {
                 return new Date(new Date(window.__TEST_DATE_OVERRIDE__).getTime() + (typeof offsetMs === 'number' ? offsetMs : 0));
@@ -6553,18 +6580,30 @@
                     enumerable: false,
                     configurable: true
                 });
+                res.toString = function() {
+                    const realDate = (typeof this.__realUtcMs === 'number') ? new Date(this.__realUtcMs) : this;
+                    return realDate.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
+                };
+                res[Symbol.toPrimitive] = function(hint) {
+                    if (hint === 'string') return this.toString();
+                    return this.getTime();
+                };
             } catch (_e) {}
             return res;
         }
-        function nowTime(offsetMs) {
-            return getISTNow(offsetMs);
+        function nowTime(offsetMsOrFormat) {
+            if (offsetMsOrFormat === true || offsetMsOrFormat === 'string' || offsetMsOrFormat === 'format') {
+                return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
+            }
+            return getISTNow(offsetMsOrFormat);
         }
         function getISTTime(offsetMs) {
             return getISTNow(offsetMs);
         }
-        function todayDate() {
-            const realNow = new Date();
-            const dateStr = realNow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
+        function todayDate(refDate) {
+            const realNow = refDate ? new Date(refDate) : new Date();
+            const cleanNow = isNaN(realNow.getTime()) ? new Date() : realNow;
+            const dateStr = cleanNow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
             return dateStr;
         }
 
@@ -7726,7 +7765,8 @@
             const val = data && field.fieldName && data[field.fieldName] != null ? data[field.fieldName] : (field.getValue ? field.getValue(data) : '');
 
             if (field.type === 'text' && field.readonly) {
-                return '<div class="form-field"><label>' + escapeHtml(field.label) + '</label><input type="text" value="' + escapeHtml(val) + '" readonly></div>';
+                const aliasId = field.id === 'inDate' ? ' id="inDate" data-alias="f_date"' : (field.id === 'inTime' ? ' id="inTime" data-alias="f_time"' : (' id="' + field.id + '"'));
+                return '<div class="form-field"><label>' + escapeHtml(field.label) + '</label><input type="text"' + aliasId + ' value="' + escapeHtml(val) + '" readonly></div>';
             }
             if (field.type === 'number') {
                 const min = field.min != null ? ' min="' + field.min + '"' : '';
@@ -9583,6 +9623,7 @@
             wrap.innerHTML = sigPadInnerHtml(id, wrap.dataset.label || '');
             initSigPad(id, h ? h.onChange : null);
         }
+        window.__SIG_CACHE = window.__SIG_CACHE || {};
         const SIG_HANDLERS = {};
         const SIG_PADS = {};
         function initSigPad(id, onChange) {
@@ -9593,7 +9634,8 @@
             const st = { drawing: false, inked: false, last: null, onChange: onChange };
             SIG_PADS[id] = st;
 
-            const existingSig = (id === 'apprSigPad' && typeof actionModalCtx !== 'undefined' && actionModalCtx && actionModalCtx.sig) ||
+            const existingSig = (window.__SIG_CACHE && window.__SIG_CACHE[id]) ||
+                                (id === 'apprSigPad' && typeof actionModalCtx !== 'undefined' && actionModalCtx && actionModalCtx.sig) ||
                                 (id === 'seSigPad' && typeof draft !== 'undefined' && draft && draft.signature && draft.signature.dataUrl);
             if (existingSig && typeof existingSig === 'string' && existingSig.startsWith('data:image')) {
                 st.inked = true;
@@ -9673,6 +9715,7 @@
                     const el = document.getElementById(id + '-status');
                     if (el) { el.className = 'sig-status ok'; el.innerHTML = '<i class="fa-solid fa-circle-check"></i> Signature captured'; }
                     const dataUrl = cv.toDataURL('image/png');
+                    if (window.__SIG_CACHE) window.__SIG_CACHE[id] = dataUrl;
                     if (st.onChange) st.onChange(dataUrl);
                     if (id === 'apprSigPad' && typeof actionModalCtx !== 'undefined' && actionModalCtx) {
                         actionModalCtx.sig = dataUrl;
@@ -9702,6 +9745,7 @@
             }
         }
         function clearSigPad(id) {
+            if (window.__SIG_CACHE) delete window.__SIG_CACHE[id];
             const cv = document.getElementById(id); if (!cv) return;
             const cctx = cv.getContext && cv.getContext('2d'); if (cctx) cctx.clearRect(0, 0, cv.width, cv.height);
             const st = SIG_PADS[id]; if (st) { st.inked = false; if (st.onChange) st.onChange(null); }
@@ -9779,9 +9823,9 @@
            page reloads. Falls back gracefully if storage is unavailable
            or the quota is exceeded (e.g. very large photo evidence).
            ================================================================ */
-        const STORAGE_KEY = 'arpl_ehs_prod_clean_v5'; // Clean production persistence key
+        const STORAGE_KEY = 'arpl_ehs_prod_clean_v6'; // Clean production persistence key
         try {
-            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2', 'arpl_ehs_prod_clean_v3', 'arpl_ehs_prod_clean_v4'].forEach(k => localStorage.removeItem(k));
+            ['arpl_ptw_v31_state', 'arpl_ehs_ptw_state_v16_prod', 'ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v2', 'arpl_ehs_prod_clean_v3', 'arpl_ehs_prod_clean_v4', 'arpl_ehs_prod_clean_v5', 'wizDraft', 'state.wizData'].forEach(k => localStorage.removeItem(k));
         } catch (_e) {}
         function saveState() {
             try {
@@ -10238,7 +10282,10 @@
             el.classList.add('show');
             const mb = el.querySelector('.modal-body');
             if (mb) mb.scrollTop = 0;
-            if (document.body) document.body.classList.add('modal-open');
+            if (document.body) {
+                document.body.classList.add('modal-open');
+                document.body.style.overflow = 'hidden';
+            }
 
             // Move focus into modal (WCAG 2.2 AA)
             setTimeout(() => {
@@ -10258,8 +10305,11 @@
             el.classList.remove('show');
             const mb = el.querySelector('.modal-body');
             if (mb) mb.scrollTop = 0;
-            const anyOpen = document.querySelector('.modal-overlay.show');
-            if (!anyOpen && document.body) document.body.classList.remove('modal-open');
+            const anyOpen = document.querySelector('.modal-overlay.show, .modal-backdrop.open, .modal-backdrop.show');
+            if (!anyOpen && document.body) {
+                document.body.classList.remove('modal-open');
+                document.body.style.overflow = '';
+            }
 
             // Restore focus to pre-modal element
             if (lastFocusedElementBeforeModal && typeof lastFocusedElementBeforeModal.focus === 'function') {
@@ -17058,11 +17108,10 @@
             window.currentUser = currentUser;
             completeAuthenticatedLogin(updated);
             if (typeof updateSidebarNavigation === 'function') updateSidebarNavigation();
-            if (typeof buildDashboard === 'function' && document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) {
-                buildDashboard();
-            }
-            if (typeof buildRegisterTable === 'function' && document.getElementById('view-register') && document.getElementById('view-register').classList.contains('active')) {
-                buildRegisterTable();
+            if (typeof buildDashboard === 'function') buildDashboard();
+            if (typeof buildRegisterTable === 'function') buildRegisterTable();
+            if (currentView === 'detail' && currentDetailId && typeof viewDetail === 'function') {
+                viewDetail(currentDetailId, true);
             }
             showToast('Active role switched to: ' + (info.label || targetRole), 'ok');
         }
@@ -17130,11 +17179,10 @@
             currentUser = Object.freeze(updated);
             window.currentUser = currentUser;
             completeAuthenticatedLogin(updated);
-            if (typeof buildDashboard === 'function' && document.getElementById('view-dashboard') && document.getElementById('view-dashboard').classList.contains('active')) {
-                buildDashboard();
-            }
-            if (typeof buildRegisterTable === 'function' && document.getElementById('view-register') && document.getElementById('view-register').classList.contains('active')) {
-                buildRegisterTable();
+            if (typeof buildDashboard === 'function') buildDashboard();
+            if (typeof buildRegisterTable === 'function') buildRegisterTable();
+            if (currentView === 'detail' && currentDetailId && typeof viewDetail === 'function') {
+                viewDetail(currentDetailId, true);
             }
             showToast('Worksite context switched to: ' + (newLocationName || newProjectName), 'ok');
         }
@@ -19069,9 +19117,17 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 craneOperatorSig: null,
                 riggerSig: null
             };
+            draft.isNewDraft = true;
+            draft.createdAt = nowTime();
             wizStep = 1;
             goTo('create');
             renderStepIndicator(); renderWizStep();
+            setTimeout(() => {
+                const fDate = document.getElementById('inDate') || document.querySelector('[data-alias="f_date"]');
+                const fTime = document.getElementById('inTime') || document.querySelector('[data-alias="f_time"]');
+                if (fDate) fDate.value = todayDate();
+                if (fTime) fTime.value = (typeof nowTime === 'function' ? nowTime(true) : fmtTime(nowTime()));
+            }, 30);
         }
         function resumeDraft(p) {
             correctionMode = false;
@@ -26005,6 +26061,25 @@ function trackerHtml(p) {
                 let y = 0;
                 let sectionCounter = 1;
 
+                function sanitizePdfText(str) {
+                    if (str == null) return '';
+                    return String(str)
+                        .replace(/≤/g, '<=')
+                        .replace(/≥/g, '>=')
+                        .replace(/O₂/g, 'O2')
+                        .replace(/H₂S/g, 'H2S')
+                        .replace(/CO₂/g, 'CO2')
+                        .replace(/°/g, ' deg')
+                        .replace(/→/g, '->')
+                        .replace(/←/g, '<-')
+                        .replace(/·/g, '-')
+                        .replace(/•/g, '*')
+                        .replace(/–/g, '-')
+                        .replace(/—/g, '--')
+                        .replace(/“|”/g, '"')
+                        .replace(/‘|’/g, "'");
+                }
+
                 function drawRunningHeader(pageNum) {
                     if (pageNum > 1) {
                         doc.setDrawColor.apply(doc, PDF_LINE);
@@ -26047,10 +26122,10 @@ function trackerHtml(p) {
                         if (row.length === 4) {
                             const k1 = row[0], v1 = String(row[1] == null || row[1] === '' ? '—' : row[1]);
                             const k2 = row[2], v2 = String(row[3] == null || row[3] === '' ? '—' : row[3]);
-                            const k1Lines = doc.splitTextToSize(String(k1).toUpperCase(), 34);
-                            const k2Lines = doc.splitTextToSize(String(k2).toUpperCase(), 34);
-                            const lines1 = doc.splitTextToSize(v1, 51);
-                            const lines2 = doc.splitTextToSize(v2, 51);
+                            const k1Lines = doc.splitTextToSize(sanitizePdfText(String(k1).toUpperCase()), 34);
+                            const k2Lines = doc.splitTextToSize(sanitizePdfText(String(k2).toUpperCase()), 34);
+                            const lines1 = doc.splitTextToSize(sanitizePdfText(v1), 51);
+                            const lines2 = doc.splitTextToSize(sanitizePdfText(v2), 51);
                             const rowH = Math.max(k1Lines.length, k2Lines.length, lines1.length, lines2.length) * 3.8 + 3.2;
                             ensure(rowH);
                             doc.setFillColor.apply(doc, PDF_BG_LIGHT);
@@ -26075,8 +26150,8 @@ function trackerHtml(p) {
                             y += rowH;
                         } else if (row.length === 2) {
                             const k = row[0], v = String(row[1] == null || row[1] === '' ? '—' : row[1]);
-                            const kLines = doc.splitTextToSize(String(k).toUpperCase(), 34);
-                            const lines = doc.splitTextToSize(v, 142);
+                            const kLines = doc.splitTextToSize(sanitizePdfText(String(k).toUpperCase()), 34);
+                            const lines = doc.splitTextToSize(sanitizePdfText(v), 142);
                             const rowH = Math.max(kLines.length, lines.length) * 3.8 + 3.2;
                             ensure(rowH);
                             doc.setFillColor.apply(doc, PDF_BG_LIGHT);
@@ -27462,7 +27537,11 @@ function trackerHtml(p) {
                 const detIcon = detCfg.icon || 'fa-file-lines';
 
                 document.getElementById('view-detail').innerHTML =
-                    '<div class="view-header"><div><div class="mono" style="font-size:22px;font-weight:800;color:var(--navy);">' + p.id + '</div><div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;">' + statusBadge(p.status, p) + '<span class="tag-type"><i class="fa-solid ' + detIcon + '"></i> ' + pMeta(p).code + ' — ' + pMeta(p).short + '</span><span style="font-size:12px;color:var(--text-muted);">Issued ' + fmtDateTime(p.submittedAt || p.createdAt) + '</span></div></div>' +
+                    (() => {
+                    const awaitingDetailLbl = getNextApproverLabel(p);
+                    const awaitingDetailBadge = awaitingDetailLbl ? ('<span style="display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:999px;font-size:11px;font-weight:700;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;"><i class="fa-solid fa-hourglass-half" style="font-size:10px;"></i> Awaiting: ' + escapeHtml(awaitingDetailLbl) + '</span>') : '';
+                    return '<div class="view-header"><div><div class="mono" style="font-size:22px;font-weight:800;color:var(--navy);">' + p.id + '</div><div style="display:flex;gap:10px;align-items:center;margin-top:6px;flex-wrap:wrap;">' + statusBadge(p.status, p) + awaitingDetailBadge + '<span class="tag-type"><i class="fa-solid ' + detIcon + '"></i> ' + pMeta(p).code + ' — ' + pMeta(p).short + '</span><span style="font-size:12px;color:var(--text-muted);">Issued ' + fmtDateTime(p.submittedAt || p.createdAt) + '</span></div></div>';
+                })() +
                     '<div style="display:flex;gap:10px;flex-wrap:wrap;"><button class="btn btn-ghost no-print" onclick="goTo(\'register\')"><i class="fa-solid fa-arrow-left"></i> Back</button>' +
                     downloadBtnHtml +
                     '</div></div>' +

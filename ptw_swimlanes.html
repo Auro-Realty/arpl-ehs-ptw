@@ -1085,7 +1085,7 @@
         </div>
       </div>
 
-      <!-- Lane 5: EHS Safety Officer -->
+      <!-- Lane 5: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -1286,7 +1286,7 @@
               </tr>
               <tr>
                 <td><b>Stage 5: Final Endorsement</b></td>
-                <td><span class="authority-badge">EHS Safety Authority</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Certified EHS Safety Officer / Manager</div></td>
+                <td><span class="authority-badge">EHS Safety Authority</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Certified EHS Supervisor (Issuer / Approver) / Manager</div></td>
                 <td>Statutory compliance check, PPE verification, emergency ladder deployment. First-wins gate between Manager and Officer.</td>
                 <td><span class="spec-tag">Active (Work Authorized)</span></td>
               </tr>
@@ -1339,7 +1339,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Site Supervisor (site-supervisor) &rarr; Site Engineer (site-engineer) &rarr; MEP, P&amp;M, IT Engineers (mep, pm, it) &rarr; Excavation Head (excavation-head) &rarr; EHS Safety Officer / Manager (ehs-officer / ehs-manager)</span>
+      <span><b>Statutory Signatories Required:</b> Site Supervisor (site-supervisor) &rarr; Site Engineer (site-engineer) &rarr; MEP, P&amp;M, IT Engineers (mep, pm, it) &rarr; Excavation Head (excavation-head) &rarr; EHS Supervisor (Issuer / Approver) / Manager (ehs-officer / ehs-manager)</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -1412,17 +1412,17 @@
           <div class="decision-gateway">
             <span class="decision-title"><i class="fa-solid fa-code-fork"></i> Spark Precautions Verified?</span>
             <div class="decision-paths">
-              <span class="path-approved"><i class="fa-solid fa-check"></i> Cleared &rarr; Advances to Tower Incharge</span>
+              <span class="path-approved"><i class="fa-solid fa-check"></i> Cleared &rarr; Advances to Tower In-Charge / Section Head (Approver)</span>
               <span class="path-rejected"><i class="fa-solid fa-rotate-left"></i> Non-Compliant &rarr; Returns to Supervisor</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Lane 3: Tower Incharge -->
+      <!-- Lane 3: Tower In-Charge / Section Head (Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority</span>
           <span class="actor-badge">Area Coordination</span>
         </div>
@@ -1438,7 +1438,7 @@
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="decision-gateway">
-            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower Incharge Decision</span>
+            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower In-Charge / Section Head (Approver) Decision</span>
             <div class="decision-paths">
               <span class="path-approved"><i class="fa-solid fa-check"></i> Endorsed &rarr; Forwarded to EHS Safety</span>
               <span class="path-rejected"><i class="fa-solid fa-xmark"></i> Returned &rarr; Corrective Actions Required</span>
@@ -1691,7 +1691,7 @@
               </tr>
               <tr>
                 <td><b>Stage 3: Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
                 <td>Ensures no concurrent painting or chemical activities in adjacent zones, verifies area ventilation and shift timing limits.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
@@ -1750,7 +1750,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; Tower Incharge &rarr; EHS Safety</span>
+      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -1823,17 +1823,17 @@
           <div class="decision-gateway">
             <span class="decision-title"><i class="fa-solid fa-code-fork"></i> Fall Controls Compliant?</span>
             <div class="decision-paths">
-              <span class="path-approved"><i class="fa-solid fa-check"></i> Passed &rarr; Advances to Tower Incharge</span>
+              <span class="path-approved"><i class="fa-solid fa-check"></i> Passed &rarr; Advances to Tower In-Charge / Section Head (Approver)</span>
               <span class="path-rejected"><i class="fa-solid fa-rotate-left"></i> Incomplete &rarr; Returns to Supervisor</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Lane 3: Tower Incharge -->
+      <!-- Lane 3: Tower In-Charge / Section Head (Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority</span>
           <span class="actor-badge">Area Coordination</span>
         </div>
@@ -1849,7 +1849,7 @@
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="decision-gateway">
-            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower Incharge Decision</span>
+            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower In-Charge / Section Head (Approver) Decision</span>
             <div class="decision-paths">
               <span class="path-approved"><i class="fa-solid fa-check"></i> Endorsed &rarr; Forwarded to EHS Safety</span>
               <span class="path-rejected"><i class="fa-solid fa-xmark"></i> Returned &rarr; Rectify Fall Measures</span>
@@ -1859,7 +1859,7 @@
         </div>
       </div>
 
-      <!-- Lane 4: EHS Safety Officer -->
+      <!-- Lane 4: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -2025,7 +2025,7 @@
               </tr>
               <tr>
                 <td><b>Stage 3: Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
                 <td>Coordinates with trades on floors directly below, ensures exclusion drop zone barricades are erected, validates removal time window.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
@@ -2084,7 +2084,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; Tower Incharge &rarr; EHS Safety</span>
+      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -2103,7 +2103,7 @@
     </div>
     <div class="flow-overview">
       <div class="flow-desc">
-        <b>Operational Scope:</b> Governs entry into tanks, water bodies, manholes, lift pits, and underground chambers. Features the statutory 4-Stage Direct Spine (Site Supervisor &rarr; Site Engineer &rarr; Tower Incharge &rarr; EHS Safety), real-time 4-gas atmospheric testing, forced air ventilation (&ge;20 ACH), emergency tripod retrieval gear, and an all-clear headcount surrender gate.
+        <b>Operational Scope:</b> Governs entry into tanks, water bodies, manholes, lift pits, and underground chambers. Features the statutory 4-Stage Direct Spine (Site Supervisor &rarr; Site Engineer &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety), real-time 4-gas atmospheric testing, forced air ventilation (&ge;20 ACH), emergency tripod retrieval gear, and an all-clear headcount surrender gate.
       </div>
       <div class="safeguards-bar">
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Oxygen Limits: <b>19.5% – 21.0% Safe Range</b></span>
@@ -2152,24 +2152,24 @@
               • Verifies continuous positive mechanical blower (&ge;20 ACH) and ducting<br/>
               • Confirms multi-gas detector calibration validity (&lt;30 days)<br/>
               • Validates rescue tripod, retrieval winch &amp; harness anchorages<br/>
-              • Signs digital ground acknowledgment &amp; forwards to Tower Incharge
+              • Signs digital ground acknowledgment &amp; forwards to Tower In-Charge / Section Head (Approver)
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="decision-gateway">
             <span class="decision-title"><i class="fa-solid fa-gavel"></i> Site Engineer Decision</span>
             <div class="decision-paths">
-              <span class="path-approved"><i class="fa-solid fa-check"></i> Acknowledged &rarr; Forwarded to Tower Incharge</span>
+              <span class="path-approved"><i class="fa-solid fa-check"></i> Acknowledged &rarr; Forwarded to Tower In-Charge / Section Head (Approver)</span>
               <span class="path-rejected"><i class="fa-solid fa-rotate-left"></i> Returned &rarr; Re-verify Ventilation/Gas Log</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Lane 3: Tower Incharge -->
+      <!-- Lane 3: Tower In-Charge / Section Head (Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority</span>
           <span class="actor-badge">Engineering Review</span>
         </div>
@@ -2185,7 +2185,7 @@
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="decision-gateway">
-            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower Incharge Decision</span>
+            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower In-Charge / Section Head (Approver) Decision</span>
             <div class="decision-paths">
               <span class="path-approved"><i class="fa-solid fa-check"></i> Endorsed &rarr; Forwarded to EHS Safety</span>
               <span class="path-rejected"><i class="fa-solid fa-xmark"></i> Returned &rarr; Correct Gas/Ventilation</span>
@@ -2398,7 +2398,7 @@
               </tr>
               <tr>
                 <td><b>Stage 2: Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
                 <td>Validates detector calibration certificate, confirms Standby Attendant log, checks rescue protocol. Direct approval spine.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
@@ -2458,7 +2458,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Entry Supervisor &rarr; Site Engineer &rarr; Tower Incharge &rarr; EHS Safety (4-Stage Direct Spine)</span>
+      <span><b>Statutory Signatories Required:</b> Entry Supervisor &rarr; Site Engineer &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety (4-Stage Direct Spine)</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -2477,7 +2477,7 @@
     </div>
     <div class="flow-overview">
       <div class="flow-desc">
-        <b>Operational Scope:</b> Covers work inside vertical building shafts (passenger/service elevator shafts, electrical busduct risers, plumbing shafts, and HVAC ducts). Enforces floor dropdown indexing across 43 levels, scaffolding green-tag verification, fall containment nets, a dedicated MEP domain clearance step prior to Tower Incharge, and mandatory shaft mouth sealing upon surrender.
+        <b>Operational Scope:</b> Covers work inside vertical building shafts (passenger/service elevator shafts, electrical busduct risers, plumbing shafts, and HVAC ducts). Enforces floor dropdown indexing across 43 levels, scaffolding green-tag verification, fall containment nets, a dedicated MEP domain clearance step prior to Tower In-Charge / Section Head (Approver), and mandatory shaft mouth sealing upon surrender.
       </div>
       <div class="safeguards-bar">
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Scaffolding Fitness: <b>Valid Green Tag Mandatory</b></span>
@@ -2561,17 +2561,17 @@
           <div class="decision-gateway">
             <span class="decision-title"><i class="fa-solid fa-check-double"></i> MEP Clearance Approved?</span>
             <div class="decision-paths">
-              <span class="path-approved"><i class="fa-solid fa-check"></i> Cleared &rarr; Handoff to Tower Incharge</span>
+              <span class="path-approved"><i class="fa-solid fa-check"></i> Cleared &rarr; Handoff to Tower In-Charge / Section Head (Approver)</span>
               <span class="path-rejected"><i class="fa-solid fa-rotate-left"></i> Interference &rarr; Returns to Supervisor</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Lane 4: Tower Incharge -->
+      <!-- Lane 4: Tower In-Charge / Section Head (Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority</span>
           <span class="actor-badge">Area Coordination</span>
         </div>
@@ -2587,7 +2587,7 @@
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="decision-gateway">
-            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower Incharge Decision</span>
+            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower In-Charge / Section Head (Approver) Decision</span>
             <div class="decision-paths">
               <span class="path-approved"><i class="fa-solid fa-check"></i> Endorsed &rarr; Forwarded to EHS Safety</span>
               <span class="path-rejected"><i class="fa-solid fa-xmark"></i> Returned &rarr; Resubmit Corrected Form</span>
@@ -2597,7 +2597,7 @@
         </div>
       </div>
 
-      <!-- Lane 5: EHS Safety Officer -->
+      <!-- Lane 5: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -2776,7 +2776,7 @@
               </tr>
               <tr>
                 <td><b>Stage 4: Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
                 <td>Deconflicts vertical void operations, confirms shaft barrier locking on adjacent floors, verifies shift validity hours.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
@@ -2835,7 +2835,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; MEP Engineer &rarr; Tower Incharge &rarr; EHS Safety</span>
+      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; MEP Engineer &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -2948,7 +2948,7 @@
             <span class="node-detail">
               • Either MEP Engineer OR P&amp;M Engineer clearance satisfies gate<br/>
               • Verifies power distribution network and substation interlocks<br/>
-              • Advances permit to Tower Incharge (Section Head)
+              • Advances permit to Tower In-Charge / Section Head (Approver)
             </span>
           </div>
         </div>
@@ -2957,14 +2957,14 @@
       <!-- Lane 4: Section Head (Site Flow Only) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority (Site Flow Only)</span>
           <span class="actor-badge">Area Coordination</span>
         </div>
         <div class="lane-track-col">
           <div class="step-node">
             <span class="node-seq">Topology B · Phase 4B</span>
-            <span class="node-action">Tower Incharge Operational Review</span>
+            <span class="node-action">Tower In-Charge / Section Head (Approver) Operational Review</span>
             <span class="node-detail">
               • Deconflicts electrical power outages with temporary construction lifts<br/>
               • Verifies backup diesel generators (DG) operational during shutdown<br/>
@@ -2982,7 +2982,7 @@
         </div>
       </div>
 
-      <!-- Lane 5: EHS Safety Officer -->
+      <!-- Lane 5: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -3188,8 +3188,8 @@
               </tr>
               <tr>
                 <td><b>Topology B: Site Flow</b></td>
-                <td><span class="authority-badge">Site Eng &rarr; MEP/P&amp;M &rarr; Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Field Engineer + Either/Or Domain + Section Head</div></td>
-                <td>Site Engineer physically checks earthing leads; either MEP or P&amp;M satisfies domain gate; Tower Incharge reviews outage coordination.</td>
+                <td><span class="authority-badge">Site Eng &rarr; MEP/P&amp;M &rarr; Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Field Engineer + Either/Or Domain + Section Head</div></td>
+                <td>Site Engineer physically checks earthing leads; either MEP or P&amp;M satisfies domain gate; Tower In-Charge / Section Head (Approver) reviews outage coordination.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
               <tr>
@@ -3331,7 +3331,7 @@
         </div>
       </div>
 
-      <!-- Lane 3: EHS Safety Officer -->
+      <!-- Lane 3: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -3581,7 +3581,7 @@
         </thead>
         <tbody>
           <tr>
-            <td><span class="authority-badge"><i class="fa-solid fa-user-shield"></i> Blasting / Drilling In-charge (PESO Licensed Exclusive)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 4px;">Site Engineer closure strictly barred</div></td>
+            <td><span class="authority-badge"><i class="fa-solid fa-user-shield"></i> Blasting In-Charge (Permittee) (PESO Licensed Exclusive)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 4px;">Site Engineer closure strictly barred</div></td>
             <td style="font-size: 12.5px; line-height: 1.5; color: var(--ink-secondary);">1. Post-Blast site clearance completed: full visual sweep of blast floor conducted<br/>2. Zero misfires or unexploded charges confirmed by licensed Shot Firer<br/>3. All excessive explosive cartridges / lead wires accounted for and returned to licensed magazine<br/>4. Danger zone sentries stood down and warning sirens sounded all-clear</td>
             <td style="font-size: 12px; line-height: 1.4; color: var(--ink-primary); font-weight: 500;">
               <div style="display: flex; align-items: flex-start; gap: 6px;">
@@ -3672,17 +3672,17 @@
           <div class="decision-gateway">
             <span class="decision-title"><i class="fa-solid fa-code-fork"></i> Installation Rigging Verified?</span>
             <div class="decision-paths">
-              <span class="path-approved"><i class="fa-solid fa-check"></i> Cleared &rarr; Advances to Tower Incharge</span>
+              <span class="path-approved"><i class="fa-solid fa-check"></i> Cleared &rarr; Advances to Tower In-Charge / Section Head (Approver)</span>
               <span class="path-rejected"><i class="fa-solid fa-rotate-left"></i> Issues Found &rarr; Returns to Supervisor</span>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- Lane 3: Tower Incharge -->
+      <!-- Lane 3: Tower In-Charge / Section Head (Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority</span>
           <span class="actor-badge">Area Coordination</span>
         </div>
@@ -3698,7 +3698,7 @@
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="decision-gateway">
-            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower Incharge Decision</span>
+            <span class="decision-title"><i class="fa-solid fa-gavel"></i> Tower In-Charge / Section Head (Approver) Decision</span>
             <div class="decision-paths">
               <span class="path-approved"><i class="fa-solid fa-check"></i> Endorsed &rarr; Forwarded to EHS Safety</span>
               <span class="path-rejected"><i class="fa-solid fa-xmark"></i> Returned &rarr; Corrective Actions Required</span>
@@ -3708,7 +3708,7 @@
         </div>
       </div>
 
-      <!-- Lane 4: EHS Safety Officer -->
+      <!-- Lane 4: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -3923,7 +3923,7 @@
               </tr>
               <tr>
                 <td><b>Stage 3: Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
                 <td>Reviews wind forecast, coordinates facade hoists with adjacent trades, ensures drop zone barriers are manned.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
@@ -3981,7 +3981,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; Tower Incharge &rarr; EHS Safety</span>
+      <span><b>Statutory Signatories Required:</b> Site Supervisor &rarr; Site Engineer &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -4100,7 +4100,7 @@
       <!-- Lane 4: Governance Authorities -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
-          <span class="actor-title">Tower Incharge</span>
+          <span class="actor-title">Tower In-Charge / Section Head (Approver)</span>
           <span class="actor-role-desc">Section Head Approving Authority</span>
           <span class="actor-badge">Area Coordination</span>
         </div>
@@ -4147,7 +4147,7 @@
         </div>
       </div>
 
-      <!-- Lane 6: EHS Safety Officer -->
+      <!-- Lane 6: EHS Supervisor (Issuer / Approver) -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-ehs">
           <span class="actor-title">EHS Safety Authority</span>
@@ -4360,7 +4360,7 @@
               </tr>
               <tr>
                 <td><b>Stage 4: Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Tower Manager</div></td>
                 <td>Deconflicts airspace with adjacent tower crane jibs, confirms radio channels for blind lifts. Routes Routine to EHS; Critical to PM.</td>
                 <td><span class="spec-tag">Pending PM / EHS Approval</span></td>
               </tr>
@@ -4425,7 +4425,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Lifting Sup &rarr; Crew &rarr; Site Eng &rarr; P&amp;M Eng &rarr; Tower Incharge &rarr; [Project Manager for Critical] &rarr; EHS Safety</span>
+      <span><b>Statutory Signatories Required:</b> Lifting Sup &rarr; Crew &rarr; Site Eng &rarr; P&amp;M Eng &rarr; Tower In-Charge / Section Head (Approver) &rarr; [Project Manager for Critical] &rarr; EHS Safety</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Max Daily Validity: 08:30 – 19:30 IST</span>
     </div>
   </section>
@@ -4469,7 +4469,7 @@
               • Inputs contractor/subcontractor status &amp; worker count<br/>
               • Selects authorized activity from 7 numerical options<br/>
               • Completes 13 checklist checks (Photo deferred to 8:30 PM)<br/>
-              • Approved by Site Engineer &amp; Tower Incharge &rarr; Unlocks linked activity permit
+              • Approved by Site Engineer &amp; Tower In-Charge / Section Head (Approver) &rarr; Unlocks linked activity permit
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
@@ -4752,7 +4752,7 @@
               </tr>
               <tr>
                 <td><b>Step 6: EHS Verification</b></td>
-                <td><span class="authority-badge">EHS Safety Authority</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">EHS Safety Officer / Manager (Role: ehs-officer / ehs-manager)</div></td>
+                <td><span class="authority-badge">EHS Safety Authority</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">EHS Supervisor (Issuer / Approver) / Manager (Role: ehs-officer / ehs-manager)</div></td>
                 <td>Audits dual photos and night safety protocols. Approval activates both permits. Rejection strictly isolates Night Supervisor.</td>
                 <td><span class="spec-tag">Active (Night Operations Authorized)</span></td>
               </tr>
@@ -4805,7 +4805,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Day Supervisor &rarr; Site Eng &rarr; Tower Incharge &rarr; Night Supervisor &rarr; P&amp;M Eng &rarr; EHS Safety</span>
+      <span><b>Statutory Signatories Required:</b> Day Supervisor &rarr; Site Eng &rarr; Tower In-Charge / Section Head (Approver) &rarr; Night Supervisor &rarr; P&amp;M Eng &rarr; EHS Safety</span>
       <span class="sig-pill"><i class="fa-solid fa-clock"></i> Overnight Window: 20:30 – 06:00 IST</span>
     </div>
   </section>
@@ -4883,7 +4883,7 @@
       <div class="swimlane-row">
         <div class="lane-actor-col actor-sectionhead">
           <span class="actor-title">Section Head</span>
-          <span class="actor-role-desc">Tower Incharge / Area Lead</span>
+          <span class="actor-role-desc">Tower In-Charge / Section Head (Approver) / Area Lead</span>
           <span class="actor-badge">Weekend Coverage</span>
         </div>
         <div class="lane-track-col">
@@ -5029,7 +5029,7 @@
               </tr>
               <tr>
                 <td><b>Saturday Section Review</b></td>
-                <td><span class="authority-badge">Tower Incharge</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Area Manager</div></td>
+                <td><span class="authority-badge">Tower In-Charge / Section Head (Approver)</span><div style="font-size: 11px; color: var(--ink-muted); margin-top: 3px;">Section Head / Area Manager</div></td>
                 <td>Validates certified supervisory staffing roster for Sunday, confirms emergency medical and security coverage.</td>
                 <td><span class="spec-tag">Pending EHS Approval</span></td>
               </tr>
@@ -5086,7 +5086,7 @@
       </div>
     </div>
     <div class="flow-footer-summary">
-      <span><b>Statutory Signatories Required:</b> Saturday Permittee &rarr; Field Eng &rarr; Tower Incharge &rarr; EHS Safety &rarr; Sunday Custodian</span>
+      <span><b>Statutory Signatories Required:</b> Saturday Permittee &rarr; Field Eng &rarr; Tower In-Charge / Section Head (Approver) &rarr; EHS Safety &rarr; Sunday Custodian</span>
       <span class="sig-pill" style="color: var(--sun-brand);"><i class="fa-solid fa-sun"></i> Saturday Prep / Sunday Valid Execution</span>
     </div>
   </section>
