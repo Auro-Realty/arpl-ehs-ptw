@@ -113,8 +113,8 @@ it('Mobile form inputs enforce 16px font size to prevent iOS auto-zoom', () => {
 });
 
 it('Icon-only buttons provide aria-label and titles', () => {
-  assert(indexHtml.includes('clearPhoto()') && indexHtml.includes('aria-label="Remove Photo"'), 'clearPhoto must have aria-label');
-  assert(indexHtml.includes('clearBlastingAckPhoto()') && indexHtml.includes('aria-label="Remove Confirmation Photo"'), 'clearBlastingAckPhoto must have aria-label');
+  assert(indexHtml.includes('clearPhoto()') && (indexHtml.includes('aria-label="Retake Live Photo"') || indexHtml.includes('aria-label="Remove Photo"')), 'clearPhoto must have aria-label');
+  assert(indexHtml.includes('clearBlastingAckPhoto()') && (indexHtml.includes('aria-label="Retake Confirmation Photo"') || indexHtml.includes('aria-label="Remove Confirmation Photo"')), 'clearBlastingAckPhoto must have aria-label');
 });
 
 // -----------------------------------------------------------------------------
