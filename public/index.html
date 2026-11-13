@@ -1214,7 +1214,20 @@
             border-color: var(--blue-brd);
         }
 
-        .badge.st-expired {
+        .badge.st-scheduled {
+            background: #EFF6FF;
+            color: #1D4ED8;
+            border-color: #93C5FD;
+        }
+
+        .badge.st-extpending {
+            background: var(--purple-bg);
+            color: var(--purple);
+            border-color: var(--purple-brd);
+        }
+
+        .badge.st-expired,
+        .badge.st-autoclosed {
             background: var(--grey-bg);
             color: var(--grey);
             border-color: var(--grey-brd);
@@ -1232,7 +1245,8 @@
             border-color: var(--green-brd);
         }
 
-        .badge.st-cancelled {
+        .badge.st-cancelled,
+        .badge.st-rejected {
             background: var(--red-bg);
             color: var(--red);
             border-color: var(--red-brd);
@@ -6586,6 +6600,84 @@
             return isNaN(istWall.getTime()) ? realNow : istWall;
         }
 
+        let SERVER_TIME_OFFSET_MS = 0;
+
+        function isLiveFirebaseAuthActive() {
+            try {
+                if (typeof window !== 'undefined' && window.__TEST_MODE__) return false;
+                if (typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__) return false;
+                return typeof firebase !== 'undefined' && typeof firebase.app === 'function' && firebase.auth && !!firebase.auth().currentUser;
+            } catch (_e) {
+                return false;
+            }
+        }
+
+        async function syncServerTimeOffset() {
+            if (!isLiveFirebaseAuthActive()) return SERVER_TIME_OFFSET_MS;
+            try {
+                const t0 = Date.now();
+                const fns = getFunctions(firebase.app(), 'asia-south1');
+                const getTimeFn = httpsCallable(fns, 'getServerTime');
+                const res = await getTimeFn({});
+                const t1 = Date.now();
+                const data = res && res.data ? res.data : res;
+                if (data && typeof data.serverTimeMs === 'number') {
+                    const midpoint = t0 + Math.round((t1 - t0) / 2);
+                    SERVER_TIME_OFFSET_MS = data.serverTimeMs - midpoint;
+                    if (typeof window !== 'undefined') window.SERVER_TIME_OFFSET_MS = SERVER_TIME_OFFSET_MS;
+                }
+            } catch (e) {
+                console.warn('[TimeSync] Unable to sync server clock offset:', e && e.message);
+            }
+            return SERVER_TIME_OFFSET_MS;
+        }
+
+        async function executeServerTransition(permit, actionPayload) {
+            if (!permit || !permit.id) return { ok: false, reason: 'Missing permit' };
+            if (!isLiveFirebaseAuthActive()) return { ok: true, localMode: true };
+            try {
+                const fns = getFunctions(firebase.app(), 'asia-south1');
+                const txFn = httpsCallable(fns, 'transitionPermitStage');
+                const payload = Object.assign({
+                    permitId: permit.id,
+                    targetStatus: (actionPayload && actionPayload.targetStatus) || permit.status,
+                    action: (actionPayload && actionPayload.action) || 'STAGE_TRANSITION',
+                    userLat: actionPayload && actionPayload.gps ? actionPayload.gps.lat : (permit.gps ? permit.gps.lat : null),
+                    userLng: actionPayload && actionPayload.gps ? actionPayload.gps.lng : (permit.gps ? permit.gps.lng : null),
+                    comments: (actionPayload && actionPayload.comments) || '',
+                    validFromMs: permit.validFromMs || getEpochMs(permit.startAt || permit.validFrom) || null,
+                    validTillMs: permit.validTillMs || getEpochMs(permit.validTill) || null,
+                    extensionMinutes: (actionPayload && actionPayload.extensionMinutes) || null,
+                    observationId: (actionPayload && actionPayload.observationId) || null
+                }, {});
+                const res = await txFn(payload);
+                const data = res && res.data ? res.data : res;
+                if (data && typeof data.serverTimeMs === 'number') {
+                    SERVER_TIME_OFFSET_MS = data.serverTimeMs - Date.now();
+                }
+                return { ok: true, data };
+            } catch (err) {
+                console.error('[WorkflowGuard] Backend transition rejected:', err);
+                const msg = (err && err.message) || 'Backend transition rejected by security rules or concurrency guard.';
+                if (typeof showToast === 'function') showToast(msg, 'err');
+                return { ok: false, error: msg };
+            }
+        }
+
+        function syncStatutoryDownloadWithServer(permit) {
+            if (!permit || !permit.id || !isLiveFirebaseAuthActive()) return;
+            try {
+                firebase.auth().currentUser.getIdToken().then(function (idToken) {
+                    return fetch('/api/download-statutory-pdf?permitId=' + encodeURIComponent(permit.id), {
+                        method: 'GET',
+                        headers: { Authorization: 'Bearer ' + idToken }
+                    });
+                }).catch(function (err) {
+                    console.warn('[PDF Audit Sync] Note:', err && err.message);
+                });
+            } catch (_e) {}
+        }
+
         function getISTNow(offsetMs) {
             if (typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__) {
                 return new Date(new Date(window.__TEST_DATE_OVERRIDE__).getTime() + (typeof offsetMs === 'number' ? offsetMs : 0));
@@ -6593,7 +6685,7 @@
             if (typeof window !== 'undefined' && window.__SIMULATED_TIME_MS__) {
                 return new Date(window.__SIMULATED_TIME_MS__ + (typeof offsetMs === 'number' ? offsetMs : 0));
             }
-            const realNow = new Date();
+            const realNow = new Date(Date.now() + SERVER_TIME_OFFSET_MS);
             const istWall = new Date(realNow.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }));
             const base = isNaN(istWall.getTime()) ? realNow : istWall;
             let t = base.getTime() + (typeof offsetMs === 'number' ? offsetMs : 0);
@@ -6632,7 +6724,7 @@
         }
         function nowTime(offsetMsOrFormat) {
             if (offsetMsOrFormat === true || offsetMsOrFormat === 'string' || offsetMsOrFormat === 'format') {
-                return new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
+                return new Date(nowMs()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' }).toLowerCase();
             }
             return getISTNow(offsetMsOrFormat);
         }
@@ -6640,8 +6732,8 @@
             return getISTNow(offsetMs);
         }
         function todayDate(refDate) {
-            const realNow = refDate ? new Date(refDate) : new Date();
-            const cleanNow = isNaN(realNow.getTime()) ? new Date() : realNow;
+            const realNow = refDate ? new Date(refDate) : new Date(nowMs());
+            const cleanNow = isNaN(realNow.getTime()) ? new Date(nowMs()) : realNow;
             const dateStr = cleanNow.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Asia/Kolkata' });
             return dateStr;
         }
@@ -6653,7 +6745,7 @@
             if (typeof window !== 'undefined' && window.__TEST_DATE_OVERRIDE__) {
                 return new Date(window.__TEST_DATE_OVERRIDE__).getTime();
             }
-            return Date.now();
+            return Date.now() + SERVER_TIME_OFFSET_MS;
         }
 
         function getEpochMs(input) {
@@ -7211,6 +7303,7 @@
             ],
             statuses: {
                 'Draft': { class: 'draft', category: 'draft', label: 'Draft' },
+                'Submitted': { class: 'parallel', category: 'pending', label: 'Submitted' },
                 'Pending Blasting In-charge Acknowledgment': { class: 'parallel', category: 'pending', label: 'Pending Blasting In-charge Acknowledgment' },
                 'Pending Blasting In-charge Re-Acknowledgment': { class: 'parallel', category: 'pending', label: 'Pending Blasting In-charge Re-Acknowledgment' },
                 'Pending Site Engineer Acknowledgment': { class: 'parallel', category: 'pending', label: 'Pending Site Engineer Acknowledgment' },
@@ -7229,7 +7322,10 @@
                 'Pending Project Manager Acknowledgment': { class: 'sectionhead', category: 'pending', label: 'Pending Project Manager Acknowledgment' },
                 'Pending Project Manager Re-Acknowledgment': { class: 'sectionhead', category: 'pending', label: 'Pending Project Manager Re-Acknowledgment' },
                 'Pending EHS Approval': { class: 'ehs', category: 'pending', label: 'Pending EHS Approval' },
+                'Approved – Scheduled': { class: 'scheduled', category: 'active', label: 'Approved – Scheduled' },
                 'Active': { class: 'active', category: 'active', label: 'Active' },
+                'Extension Pending': { class: 'extpending', category: 'active', label: 'Extension Pending' },
+                'Extended': { class: 'active', category: 'active', label: 'Extended' },
                 'Active – Observation Open': { class: 'returned', category: 'observation', label: 'Active – Observation Open' },
                 'Observation Pending Site Engineer Acknowledgment': { class: 'parallel', category: 'observation', label: 'Observation Pending Site Engineer Acknowledgment' },
                 'Observation Pending Section Head Review': { class: 'sectionhead', category: 'observation', label: 'Observation Pending Section Head Review' },
@@ -7237,12 +7333,16 @@
                 'Observation Pending Excavation Head Review': { class: 'sectionhead', category: 'observation', label: 'Observation Pending Excavation Head Review' },
                 'Observation Pending EHS Clearance': { class: 'ehs', category: 'observation', label: 'Observation Pending EHS Clearance' },
                 'Expired': { class: 'expired', category: 'terminal', label: 'Expired' },
+                'Expired Before Activation': { class: 'expired', category: 'terminal', label: 'Expired Before Activation' },
+                'Auto-Closed': { class: 'autoclosed', category: 'terminal', label: 'Auto-Closed' },
+                'Closed': { class: 'closed', category: 'completed', label: 'Closed' },
                 'Closed – Pending Surrender': { class: 'closed', category: 'completed', label: 'Closed – Pending Surrender' },
                 'Night Shift Approved – Awaiting Linked Permit': { class: 'parallel', category: 'pending', label: 'Night Shift Approved – Awaiting Linked Permit' },
                 'Approved – Pending Night Handover': { class: 'parallel', category: 'pending', label: 'Approved – Pending Night Handover' },
                 'Pending P&M Night Acknowledgment': { class: 'parallel', category: 'pending', label: 'Pending P&M Night Acknowledgment' },
                 'Returned to Night Supervisor': { class: 'returned', category: 'returned', label: 'Returned to Night Supervisor' },
                 'Completed (Surrendered)': { class: 'completed', category: 'completed', label: 'Completed (Surrendered)' },
+                'Rejected': { class: 'rejected', category: 'terminal', label: 'Rejected' },
                 'Cancelled': { class: 'cancelled', category: 'terminal', label: 'Cancelled' }
             },
             permitTypes: {
@@ -7468,11 +7568,11 @@
             dashboards: {
                 initiators: [
                     { cls: 'k-grey', icon: 'fa-file-pen', label: 'My Drafts', count: (m) => m.filter(p => p.status === 'Draft').length, foot: 'Not yet submitted', action: "filterRegisterAndGo('Draft')" },
-                    { cls: 'k-amber', icon: 'fa-hourglass-half', label: 'In Approval Chain', count: (m) => m.filter(p => !['Draft', 'Active', 'Completed (Surrendered)', 'Closed – Pending Surrender', 'Expired', 'Cancelled'].includes(p.status)).length, foot: 'Across workflow stages', action: "goTo('register')" },
-                    { cls: 'k-blue', icon: 'fa-bolt', label: 'Active Permits', count: (m) => m.filter(p => p.status === 'Active').length, foot: 'Currently valid on site', action: "filterRegisterAndGo('Active')" },
+                    { cls: 'k-amber', icon: 'fa-hourglass-half', label: 'In Approval Chain', count: (m) => m.filter(p => !['Draft', 'Approved – Scheduled', 'Active', 'Extended', 'Extension Pending', 'Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender', 'Auto-Closed', 'Expired', 'Expired Before Activation', 'Rejected', 'Cancelled'].includes(p.status)).length, foot: 'Across workflow stages', action: "goTo('register')" },
+                    { cls: 'k-blue', icon: 'fa-bolt', label: 'Active Permits', count: (m) => m.filter(p => ['Active', 'Extended'].includes(p.status)).length, foot: 'Currently valid on site', action: "filterRegisterAndGo('Active')" },
                     { cls: 'k-red', icon: 'fa-triangle-exclamation', label: 'Open Observations', count: (m) => m.filter(p => p.status === 'Active – Observation Open').length, foot: 'Requires corrective response', action: "filterRegisterAndGo('Active – Observation Open')" },
                     { cls: 'k-purple', icon: 'fa-stopwatch', label: 'Extension Requests', count: (m) => m.filter(p => p.extension && !['Approved', 'Rejected', 'Cancelled'].includes(p.extension.status)).length, foot: 'Under review by Section Head / EHS', action: "goTo('register')" },
-                    { cls: 'k-green', icon: 'fa-box-archive', label: 'Closed Permits', count: (m) => m.filter(p => ['Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status)).length, foot: 'Surrendered / archived', action: "filterRegisterAndGo('Completed (Surrendered)')" },
+                    { cls: 'k-green', icon: 'fa-box-archive', label: 'Closed Permits', count: (m) => m.filter(p => ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status)).length, foot: 'Surrendered / archived', action: "filterRegisterAndGo('Completed (Surrendered)')" },
                     { cls: 'k-orange', icon: 'fa-plus', label: 'Create Permit', count: () => '', foot: 'Permittee: Initiate new permit', action: "openPermitTypeSelection()" },
                     { cls: 'k-teal', icon: 'fa-bell', label: 'Notifications', count: () => notifsForCurrentUser().length, foot: 'View all alerts', action: "goTo('notifications')" }
                 ],
@@ -7483,8 +7583,8 @@
                 ],
                 siteEngineer: [
                     { cls: 'k-amber', icon: 'fa-clipboard-check', label: 'Pending Acknowledgment', count: () => PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && (p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment' || p.status === 'Observation Pending Site Engineer Acknowledgment')).length, foot: 'Step 2 & Obs: Acknowledge', action: "goTo('register')" },
-                    { cls: 'k-green', icon: 'fa-bolt', label: 'Active On-Site', count: () => PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && p.status === 'Active').length, foot: 'Work in progress', action: "filterRegisterAndGo('Active')" },
-                    { cls: 'k-grey', icon: 'fa-box-archive', label: 'Surrendered Permits', count: () => PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && ['Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status)).length, foot: 'Closed safely', action: "filterRegisterAndGo('Completed (Surrendered)')" }
+                    { cls: 'k-green', icon: 'fa-bolt', label: 'Active On-Site', count: () => PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && ['Active', 'Extended'].includes(p.status)).length, foot: 'Work in progress', action: "filterRegisterAndGo('Active')" },
+                    { cls: 'k-grey', icon: 'fa-box-archive', label: 'Surrendered Permits', count: () => PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status)).length, foot: 'Closed safely', action: "filterRegisterAndGo('Completed (Surrendered)')" }
                 ],
                 siteEngineerActions: [
                     { label: 'Open Permit Register', icon: 'fa-table-list', cls: 'btn-primary', action: "goTo('register')" },
@@ -7493,7 +7593,7 @@
                 approvers: [
                     { cls: 'k-amber', icon: 'fa-hourglass-half', label: 'Pending My Approval', count: (rk) => pendingForRole(rk).length, foot: (rk) => (rk === 'excavation-head' ? 'Excavation permits' : (rk === 'quality-engineer' ? 'Batching Plant Quality Clearance' : (rk === 'project-manager' ? 'PTW-009B Critical Lift Plans' : (normalizeRoleKey(rk) === 'tower-in-charge' ? 'Across building & tower permits' : 'Across all permit types')))), action: "goTo('register')" },
                     { cls: 'k-purple', icon: 'fa-stopwatch', label: 'Pending Extension Approval', count: (rk) => pendingExtensionsForRole(rk).length, foot: () => 'Extension requests', action: "goTo('register')" },
-                    { cls: 'k-blue', icon: 'fa-bolt', label: 'Active Permits', count: (rk, sc) => PERMITS.filter(p => isPermitVisibleToRole(p, rk) && p.status === 'Active' && permitMatchesScope(p, sc)).length, foot: (rk, sc) => (sc ? (Array.isArray(sc) ? ((sc.length === 1 && PTYPE_META[sc[0]]) ? (PTYPE_META[sc[0]].short + ' — currently on site') : 'Hot Work & Shaft Work — currently on site') : (PTYPE_META[sc] ? PTYPE_META[sc].short + ' — currently on site' : 'Currently on site')) : 'Currently on site'), action: "goTo('register')" },
+                    { cls: 'k-blue', icon: 'fa-bolt', label: 'Active Permits', count: (rk, sc) => PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Active', 'Extended'].includes(p.status) && permitMatchesScope(p, sc)).length, foot: (rk, sc) => (sc ? (Array.isArray(sc) ? ((sc.length === 1 && PTYPE_META[sc[0]]) ? (PTYPE_META[sc[0]].short + ' — currently on site') : 'Hot Work & Shaft Work — currently on site') : (PTYPE_META[sc] ? PTYPE_META[sc].short + ' — currently on site' : 'Currently on site')) : 'Currently on site'), action: "goTo('register')" },
                     { cls: 'k-green', icon: 'fa-circle-check', label: 'Approved by Me', count: (rk, sc) => PERMITS.filter(p => isPermitVisibleToRole(p, rk) && permitMatchesScope(p, sc) && p.approvals && CHAIN_ROLE_FIELD[rk] && p.approvals[CHAIN_ROLE_FIELD[rk]] && p.approvals[CHAIN_ROLE_FIELD[rk]].status === 'approved').length, foot: () => 'All-time', action: "goTo('register')" }
                 ],
                 approverActions: [
@@ -7502,7 +7602,7 @@
                 ],
                 admin: [
                     { cls: 'k-blue', icon: 'fa-file-lines', label: 'Total Permits', count: () => PERMITS.length, foot: 'PTW-001 to PTW-009 &middot; Active &amp; Historical', action: "goTo('register')" },
-                    { cls: 'k-orange', icon: 'fa-bolt', label: 'Active Now', count: () => PERMITS.filter(p => p.status === 'Active').length, foot: 'On worksites currently', action: "goTo('register')" },
+                    { cls: 'k-orange', icon: 'fa-bolt', label: 'Active Now', count: () => PERMITS.filter(p => ['Active', 'Extended'].includes(p.status)).length, foot: 'On worksites currently', action: "goTo('register')" },
                     { cls: 'k-green', icon: 'fa-map-location-dot', label: 'Geofence Configured', count: () => PROJECTS.filter(p => p.configured).length + ' / ' + PROJECTS.length + ' Sites', foot: () => (PROJECTS.length - PROJECTS.filter(p => p.configured).length) + ' site(s) locked', action: "goTo('admin-config')" },
                     { cls: 'k-red', icon: 'fa-ban', label: 'Cancelled', count: () => PERMITS.filter(p => p.status === 'Cancelled').length, foot: 'Terminated by EHS', action: "goTo('register')" }
                 ],
@@ -7699,7 +7799,8 @@
                 'obs-sh-reject': { id: 'obs-sh-reject', label: 'Reject (Return to Supervisor)', icon: 'fa-rotate-left', btnCls: 'btn-warning', permission: 'permit.reject' },
                 'obs-clear-ok': { id: 'obs-clear-ok', label: 'EHS OK (Resolve & Return to Active)', icon: 'fa-check', btnCls: 'btn-green', permission: 'ehs.clear' },
                 'obs-clear-reject': { id: 'obs-clear-reject', label: 'Reject Rectification (Return to Supervisor)', icon: 'fa-rotate-left', btnCls: 'btn-warning', permission: 'ehs.clear' },
-                'obs-cancel': { id: 'obs-cancel', label: 'Cancel Permit + Comment (Terminal)', icon: 'fa-ban', btnCls: 'btn-danger', permission: 'permit.cancel' }
+                'obs-cancel': { id: 'obs-cancel', label: 'Cancel Permit + Comment (Terminal)', icon: 'fa-ban', btnCls: 'btn-danger', permission: 'permit.cancel' },
+                'active-ehs-cancel': { id: 'active-ehs-cancel', label: 'Cancel Permit (Stop Work)', icon: 'fa-ban', btnCls: 'btn-danger', permission: 'permit.cancel' }
             },
             emptyStates: {
                 notifications: { icon: 'fa-regular fa-bell-slash', text: 'No notifications yet.' },
@@ -7813,19 +7914,19 @@
             }
             if (action === 'permit.extend') {
                 const p = context;
-                if (!p || p.status !== 'Active') return false;
+                if (!p || !['Active', 'Extended'].includes(p.status)) return false;
                 return isExtensionRequestAllowed(p, rk);
             }
             if (action === 'permit.surrender' || action === 'permit.close') {
                 const p = context;
-                if (!p || (p.status !== 'Active' && p.status !== 'Closed – Pending Surrender' && p.status !== 'Expired')) return false;
+                if (!p || !['Active', 'Extended', 'Closed – Pending Surrender'].includes(p.status)) return false;
                 if (ptypeOf(p) === 'electrical') return rk === 'electrician';
                 if (ptypeOf(p) === 'blasting') return rk === 'blasting-incharge' || rk === 'site-supervisor';
                 if (ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') return rk === 'lift-supervisor';
                 return rk === 'site-supervisor';
             }
             if (action === 'permit.download_pdf') {
-                return ['ehs-manager', 'ehs-officer'].includes(rk);
+                return ['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager'].includes(rk);
             }
             if (action === 'admin.config') {
                 return rk === 'admin' || rk === 'super-admin';
@@ -10996,10 +11097,21 @@
         }
 
         /* ---------------- MAIN PERMIT WORKFLOW ---------------- */
+        function stampPermitValidityEpochs(p) {
+            if (!p) return;
+            const vfMs = getEpochMs(p.validFromMs || p.startAt || p.validFrom);
+            const vtMs = getEpochMs(p.validTillMs || p.validTill);
+            if (vfMs) p.validFromMs = vfMs;
+            if (vtMs) p.validTillMs = vtMs;
+            if (!p.originalValidTill && p.validTill) p.originalValidTill = p.validTill;
+            if (!p.originalValidTillMs && vtMs) p.originalValidTillMs = vtMs;
+        }
+
         function submitPermit(p) {
             p.submittedAt = nowTime();
             p.stageEnteredAt = nowTime();
             p.escalation = { stage1: false, stage2: false };
+            stampPermitValidityEpochs(p);
             const creator = p.createdBy || (currentUser && currentUser.name) || roleInfo('site-supervisor').label;
             p.status = 'Pending Site Engineer Acknowledgment';
             persistPermitToFirestore(p);
@@ -11146,6 +11258,7 @@
             notify(['quality-engineer'], pLabel(p) + ' acknowledged by P&M Engineer — Quality Engineer approval required.', 'info', p.id);
             notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by P&M Engineer and forwarded to Quality Engineer.', 'info', p.id);
             showToast('P&M Engineer acknowledgment completed & forwarded to Quality Engineer.', 'ok');
+            executeServerTransition(p, { action: 'PM_ACK', targetStatus: p.status, gps: effectiveGps, comments: comment });
             saveState();
         }
 
@@ -11272,6 +11385,10 @@
             p.signatories['site-engineer'] = { name: effectiveSigner, sig: effectiveSig, consent: true, at: nowTime() };
             p.siteEngineerAck = { acknowledged: true, at: nowTime(), by: effectiveSigner, gps: effectiveGps, comment: comment || '', sig: effectiveSig };
             p.stageEnteredAt = nowTime();
+            const finishSiteAck = () => {
+                executeServerTransition(p, { action: 'SITE_ENGINEER_ACK', targetStatus: p.status, gps: effectiveGps, comments: comment });
+                saveState();
+            };
             if (ptypeOf(p) === 'nightshift') {
                 p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('nightshift');
@@ -11279,7 +11396,7 @@
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review & approval required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
                 showToast('Night Shift permit acknowledged & forwarded to Tower Incharge.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11291,7 +11408,7 @@
                 notify(['pm'], pLabel(p) + ' acknowledged by Site Engineer — P&M Engineer technical verification required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to P&M Engineer.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to P&M Engineer.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11302,7 +11419,7 @@
                 notify(['mep', 'pm'], pLabel(p) + ' acknowledged by Site Engineer — MEP or P&M Engineer approval required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to MEP / P&M Engineer.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to MEP / P&M Engineer.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11313,7 +11430,7 @@
                 notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' acknowledged by Site Engineer — EHS statutory endorsement required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to EHS Safety.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to EHS Safety.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11324,7 +11441,7 @@
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11335,7 +11452,7 @@
                 notify(['mep'], pLabel(p) + ' acknowledged by Site Engineer — MEP Engineer clearance required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to MEP Engineer.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to MEP Engineer.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11346,7 +11463,7 @@
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11357,7 +11474,7 @@
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11368,7 +11485,7 @@
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
                 showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
-                saveState();
+                finishSiteAck();
                 return;
             }
 
@@ -11389,7 +11506,7 @@
             }
             notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded.', 'info', p.id);
             showToast('Permit acknowledged & forwarded' + (allParallelDone ? (' to ' + shTargetLabel + '.') : ' to parallel gate.'), 'ok');
-            saveState();
+            finishSiteAck();
         }
 
         function rejectSiteEngineer(p, { gps, comment, sig, signerName }) {
@@ -11481,14 +11598,15 @@
                 }
                 if (p.parentNightShiftId) {
                     const parent = PERMITS.find(x => x.id === p.parentNightShiftId);
-                    if (parent && parent.status !== 'Active') activatePermit(parent);
+                    if (parent && !['Active', 'Extended', 'Approved – Scheduled'].includes(parent.status)) activatePermit(parent);
                 }
                 if (p.linkedPermitId) {
                     const child = PERMITS.find(x => x.id === p.linkedPermitId);
-                    if (child && child.status !== 'Active') activatePermit(child);
+                    if (child && !['Active', 'Extended', 'Approved – Scheduled'].includes(child.status)) activatePermit(child);
                 }
                 activatePermit(p);
             } else {
+                executeServerTransition(p, { action: 'STAGE_APPROVED', targetStatus: p.status, gps, comments: comment });
                 notify(stakeholdersFor(p), pLabel(p) + ' — ' + roleInfo(roleKey).label + ' approval recorded. Awaiting remaining clearances.', 'info', p.id);
             }
             showToast('Approval recorded for ' + p.id + '.', 'ok');
@@ -11561,17 +11679,46 @@
                 notify([targetInitiator], pLabel(p) + ' returned by ' + roleInfo(roleKey).label + ' — correction required: "' + comment + '"', 'error', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' returned by ' + roleInfo(roleKey).label + ' — correction required: "' + comment + '"', 'error', p.id);
             }
+            executeServerTransition(p, { action: isTerminalCancel ? 'STAGE_CANCELLED' : 'STAGE_REJECTED', targetStatus: p.status, gps, comments: comment });
             showToast('Permit ' + p.id + ' ' + (p.status === 'Cancelled' ? 'cancelled' : 'returned for correction') + '.', 'err');
             saveState();
         }
 
         function activatePermit(p) {
+            if (!p) return false;
+            stampPermitValidityEpochs(p);
+            const curMs = nowMs();
+            const vfMs = getEpochMs(p.validFromMs || p.startAt || p.validFrom);
+            const vtMs = getEpochMs(p.validTillMs || p.validTill);
+            p.escalation = { stage1: false, stage2: false };
+
+            if (vtMs && curMs >= vtMs) {
+                p.status = 'Expired Before Activation';
+                p.expiredBeforeActivationAt = nowTime();
+                logActivity(p, 'Permit validity window elapsed before EHS activation. Status set to Expired Before Activation.');
+                notify(stakeholdersFor(p), pLabel(p) + ' expired before activation because its validity end time (' + fmtDateTime(p.validTill) + ') has passed.', 'error', p.id);
+                executeServerTransition(p, { action: 'EXPIRED_BEFORE_ACTIVATION', targetStatus: p.status });
+                saveState();
+                return false;
+            }
+
+            if (vfMs && curMs < vfMs - 1000) {
+                p.status = 'Approved – Scheduled';
+                p.scheduledActivationAt = nowTime();
+                logActivity(p, 'Permit ENDORSED by EHS. Status is Approved – Scheduled until work start time (' + fmtDateTime(p.startAt || p.validFrom) + ').');
+                notify(stakeholdersFor(p), pLabel(p) + ' is Approved – Scheduled and will automatically become ACTIVE at ' + fmtDateTime(p.startAt || p.validFrom) + '.', 'info', p.id);
+                executeServerTransition(p, { action: 'EHS_SCHEDULED', targetStatus: p.status });
+                saveState();
+                return true;
+            }
+
             p.status = 'Active';
             p.activatedAt = nowTime();
-            p.escalation = { stage1: false, stage2: false };
             logActivity(p, 'Permit ENDORSED by EHS. Status is now ACTIVE. Work may proceed safely.');
             notify(stakeholdersFor(p), pLabel(p) + ' is now ACTIVE. Work may commence until ' + fmtDateTime(p.validTill) + '.', 'success', p.id);
+            executeServerTransition(p, { action: 'EHS_ACTIVATE', targetStatus: p.status });
             saveState();
+            return true;
         }
 
         /* ================================================================
@@ -12256,32 +12403,57 @@
         }
 
         /* ---------------- OBSERVATION WORKFLOW ---------------- */
+        function hasOpenObservation(p) {
+            if (!p) return false;
+            if (Array.isArray(p.observations) && p.observations.length > 0) {
+                return p.observations.some(function (o) { return o && o.status !== 'Resolved' && o.status !== 'Permit Cancelled'; });
+            }
+            return !!(p.observation && p.observation.status && p.observation.status !== 'Resolved' && p.observation.status !== 'Permit Cancelled');
+        }
+
+        function getActiveObservation(p) {
+            if (!p) return null;
+            if (Array.isArray(p.observations) && p.observations.length > 0) {
+                for (let i = p.observations.length - 1; i >= 0; i--) {
+                    if (p.observations[i] && p.observations[i].status !== 'Resolved') return p.observations[i];
+                }
+                return p.observations[p.observations.length - 1];
+            }
+            return p.observation || null;
+        }
+
         function raiseObservation(p, { comment, gps, sig, signerName }) {
-            const effectiveSigner = signerName || (currentUser && currentUser.name) || currentUser.label;
-            const obsId = 'OBS-' + p.id;
+            const effectiveSigner = signerName || (currentUser && currentUser.name) || (currentUser && currentUser.label) || 'EHS Authority';
+            p.observations = Array.isArray(p.observations) ? p.observations : (p.observation ? [p.observation] : []);
+            const obsId = 'OBS-' + p.id + '-' + (p.observations.length + 1);
+            p.preObservationStatus = p.preObservationStatus || p.status;
             p.status = 'Active – Observation Open';
-            p.observation = {
+            const obsObj = {
                 id: obsId,
                 permitId: p.id,
                 raisedAt: nowTime(),
                 raisedBy: effectiveSigner,
-                raisedByRole: currentUser.label,
+                raisedByRole: (currentUser && currentUser.label) || 'EHS Authority',
                 comment: comment,
                 gps: gps,
                 sig: sig,
                 status: 'Open',
                 response: null
             };
-            logActivity(p, 'Observation (' + obsId + ') RAISED for Permit ' + p.id + ' by ' + currentUser.label + ' (' + effectiveSigner + '): ' + comment);
+            p.observations.push(obsObj);
+            p.observation = obsObj;
+            logActivity(p, 'Observation (' + obsId + ') RAISED for Permit ' + p.id + ' by ' + ((currentUser && currentUser.label) || 'EHS Authority') + ' (' + effectiveSigner + '): ' + comment);
             notify(stakeholdersFor(p), 'SAFETY OBSERVATION (' + obsId + ') raised for ' + pLabel(p) + ' by EHS: "' + comment + '". Extension and Closure are BLOCKED until resolved.', 'warn', p.id);
             showToast('Observation ' + obsId + ' recorded for permit ' + p.id + '. Extension & Closure blocked until resolved.', 'warn');
+            executeServerTransition(p, { action: 'OBS_RAISED', targetStatus: p.status, gps, comments: comment, observationId: obsId });
             saveState();
         }
 
         function respondToObservation(p, { comment, photo, gps, sig, signerName }) {
             const effectiveSigner = signerName || (currentUser && currentUser.name) || 'Site Supervisor';
-            if (!p.observation) return;
-            p.observation.response = {
+            const obs = getActiveObservation(p);
+            if (!obs) return;
+            obs.response = {
                 respondedAt: nowTime(),
                 respondedBy: effectiveSigner,
                 comment: comment,
@@ -12289,18 +12461,21 @@
                 gps: gps,
                 sig: sig
             };
-            p.observation.status = 'Rectified – Awaiting Engineer Ack';
+            obs.status = 'Rectified – Awaiting Engineer Ack';
+            p.observation = obs;
             p.status = 'Observation Pending Site Engineer Acknowledgment';
-            logActivity(p, 'Site Supervisor (' + effectiveSigner + ') submitted on-site GPS' + (gps ? ' (' + gps.lat.toFixed(4) + ', ' + gps.lng.toFixed(4) + ')' : '') + ', photo evidence and remarks to clear Observation: "' + comment + '". Awaiting Site Engineer rectification verification.');
+            logActivity(p, 'Site Supervisor (' + effectiveSigner + ') submitted on-site GPS' + (gps ? ' (' + gps.lat.toFixed(4) + ', ' + gps.lng.toFixed(4) + ')' : '') + ', photo evidence and remarks to clear Observation (' + (obs.id || p.id) + '): "' + comment + '". Awaiting Site Engineer rectification verification.');
             notify(['site-engineer'], pLabel(p) + ' — Site Supervisor submitted Observation rectification with on-site GPS verification. Site Engineer acknowledgment required.', 'info', p.id);
             showToast('Observation rectification submitted. Awaiting Site Engineer acknowledgment.', 'ok');
+            executeServerTransition(p, { action: 'OBS_SUPERVISOR_RESPONSE', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             saveState();
         }
 
         function acknowledgeObservationEng(p, { comment, gps, sig, signerName }) {
             const effectiveSigner = signerName || (currentUser && currentUser.name) || roleInfo('site-engineer').label;
-            if (!p.observation) return;
-            p.observation.engAck = {
+            const obs = getActiveObservation(p);
+            if (!obs) return;
+            obs.engAck = {
                 acknowledged: true,
                 at: nowTime(),
                 by: effectiveSigner,
@@ -12308,28 +12483,15 @@
                 sig: sig,
                 comment: comment
             };
-            const isExcavation = ptypeOf(p) === 'excavation';
-            const approverLabel = (pMeta(p) && pMeta(p).shLabel) || (isExcavation ? 'Excavation Head' : 'Tower Incharge');
-            const shRole = shRoleFor(p);
-
-            // Check if EHS originally rejected rectification
-            if (p.observation.rejectionOrigin && p.observation.rejectionOrigin.roleKey === 'ehs') {
-                p.observation.status = 'Pending EHS Clearance';
-                p.status = 'Observation Pending EHS Clearance';
-                logActivity(p, 'Site Engineer (' + effectiveSigner + ') verified on-site re-rectification. Returned directly to EHS Safety for clearance (prior approval retained).');
-                notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' — Observation re-rectification verified by Site Engineer. Returned directly to EHS for clearance.', 'info', p.id);
-                notify(stakeholdersFor(p), pLabel(p) + ' Observation re-rectification verified by Site Engineer. Returned to EHS.', 'info', p.id);
-                showToast('Re-rectification acknowledged & returned directly to EHS.', 'ok');
-                p.observation.rejectionOrigin = null;
-            } else {
-                p.observation.status = 'Pending ' + approverLabel + ' Review';
-                p.status = 'Observation Pending Section Head Review';
-                logActivity(p, 'Site Engineer (' + effectiveSigner + ') verified on-site rectification and forwarded Observation to ' + approverLabel + ' for review.');
-                notify([shRole], pLabel(p) + ' — Observation rectification verified by Site Engineer. ' + approverLabel + ' review required.', 'info', p.id);
-                notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification verified by Site Engineer. Awaiting ' + approverLabel + ' review.', 'info', p.id);
-                showToast('Rectification acknowledged & forwarded to ' + approverLabel + '.', 'ok');
-                if (p.observation.rejectionOrigin) p.observation.rejectionOrigin = null;
-            }
+            obs.status = 'Pending EHS Clearance';
+            obs.rejectionOrigin = null;
+            p.observation = obs;
+            p.status = 'Observation Pending EHS Clearance';
+            logActivity(p, 'Site Engineer (' + effectiveSigner + ') verified on-site rectification for ' + (obs.id || p.id) + ' and forwarded directly to EHS Safety for final clearance.');
+            notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' — Observation rectification verified by Site Engineer. EHS clearance required.', 'info', p.id);
+            notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification verified by Site Engineer. Forwarded to EHS.', 'info', p.id);
+            showToast('Rectification verified by Site Engineer & forwarded to EHS.', 'ok');
+            executeServerTransition(p, { action: 'OBS_ENG_ACK', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             saveState();
         }
 
@@ -12337,9 +12499,10 @@
             const isExcavation = ptypeOf(p) === 'excavation';
             const approverLabel = (pMeta(p) && pMeta(p).shLabel) || (isExcavation ? 'Excavation Head' : 'Tower Incharge');
             const effectiveSigner = signerName || (currentUser && currentUser.name) || approverLabel;
-            if (!p.observation) return;
+            const obs = getActiveObservation(p);
+            if (!obs) return;
 
-            p.observation.shReview = {
+            obs.shReview = {
                 reviewed: true,
                 approved: ok,
                 at: nowTime(),
@@ -12350,21 +12513,22 @@
             };
 
             if (ok) {
-                p.observation.status = 'Pending EHS Clearance';
+                obs.status = 'Pending EHS Clearance';
+                p.observation = obs;
                 p.status = 'Observation Pending EHS Clearance';
                 logActivity(p, approverLabel + ' (' + effectiveSigner + ') reviewed and approved Observation rectification. Forwarded to EHS for clearance.');
-                notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' — Observation rectification endorsed by ' + approverLabel + '. EHS clearance required.', 'info', p.id);
+                notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' — Observation rectification endorsed by ' + approverLabel + '. EHS clearance required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification approved by ' + approverLabel + '. Awaiting EHS clearance.', 'info', p.id);
                 showToast('Rectification endorsed & forwarded to EHS.', 'ok');
             } else {
-                p.observation.shRejection = {
+                obs.shRejection = {
                     rejected: true,
                     at: nowTime(),
                     by: effectiveSigner,
                     gps: gps,
                     comment: comment
                 };
-                p.observation.rejectionOrigin = {
+                obs.rejectionOrigin = {
                     roleKey: shRoleFor(p),
                     roleLabel: approverLabel,
                     by: effectiveSigner,
@@ -12372,27 +12536,30 @@
                 };
                 const targetPermittee = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (ptypeOf(p) === 'blasting' ? 'blasting-incharge' : (ptypeOf(p) === 'nightshift' ? 'night-supervisor' : 'site-supervisor')));
                 const targetPermitteeLabel = (roleInfo(targetPermittee) && roleInfo(targetPermittee).label) || 'Permittee';
-                p.observation.status = 'Open';
+                obs.status = 'Open';
+                p.observation = obs;
                 p.status = 'Active – Observation Open';
                 logActivity(p, approverLabel + ' (' + effectiveSigner + ') REJECTED Observation rectification: ' + comment + '. Returned to ' + targetPermitteeLabel + ' for re-rectification.');
                 notify([targetPermittee], pLabel(p) + ' — Observation rectification REJECTED by ' + approverLabel + ': "' + comment + '". Please re-rectify with proper evidence.', 'error', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification rejected by ' + approverLabel + '. Returned to ' + targetPermitteeLabel + '.', 'warn', p.id);
                 showToast('Observation rectification rejected. Returned to ' + targetPermitteeLabel + '.', 'err');
             }
+            executeServerTransition(p, { action: ok ? 'OBS_SH_APPROVED' : 'OBS_SH_REJECTED', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             saveState();
         }
 
         function rejectObservationEhs(p, { comment, sig, signerName, gps } = {}) {
             const effectiveSigner = signerName || (currentUser && currentUser.name) || (currentUser && currentUser.label) || 'EHS Authority';
-            if (!p.observation) return;
-            p.observation.ehsRejection = {
+            const obs = getActiveObservation(p);
+            if (!obs) return;
+            obs.ehsRejection = {
                 rejected: true,
                 at: nowTime(),
                 by: effectiveSigner,
                 gps: gps,
                 comment: comment
             };
-            p.observation.rejectionOrigin = {
+            obs.rejectionOrigin = {
                 roleKey: 'ehs',
                 roleLabel: 'EHS Authority',
                 by: effectiveSigner,
@@ -12400,40 +12567,73 @@
             };
             const targetPermittee = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (ptypeOf(p) === 'blasting' ? 'blasting-incharge' : (ptypeOf(p) === 'nightshift' ? 'night-supervisor' : 'site-supervisor')));
             const targetPermitteeLabel = (roleInfo(targetPermittee) && roleInfo(targetPermittee).label) || 'Permittee';
-            p.observation.status = 'Open';
+            obs.status = 'Open';
+            p.observation = obs;
             p.status = 'Active – Observation Open';
-            logActivity(p, 'EHS (' + effectiveSigner + ') REJECTED Observation rectification: ' + comment + '. Returned to ' + targetPermitteeLabel + ' for re-rectification.');
+            logActivity(p, 'EHS (' + effectiveSigner + ') REJECTED Observation rectification: ' + comment + '. Returned to ' + targetPermitteeLabel + ' for re-rectification (permit remains Active – Observation Open).');
             notify([targetPermittee], pLabel(p) + ' — Observation rectification REJECTED by EHS: "' + comment + '". Please re-rectify with proper evidence.', 'error', p.id);
             notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification rejected by EHS. Returned to ' + targetPermitteeLabel + ' for re-rectification.', 'warn', p.id);
             showToast('Observation rectification rejected. Returned to ' + targetPermitteeLabel + '.', 'err');
+            executeServerTransition(p, { action: 'OBS_EHS_REJECTED', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             saveState();
+        }
+
+        function cancelActivePermit(pOrId, { comment, gps, sig, signerName } = {}) {
+            const p = (typeof pOrId === 'string') ? PERMITS.find(x => x.id === pOrId) : pOrId;
+            if (!p) return false;
+            const rk = normalizeRoleKey(currentUser && (currentUser.key || currentUser.role));
+            if (currentUser && !['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager'].includes(rk) &&
+                !['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager'].includes(String(currentUser.key || '').toLowerCase())) {
+                showToast('Access Denied: Direct Stop-Work Cancellation is strictly restricted to EHS personnel.', 'err');
+                return false;
+            }
+            if (!['Active', 'Approved – Scheduled', 'Extended', 'Extension Pending', 'Active – Observation Open', 'Active - Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance'].includes(p.status)) {
+                showToast('Only active, scheduled, or observation-open permits can be stop-work cancelled by EHS.', 'warn');
+                return false;
+            }
+            const reason = String(comment || '').trim();
+            if (!reason) {
+                showToast('Mandatory cancellation reason is required to stop work.', 'warn');
+                return false;
+            }
+            const effectiveSigner = signerName || (currentUser && currentUser.name) || (currentUser && currentUser.label) || 'EHS Authority';
+            p.status = 'Cancelled';
+            p.isCancelled = true;
+            p.cancelledBy = effectiveSigner;
+            p.cancelledByRole = (currentUser && currentUser.label) || 'EHS Safety';
+            p.cancelledAt = nowTime();
+            p.cancelReason = reason;
+            p.cancelGps = gps || null;
+            p.cancelSig = sig || null;
+            logActivity(p, 'Permit STOP-WORK CANCELLED by EHS (' + effectiveSigner + '): ' + reason);
+            notify(stakeholdersFor(p), pLabel(p) + ' CANCELLED (Stop Work) by EHS (' + effectiveSigner + '): "' + reason + '". Work must halt immediately.', 'error', p.id);
+            showToast('Permit ' + p.id + ' cancelled (Stop Work).', 'err');
+            executeServerTransition(p, { action: 'EHS_ACTIVE_CANCEL', targetStatus: 'Cancelled', gps, comments: reason });
+            saveState();
+            return true;
         }
 
         function resolveObservation(p, ok, { comment, sig, signerName, gps } = {}) {
             const effectiveSigner = signerName || (currentUser && currentUser.name) || (currentUser && currentUser.label) || 'EHS Authority';
-            if (!p.observation) return;
+            const obs = getActiveObservation(p);
+            if (!obs) return;
             if (ok) {
-                p.observation.status = 'Resolved';
-                p.observation.resolvedAt = nowTime();
-                p.observation.resolvedBy = effectiveSigner;
-                p.observation.clearanceRemarks = comment || 'Cleared by EHS';
-                p.observation.ehsSig = sig || null;
-                p.observation.ehsGps = gps || null;
-                p.status = 'Active';
-                logActivity(p, 'Observation CLEARED by EHS (' + effectiveSigner + '). Worksite restored to ACTIVE status.');
-                notify(stakeholdersFor(p), pLabel(p) + ' Observation CLEARED by EHS (' + effectiveSigner + '). Permit is ACTIVE.', 'success', p.id);
-                showToast('Observation resolved. Permit returned to Active.', 'ok');
+                obs.status = 'Resolved';
+                obs.resolvedAt = nowTime();
+                obs.resolvedBy = effectiveSigner;
+                obs.clearanceRemarks = comment || 'Cleared by EHS';
+                obs.ehsSig = sig || null;
+                obs.ehsGps = gps || null;
+                p.observation = obs;
+                const stillOpen = hasOpenObservation(p);
+                p.status = stillOpen ? 'Active – Observation Open' : 'Active';
+                logActivity(p, 'Observation (' + (obs.id || p.id) + ') CLEARED by EHS (' + effectiveSigner + '). Worksite restored to ' + p.status + ' status.');
+                notify(stakeholdersFor(p), pLabel(p) + ' Observation CLEARED by EHS (' + effectiveSigner + '). Permit is ' + p.status + '.', 'success', p.id);
+                showToast('Observation resolved. Permit returned to ' + p.status + '.', 'ok');
+                executeServerTransition(p, { action: 'OBS_CLEARED', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             } else {
-                p.observation.status = 'Permit Cancelled';
-                p.status = 'Cancelled';
-                p.isCancelled = true;
-                p.cancelledBy = effectiveSigner;
-                p.cancelledByRole = (currentUser && currentUser.label) || 'EHS';
-                p.cancelledAt = nowTime();
-                p.cancelReason = 'Cancelled during Observation: ' + (comment || 'Unresolved site deviation');
-                logActivity(p, 'Permit CANCELLED by EHS (' + effectiveSigner + ') during Observation: ' + p.cancelReason);
-                notify(stakeholdersFor(p), pLabel(p) + ' CANCELLED by EHS due to non-compliance during Observation. Stop work immediately.', 'error', p.id);
-                showToast('Permit cancelled. Official report PDF generated.', 'err');
+                // Rejecting an observation clearance returns to Site Supervisor for re-rectification (never cancels permit)
+                return rejectObservationEhs(p, { comment: comment || 'Observation rectification rejected by EHS', sig, signerName: effectiveSigner, gps });
             }
             saveState();
         }
@@ -12447,10 +12647,19 @@
                 minutes = optsOrMins;
                 reason = maybeReason;
             }
+            if (!p || ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Closed', 'Completed (Surrendered)', 'Cancelled', 'Rejected'].includes(p.status)) {
+                showToast('Extensions are strictly prohibited after permit expiry, auto-closure, or termination.', 'err');
+                return false;
+            }
+            if (hasOpenObservation(p)) {
+                showToast('Extensions are blocked while a safety observation remains unresolved.', 'warn');
+                return false;
+            }
             if (!workStarted(p)) {
                 showToast('This permit cannot be extended before the scheduled work start time (' + (p.startTime || 'validity start') + ' IST).', 'warn');
-                return;
+                return false;
             }
+            stampPermitValidityEpochs(p);
             if (p.extension && !['Approved', 'Rejected', 'Cancelled'].includes(p.extension.status)) {
                 showToast('An extension request is already in the approval workflow for this permit.', 'warn');
                 return;
@@ -12534,6 +12743,10 @@
         }
 
         function resubmitExtensionSupervisor(p, { reason, minutes, gps, photo, sig, signerName }) {
+            if (!p || ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Closed', 'Completed (Surrendered)', 'Cancelled', 'Rejected'].includes(p.status)) {
+                showToast('Extension approval blocked: permit has already expired or closed.', 'err');
+                return false;
+            }
             const ext = p.extension;
             if (!ext) return;
             const reqBy = signerName || (currentUser && currentUser.name) || p.createdBy || (ptypeOf(p) === 'electrical' ? 'Permittee Electrician' : (ptypeOf(p) === 'blasting' ? 'Blasting In-charge' : 'Site Supervisor'));
@@ -12593,6 +12806,10 @@
                 sig = gpsOrOpt.sig;
                 signerName = gpsOrOpt.signerName;
                 gps = gpsOrOpt.gps;
+            }
+            if (!p || ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Closed', 'Completed (Surrendered)', 'Cancelled', 'Rejected'].includes(p.status)) {
+                showToast('Extension approval blocked: permit has already expired or closed.', 'err');
+                return false;
             }
             const ext = p.extension;
             const isExc = ptypeOf(p) === 'excavation';
@@ -12671,18 +12888,22 @@
                 ext.stageEnteredAt = nowTime();
                 logActivity(p, 'Extension — ' + approverLabel + ' (' + effectiveSigner + ') approved.');
                 notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension approved by ' + approverLabel + ' — awaiting EHS verification.', 'info', p.id);
-            } else if (roleKey === 'ehs-manager' || roleKey === 'ehs-officer' || roleKey === 'ehs') {
+            } else if (roleKey === 'ehs-manager' || roleKey === 'ehs-officer' || roleKey === 'ehs-supervisor' || roleKey === 'ehs-head' || roleKey === 'ehs') {
                 const ehsField = (roleKey === 'ehs-officer') ? 'ehsOfficer' : 'ehsManager';
                 ext.approvals[ehsField] = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
                 ext.status = 'Approved';
+                stampPermitValidityEpochs(p);
                 const oldExpiry = p.validTill;
-                p.validTill = new Date(new Date(p.validTill).getTime() + ext.hours * 3600 * 1000);
+                const newValidTill = new Date(new Date(p.validTill).getTime() + ext.hours * 3600 * 1000);
+                p.validTill = newValidTill;
+                p.validTillMs = newValidTill.getTime();
                 p.escalation = { stage1: false, stage2: false };
                 p.warned30 = false;
-                if (p.status === 'Expired') p.status = 'Active';
+                if (p.status === 'Active' || p.status === 'Extension Pending') p.status = 'Extended';
                 logActivity(p, 'Extension APPROVED by EHS (' + effectiveSigner + '). Validity extended from ' + fmtDateTime(oldExpiry) + ' to ' + fmtDateTime(p.validTill) + '. Work may continue.');
                 notify(stakeholdersFor(p), pLabel(p) + ' extension APPROVED — validity now extends to ' + fmtDateTime(p.validTill) + '.', 'success', p.id);
             }
+            executeServerTransition(p, { action: 'EXT_STAGE_APPROVED', targetStatus: p.status, gps, comments: comment, extensionMinutes: ext.minutes });
             showToast('Extension approval recorded.', 'ok');
             saveState();
         }
@@ -12694,6 +12915,10 @@
                 sig = gpsOrOpt.sig;
                 signerName = gpsOrOpt.signerName;
                 gps = gpsOrOpt.gps;
+            }
+            if (!p || ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Closed', 'Completed (Surrendered)', 'Cancelled', 'Rejected'].includes(p.status)) {
+                showToast('Extension approval blocked: permit has already expired or closed.', 'err');
+                return false;
             }
             const ext = p.extension;
             if (!ext) return;
@@ -12737,6 +12962,7 @@
             notify([initiatorRole], pLabel(p) + ' extension request returned for correction by ' + approverLabel + ': "' + comment + '" — revise and resubmit.', 'warn', p.id);
             notify(stakeholdersFor(p), pLabel(p) + ' extension request returned to ' + initiatorLabel + ' for correction by ' + approverLabel + '.', 'warn', p.id);
             showToast('Extension returned to ' + initiatorLabel + ' for correction.', 'info');
+            executeServerTransition(p, { action: 'EXT_RETURN', targetStatus: p.status, roleKey, gps, comments: comment });
             saveState();
         }
 
@@ -12746,6 +12972,14 @@
             // happen in one operation with one GPS/photo/remarks capture and DPDP digital signature.
             const p = (typeof pOrId === 'string') ? PERMITS.find(x => x.id === pOrId) : pOrId;
             if (!p) return false;
+            if (['Auto-Closed', 'Expired', 'Expired Before Activation', 'Closed', 'Completed (Surrendered)', 'Cancelled', 'Rejected'].includes(p.status)) {
+                showToast('Closure blocked: permit is already ' + p.status + '.', 'err');
+                return false;
+            }
+            if (hasOpenObservation(p)) {
+                showToast('Closure blocked: clear all open EHS safety observations before closing or surrendering the permit.', 'warn');
+                return false;
+            }
 
             let gps = null, photo = null, remarks = '', sig = null, signerName = null,
                 fireWatch = false, guardrailReFix = false, confinedClosure = false,
@@ -12865,6 +13099,7 @@
             logActivity(p, 'Permittee (' + effectiveSigner + ') confirmed area made safe, men & materials removed' + (isElectrical ? ' and verified all electrical personnel withdrawn, apparatus made safe, lockouts surrendered' : '') + (isLifting ? ' and lifting demobilization & safety certified (crane stowed, rigging gears stored, area safe)' : '') + (blastingPostClearance ? ' and post-blast clearance verified (exclusion perimeter checked, all personnel accounted for, zero misfires confirmed)' : '') + (confinedClosure ? ' and confined space safely evacuated, equipment removed & openings secured' : '') + (fireWatch ? ' and continuous 1-hr fire watch verified' : '') + (guardrailReFix ? ' and all guard rails, edge protections & floor opening covers safely re-fixed' : '') + (generalHousekeeping ? ' and housekeeping & area clearance certified (tools/rigging demobilized, debris cleared, safe handover)' : '') + (nightClosure ? ' and night shift safely concluded (personnel evacuated, lighting towers de-energized/secured)' : '') + (closedOnSunday ? ' [Sunday Closure Authorized as per Valid Time Window]' : '') + '. Digitally signed under DPDP consent. Permit CLOSED and formally SURRENDERED to EHS.');
             notify(stakeholdersFor(p), pLabel(p) + ' closed & formally SURRENDERED to EHS by ' + effectiveSigner + (closedOnSunday ? ' (Sunday Closure as per Valid Time)' : '') + '. Lifecycle complete. The official Permit Report PDF is now available.', 'success', p.id);
             showToast('Permit closed & surrendered. Lifecycle complete — the official Permit Report PDF is ready to download from the top-right button.', 'ok');
+            executeServerTransition(p, { action: 'PERMIT_SURRENDERED', targetStatus: 'Completed (Surrendered)', gps, comments: remarks });
             saveState();
             return true;
         }
@@ -15470,54 +15705,110 @@
                         ? nowTime().__realUtcMs
                         : Date.now()));
 
+            const fmtIstClock = function (val) {
+                const ms = getEpochMs(val);
+                if (!ms) return '';
+                try {
+                    return new Date(ms).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true, timeZone: 'Asia/Kolkata' });
+                } catch (_e) { return ''; }
+            };
+
             PERMITS.forEach(p => {
-                // Pending-stage escalation (Stage 1 / Stage 2)
-                if (['Pending Site Engineer Acknowledgment', 'Pending Parallel Approval', 'Pending Section Head', 'Pending EHS Approval', 'Pending P&M Acknowledgment', 'Pending Quality Engineer Approval', 'Pending MEP Clearance', 'Pending MEP or P&M Approval', 'Pending P&M Night Acknowledgment'].includes(p.status) && p.stageEnteredAt) {
-                    const stageMs = getEpochMs(p.stageEnteredAt);
-                    const elapsed = nowEpoch - stageMs;
-                    if (!p.escalation) p.escalation = { stage1: false, stage2: false };
-                    if (elapsed > STAGE1_MS && !p.escalation.stage1) {
-                        p.escalation.stage1 = true;
-                        notify([shRoleFor(p), 'ehs-manager'], 'ESCALATION (Stage 1): ' + pLabel(p) + ' has been pending ' + stageLabelFor(p.status, p) + ' beyond the expected window.', 'warn', p.id);
+                stampPermitValidityEpochs(p);
+                const validFromMs = getEpochMs(p.validFromMs || p.startAt || p.validFrom);
+                const validTillMs = getEpochMs(p.validTillMs || p.validTill);
+
+                // Promote Approved – Scheduled permits once validFromMs arrives (or Expire Before Activation if past validTillMs)
+                if (p.status === 'Approved – Scheduled') {
+                    if (validTillMs && nowEpoch >= validTillMs) {
+                        p.status = 'Expired Before Activation';
+                        p.expiredBeforeActivationAt = new Date(nowEpoch);
+                        logActivity(p, 'Scheduled permit expired before activation: validity end time elapsed.');
+                        notify(stakeholdersFor(p), pLabel(p) + ' expired before activation because its validity window elapsed.', 'error', p.id);
+                        return;
                     }
-                    if (elapsed > STAGE2_MS && !p.escalation.stage2) {
-                        p.escalation.stage2 = true;
-                        notify(['ehs-manager', 'ehs-officer'], 'ESCALATION (Stage 2): ' + pLabel(p) + ' is significantly overdue at ' + stageLabelFor(p.status, p) + '. Project Manager / EHS Head visibility required.', 'error', p.id);
+                    if (!validFromMs || nowEpoch >= validFromMs) {
+                        p.status = 'Active';
+                        p.activatedAt = p.activatedAt || new Date(nowEpoch);
+                        p.scheduledPromotedAt = new Date(nowEpoch);
+                        logActivity(p, 'Scheduled start time reached; permit automatically promoted from Approved – Scheduled to Active.');
+                        notify(stakeholdersFor(p), pLabel(p) + ' is now ACTIVE for work until ' + fmtDateTime(p.validTill) + '.', 'success', p.id);
                     }
                 }
-                // Observation auto-escalate to Cancel if validity expires while open
-                const validTillMs = getEpochMs(p.validTill);
-                if (['Active – Observation Open', 'Observation Pending EHS Clearance'].includes(p.status) && nowEpoch > validTillMs) {
-                    p.status = 'Cancelled';
-                    p.isCancelled = true;
-                    p.cancelReason = 'Auto-escalated to Cancel: Validity expired while EHS Site Observation remained unrectified / open.';
-                    p.cancelledBy = 'System Escalation Engine';
-                    p.cancelledByRole = 'EHS Automation';
-                    p.cancelledAt = new Date(nowEpoch);
-                    logActivity(p, 'Permit AUTO-CANCELLED: validity expired while EHS Site Observation was still open. Stop work immediately. Official PDF generated.');
-                    notify(stakeholdersFor(p), pLabel(p) + ' AUTO-CANCELLED: validity expired with open EHS Observation. Stop work & generate PDF.', 'error', p.id);
+
+                // Pending-stage escalation (Stage 1 / Stage 2) and Expired Before Activation sweep
+                const preActivationPendingStatuses = [
+                    'Submitted',
+                    'Pending Site Engineer Acknowledgment', 'Pending Site Engineer Re-Acknowledgment',
+                    'Pending Blasting In-charge Acknowledgment', 'Pending Blasting In-charge Re-Acknowledgment',
+                    'Pending P&M Acknowledgment', 'Pending P&M Re-Acknowledgment', 'Pending P&M Approval',
+                    'Pending Quality Engineer Approval', 'Pending Parallel Approval',
+                    'Pending MEP Clearance', 'Pending MEP or P&M Approval',
+                    'Pending Section Head', 'Pending Project Manager Acknowledgment', 'Pending Project Manager Re-Acknowledgment',
+                    'Pending EHS Approval', 'Pending P&M Night Acknowledgment', 'Returned for Correction'
+                ];
+                if (preActivationPendingStatuses.includes(p.status)) {
+                    if (validTillMs && nowEpoch >= validTillMs) {
+                        p.status = 'Expired Before Activation';
+                        p.expiredBeforeActivationAt = new Date(nowEpoch);
+                        logActivity(p, 'Permit lapsed before EHS activation and transitioned to Expired Before Activation.');
+                        notify(stakeholdersFor(p), pLabel(p) + ' expired before activation as validity ended while pending approval.', 'error', p.id);
+                        return;
+                    }
+                    if (p.stageEnteredAt) {
+                        const stageMs = getEpochMs(p.stageEnteredAt);
+                        const elapsed = nowEpoch - stageMs;
+                        if (!p.escalation) p.escalation = { stage1: false, stage2: false };
+                        if (elapsed > STAGE1_MS && !p.escalation.stage1) {
+                            p.escalation.stage1 = true;
+                            notify([shRoleFor(p), 'ehs-manager'], 'ESCALATION (Stage 1): ' + pLabel(p) + ' has been pending ' + stageLabelFor(p.status, p) + ' beyond the expected window.', 'warn', p.id);
+                        }
+                        if (elapsed > STAGE2_MS && !p.escalation.stage2) {
+                            p.escalation.stage2 = true;
+                            notify(['ehs-manager', 'ehs-officer'], 'ESCALATION (Stage 2): ' + pLabel(p) + ' is significantly overdue at ' + stageLabelFor(p.status, p) + '. Project Manager / EHS Head visibility required.', 'error', p.id);
+                        }
+                    }
                 }
-                // 30-minute expiry warning / close reminder (fires 30 min before expiry to supervisor & engineer)
-                if (['Active', 'Active – Observation Open'].includes(p.status)) {
+
+                // 30-minute expiry warning / close reminder (fires 30 min before expiry to Site Engineer & Site Supervisor)
+                if (['Active', 'Extended', 'Active – Observation Open', 'Active - Observation Open'].includes(p.status) && validTillMs) {
                     const remMs = validTillMs - nowEpoch;
                     if (remMs > 0 && remMs <= 30 * 60000 && !p.warned30) {
                         p.warned30 = true;
-                        notify(['site-supervisor', 'site-engineer'], 'CLOSE REMINDER (T-30 min): ' + pLabel(p) + ' expires in 30 minutes. Request an extension before 06:30 PM, or complete work and close & surrender the permit.', 'warn', p.id);
+                        const fromTxt = fmtIstClock(validFromMs || p.submittedAt || p.createdAt) || (p.startTime || 'Start');
+                        const tillTxt = fmtIstClock(validTillMs) || fmtDateTime(p.validTill);
+                        notify(
+                            ['site-supervisor', 'site-engineer'],
+                            'EXPIRY ALERT (T-30 min): ' + pLabel(p) + ' (' + String(ptypeOf(p) || 'PTW').toUpperCase() + ') at ' + (p.project || p.projectId || 'Site') + ' / ' + (p.tower || p.location || 'Worksite') + ' (' + fromTxt + ' – ' + tillTxt + ' IST) for Supervisor ' + (p.createdBy || 'Site Supervisor') + ' expires in 30 minutes. Request an extension or complete work and close & surrender the permit.',
+                            'warn',
+                            p.id
+                        );
                     }
                 }
-                // Auto-expiry of active permits
-                if (p.status === 'Active' && nowEpoch > validTillMs) {
-                    p.status = 'Expired';
+
+                // Auto-Closure of overdue active/extended/open-observation permits (never auto-cancels open observations on time expiry)
+                const autoClosableStatuses = [
+                    'Active', 'Extended', 'Extension Pending',
+                    'Active – Observation Open', 'Active - Observation Open',
+                    'Observation Pending Site Engineer Acknowledgment',
+                    'Observation Pending Section Head Review',
+                    'Observation Pending EHS Clearance'
+                ];
+                if (autoClosableStatuses.includes(p.status) && validTillMs && nowEpoch > validTillMs) {
+                    p.status = 'Auto-Closed';
+                    p.autoClosedAt = new Date(nowEpoch);
+                    p.closedAt = new Date(nowEpoch);
                     p.expiredAt = new Date(nowEpoch);
                     p.surrenderEscalations = 0;
-                    logActivity(p, 'Permit auto-EXPIRED at end of validity period without closure.');
-                    notify(stakeholdersFor(p), 'ESCALATION WITH PDF: ' + pLabel(p) + ' has EXPIRED without closure. Work must stop immediately. Formal closure & surrender or extension required.', 'error', p.id);
+                    logActivity(p, 'Permit AUTO-CLOSED at end of approved validity period (' + fmtDateTime(p.validTill) + ') without manual closure.');
+                    notify(stakeholdersFor(p), 'AUTO-CLOSED: ' + pLabel(p) + ' reached validity end time (' + fmtDateTime(p.validTill) + ') and was automatically closed. Extension is no longer allowed.', 'error', p.id);
                 }
+
                 // Recurring surrender-pending escalation
-                if (p.status === 'Expired' || p.status === 'Closed – Pending Surrender') {
+                if (p.status === 'Auto-Closed' || p.status === 'Expired' || p.status === 'Closed – Pending Surrender') {
                     p.surrenderEscalations = (p.surrenderEscalations || 0) + 1;
                     if (p.surrenderEscalations % 6 === 0) {
-                        notify(stakeholdersFor(p), 'REMINDER: ' + pLabel(p) + ' is still not surrendered to EHS. Escalation #' + (p.surrenderEscalations / 6) + '.', 'warn', p.id);
+                        notify(stakeholdersFor(p), 'REMINDER: ' + pLabel(p) + ' is awaiting final EHS surrender closure. Escalation #' + (p.surrenderEscalations / 6) + '.', 'warn', p.id);
                     }
                 }
             });
@@ -18498,7 +18789,10 @@
                 'Pending Tower Incharge': 'sectionhead',
                 'Pending Excavation Head': 'sectionhead',
                 'Pending EHS Approval': 'ehs',
+                'Approved – Scheduled': 'scheduled',
                 'Active': 'active',
+                'Extension Pending': 'extpending',
+                'Extended': 'active',
                 'Active – Observation Open': 'returned',
                 'Observation Pending Site Engineer Acknowledgment': 'parallel',
                 'Observation Pending Section Head Review': 'sectionhead',
@@ -18506,8 +18800,12 @@
                 'Observation Pending Excavation Head Review': 'sectionhead',
                 'Observation Pending EHS Clearance': 'ehs',
                 'Expired': 'expired',
+                'Expired Before Activation': 'expired',
+                'Auto-Closed': 'autoclosed',
+                'Closed': 'closed',
                 'Closed – Pending Surrender': 'closed',
                 'Completed (Surrendered)': 'completed',
+                'Rejected': 'rejected',
                 'Cancelled': 'cancelled'
             })[status] || 'draft';
         }
@@ -18662,10 +18960,10 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const scope = roleTypeScope(rk);
                 const mine = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && permitMatchesScope(p, scope));
                 const drafts = mine.filter(p => p.status === 'Draft');
-                const active = mine.filter(p => p.status === 'Active');
-                const pendingAppr = mine.filter(p => !['Draft', 'Active', 'Completed (Surrendered)', 'Closed – Pending Surrender', 'Expired', 'Cancelled'].includes(p.status));
-                const closed = mine.filter(p => ['Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status));
-                const expired = mine.filter(p => p.status === 'Expired');
+                const active = mine.filter(p => ['Active', 'Extended'].includes(p.status));
+                const pendingAppr = mine.filter(p => !['Draft', 'Approved – Scheduled', 'Active', 'Extended', 'Extension Pending', 'Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender', 'Auto-Closed', 'Expired', 'Expired Before Activation', 'Rejected', 'Cancelled'].includes(p.status));
+                const closed = mine.filter(p => ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status));
+                const expired = mine.filter(p => ['Auto-Closed', 'Expired', 'Expired Before Activation'].includes(p.status));
                 const obs = mine.filter(p => p.status === 'Active – Observation Open');
                 const extReq = mine.filter(p => p.extension && !['Approved', 'Rejected', 'Cancelled'].includes(p.extension.status));
 
@@ -18786,8 +19084,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '</div></div>';
             } else if (rk === 'site-engineer') {
                 const pendingAck = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && (p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment' || p.status === 'Observation Pending Site Engineer Acknowledgment'));
-                const active = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && p.status === 'Active');
-                const closed = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status));
+                const active = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Active', 'Extended'].includes(p.status));
+                const closed = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status));
                 if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.dashboards && APP_CONFIG.dashboards.siteEngineer) {
                     const defs = APP_CONFIG.dashboards.siteEngineer;
                     html += '<div class="kpi-strip">' + defs.map(d => kpiCard(d.cls, d.icon, d.label, typeof d.count === 'function' ? d.count() : d.count, typeof d.foot === 'function' ? d.foot() : d.foot, d.action)).join('') + '</div>';
@@ -18817,7 +19115,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const pending = pendingForRole(rk);
                 const extPending = pendingExtensionsForRole(rk);
                 const scope = roleTypeScope(rk);
-                const active = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && p.status === 'Active' && permitMatchesScope(p, scope));
+                const active = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Active', 'Extended'].includes(p.status) && permitMatchesScope(p, scope));
                 const approvedByMe = PERMITS.filter(p => {
                     if (!isPermitVisibleToRole(p, rk) || !permitMatchesScope(p, scope)) return false;
                     const f = CHAIN_ROLE_FIELD[rk]; return p.approvals && p.approvals[f] && p.approvals[f].status === 'approved';
@@ -19087,7 +19385,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '</div></div>';
             } else {
                 const mine = PERMITS.filter(p => isPermitVisibleToRole(p, rk));
-                const active = mine.filter(p => p.status === 'Active');
+                const active = mine.filter(p => ['Active', 'Extended'].includes(p.status));
                 const pending = (typeof pendingForRole === 'function') ? pendingForRole(rk) : [];
                 html += '<div class="kpi-strip">' +
                     kpiCard('k-blue', 'fa-file-lines', 'Accessible Permits', mine.length, 'Within role scope', "goTo('register')") +
@@ -19127,14 +19425,21 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 'Returned for Correction',
                 'Pending Section Head',
                 'Pending EHS Approval',
+                'Approved – Scheduled',
                 'Active',
+                'Extension Pending',
+                'Extended',
                 'Active – Observation Open',
                 'Observation Pending Site Engineer Acknowledgment',
                 'Observation Pending Section Head Review',
                 'Observation Pending EHS Clearance',
+                'Auto-Closed',
                 'Expired',
+                'Expired Before Activation',
+                'Closed',
                 'Closed – Pending Surrender',
                 'Completed (Surrendered)',
+                'Rejected',
                 'Cancelled'
             ];
         function buildRegisterFilters() {
@@ -23409,7 +23714,7 @@ function trackerHtml(p) {
     const shLabel = (pMeta(p) && pMeta(p).shLabel) || (isExc ? 'Excavation Head' : 'Tower Incharge');
     const a = p.approvals || newChain(pt);
     const isEngAckDone = !!(p.siteEngineerAck && p.siteEngineerAck.acknowledged);
-    const isWorkActive = ['Active', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance', 'Closed – Pending Surrender', 'Completed (Surrendered)', 'Expired'].includes(p.status);
+    const isWorkActive = ['Active', 'Extended', 'Extension Pending', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending Tower Incharge Review', 'Observation Pending Excavation Head Review', 'Observation Pending EHS Clearance', 'Closed', 'Auto-Closed', 'Closed – Pending Surrender', 'Completed (Surrendered)', 'Expired'].includes(p.status);
 
     function node(label, sub, state, onclickAttr, tooltip) {
         const click = onclickAttr ? (' onclick="' + onclickAttr + '" style="cursor:pointer;"') : '';
@@ -24469,30 +24774,32 @@ function trackerHtml(p) {
                 }
             }
 
-            // ---- OBSERVATION FLOWS (POST-ACTIVATION) ----
-            // 1. EHS raises observation
-            if (['Active'].includes(p.status) && ['ehs-manager', 'ehs-officer'].includes(rk) && (!p.observation || p.observation.status === 'Resolved')) {
+            // ---- POST-ACTIVATION EHS CONTROLS (OBSERVATION & STOP-WORK CANCEL) ----
+            const isEhsActor = ['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(rk) ||
+                ['ehs-supervisor', 'ehs-head'].includes(normalizeRoleKey(rk));
+            if (isEhsActor && ['Active', 'Approved – Scheduled', 'Extended', 'Active – Observation Open', 'Active - Observation Open'].includes(p.status)) {
                 const started = workStarted(p);
-                if (!started) {
-                    html += '<div class="approval-action-card" style="border-color:var(--amber-brd);background:var(--amber-bg);">' +
-                        '<div class="aa-title" style="color:var(--amber);"><i class="fa-solid fa-clock"></i> Observation Scheduled Start Time Gate</div>' +
-                        '<div class="aa-desc" style="color:var(--text);">Safety observations can only be raised after scheduled work start time (<b>' + (p.startTime || 'validity start') + ' IST</b>). Work has not yet officially commenced.</div>' +
-                        '<button class="btn btn-secondary" disabled style="opacity:0.6;cursor:not-allowed;"><i class="fa-solid fa-lock"></i> Raise Safety Observation (Locked until ' + (p.startTime || 'start') + ' IST)</button>' +
-                        '</div>';
-                } else {
-                    html += '<div class="approval-action-card" style="border-color:var(--orange);background:rgba(232,96,10,0.06);">' +
-                        '<div class="aa-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--orange);"></i> Site Safety Observation</div>' +
-                        '<div class="aa-desc">Raise an observation if a site deviation or unsafe condition appears. <b>Note:</b> While an observation is open, Extension and Closure will be blocked until rectified.</div>' +
-                        '<button class="btn btn-warning" onclick="openRaiseObservationModal(\'' + p.id + '\')"><i class="fa-solid fa-triangle-exclamation"></i> Raise Safety Observation</button>' +
-                        '</div>';
-                }
+                const obsAllowed = ['Active', 'Extended'].includes(p.status) && !hasOpenObservation(p) && started;
+                html += '<div class="approval-action-card" style="border-color:var(--orange);background:rgba(232,96,10,0.06);">' +
+                    '<div class="aa-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--orange);"></i> EHS Site Safety Controls &amp; Observation</div>' +
+                    '<div class="aa-desc">Raise a site safety observation (blocking extension and closure until rectified) or issue an immediate <b>Stop-Work Cancellation</b> if critical hazards exist.' +
+                    (!started && !hasOpenObservation(p) ? '<br><span style="color:var(--amber);font-size:11.5px;"><i class="fa-solid fa-clock"></i> Observations unlock at scheduled start time (' + (p.startTime || 'validity start') + ' IST).</span>' : '') +
+                    '</div>' +
+                    '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+                    (obsAllowed
+                        ? '<button class="btn btn-warning" onclick="openRaiseObservationModal(\'' + p.id + '\')"><i class="fa-solid fa-triangle-exclamation"></i> Raise Safety Observation</button>'
+                        : (!hasOpenObservation(p) ? '<button class="btn btn-secondary" disabled style="opacity:0.6;cursor:not-allowed;"><i class="fa-solid fa-lock"></i> Raise Safety Observation</button>' : '')) +
+                    renderActionButton('active-ehs-cancel', p.id, 'Cancel Permit (Stop Work)') +
+                    '</div>' +
+                    '</div>';
             }
 
             // 2. Observation Open: Supervisor responds with Photo + Comment
             if (p.status === 'Active – Observation Open' || p.status === 'Active - Observation Open') {
+                const curObs = getActiveObservation(p);
                 html += '<div class="approval-action-card" style="border-color:#E65100;background:#FFF3E0;">' +
                     '<div class="aa-title" style="color:#BF360C;"><i class="fa-solid fa-triangle-exclamation"></i> Safety Deviation Reported by EHS &mdash; Active Safety Observation In Progress</div>' +
-                    '<div class="aa-desc"><b>Deviation:</b> "' + escapeHtml(p.observation ? p.observation.comment : '') + '"<br><span style="color:#C62828;font-weight:700;">Extension and Closure are currently BLOCKED. Extension and surrender are locked until observation is resolved.</span> Rectify the site condition and attach photo evidence.</div>' +
+                    '<div class="aa-desc"><b>Deviation' + (curObs && curObs.id ? ' (' + escapeHtml(curObs.id) + ')' : '') + ':</b> "' + escapeHtml(curObs ? curObs.comment : '') + '"<br><span style="color:#C62828;font-weight:700;">Extension and Closure are currently BLOCKED. Extension and surrender are locked until observation is resolved.</span> Rectify the site condition and attach photo evidence.</div>' +
                     (isPermitteeForP
                         ? '<button class="btn btn-primary" onclick="openRespondObservationModal(\'' + p.id + '\')"><i class="fa-solid fa-camera"></i> Respond to Observation (Photo + Comment)</button>'
                         : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-clock"></i> Awaiting Permittee corrective response with photo evidence.</div>') +
@@ -24501,16 +24808,17 @@ function trackerHtml(p) {
 
             // 2b. Observation Pending Site Engineer Acknowledgment
             if (p.status === 'Observation Pending Site Engineer Acknowledgment') {
+                const curObs = getActiveObservation(p);
                 html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(30,136,229,0.06);">' +
                     '<div class="aa-title"><i class="fa-solid fa-clipboard-check" style="color:var(--blue);"></i> Observation Rectification: Site Engineer Verification</div>' +
-                    '<div class="aa-desc"><b>Supervisor rectification:</b> "' + escapeHtml(p.observation && p.observation.response ? p.observation.response.comment : '') + '"<br>Inspect the on-site physical rectification before forwarding to ' + shTitle + ' for review. (Your signature on file will be reused without re-entry).</div>' +
+                    '<div class="aa-desc"><b>Supervisor rectification:</b> "' + escapeHtml(curObs && curObs.response ? curObs.response.comment : '') + '"<br>Inspect the on-site physical rectification before forwarding directly to EHS Safety for final clearance. (Your signature on file will be reused without re-entry).</div>' +
                     ((rk === 'site-engineer')
-                        ? renderActionButton('obs-eng-ack', p.id, 'Acknowledge Rectification &amp; Forward to ' + shTitle)
+                        ? renderActionButton('obs-eng-ack', p.id, 'Acknowledge Rectification &amp; Forward to EHS')
                         : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-clock"></i> Awaiting Site Engineer verification and acknowledgment of rectification.</div>') +
                     '</div>';
             }
 
-            // 2c. Observation Pending Tower Incharge Review
+            // 2c. Observation Pending Tower Incharge Review (legacy backward-compat view)
             if (p.status === 'Observation Pending Section Head Review') {
                 const targetShRole = shRoleFor(p);
                 const isShRole = (rk === targetShRole) || ((isShaft || isGr || isHw || isConfined || isGeneral) && (rk === 'hw-section-head' || rk === 'section-head'));
@@ -24528,26 +24836,26 @@ function trackerHtml(p) {
 
             // 3. Observation Pending EHS Clearance
             if (p.status === 'Observation Pending EHS Clearance') {
-                const endorsementTxt = 'Verified by Site Engineer &amp; endorsed by ' + shTitle + '.';
+                const curObs = getActiveObservation(p);
+                const endorsementTxt = 'Verified on-site by Site Engineer (' + escapeHtml((curObs && curObs.engAck && curObs.engAck.by) || 'Site Engineer') + ').';
                 html += '<div class="approval-action-card" style="border-color:var(--green);background:rgba(46,125,50,0.06);">' +
                     '<div class="aa-title"><i class="fa-solid fa-shield-halved" style="color:var(--green);"></i> EHS Observation Clearance Review</div>' +
-                    '<div class="aa-desc"><b>Supervisor rectification:</b> "' + escapeHtml(p.observation && p.observation.response ? p.observation.response.comment : '') + '"<br><b>Endorsement:</b> ' + endorsementTxt + '<br>Review the photo evidence and either clear to return to Active, Reject rectification (returns to Site Supervisor for re-rectification), or Cancel the permit (terminal).</div>' +
-                    ((['ehs-manager', 'ehs-officer'].includes(rk))
+                    '<div class="aa-desc"><b>Supervisor rectification:</b> "' + escapeHtml(curObs && curObs.response ? curObs.response.comment : '') + '"<br><b>Verification:</b> ' + endorsementTxt + '<br>Review the photo evidence and either clear to return to Active, or Reject rectification (returns directly to Site Supervisor for re-rectification without cancelling the permit).</div>' +
+                    ((isEhsActor)
                         ? '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
                         renderActionButton('obs-clear-ok', p.id, 'EHS OK (Resolve &amp; Return to Active)') +
                         renderActionButton('obs-clear-reject', p.id, 'Reject Rectification (Return to Supervisor)') +
-                        renderActionButton('obs-cancel', p.id, 'Cancel Permit + Comment (Terminal)') +
                         '</div>'
-                        : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-clock"></i> Awaiting EHS Manager / Officer verification and clearance.</div>') +
+                        : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-clock"></i> Awaiting EHS safety verification and clearance.</div>') +
                     '</div>';
             }
 
             // ---- EXTENSION FLOW ----
             // Work-specific extension policy:
             // Blasting operations: strictly NO extension available under statutory safety rules.
-            // Drilling, Electrical, Civil operations: extensions enabled.
+            // Extensions are strictly prohibited once a permit has reached Auto-Closed, Expired, or terminal closure.
             const isBlastingOp = isBlasting && (p.dbOperationType === 'Blasting' || p.drillingBlastingType === 'blasting');
-            if (isPermitteeForP && ['Active', 'Active – Observation Open', 'Active - Observation Open', 'Expired'].includes(p.status) && (!p.extension || ['Approved', 'Rejected', 'Cancelled'].includes(p.extension.status))) {
+            if (isPermitteeForP && ['Active', 'Extended', 'Active – Observation Open', 'Active - Observation Open'].includes(p.status) && (!p.extension || ['Approved', 'Rejected', 'Cancelled'].includes(p.extension.status))) {
                 const started = workStarted(p);
                 const isBatchingElec = ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant');
                 const extChainDesc = isBatchingElec
@@ -24573,14 +24881,14 @@ function trackerHtml(p) {
                         '</div>';
                 } else if (!started) {
                     html += '<div class="approval-action-card" style="border-color:var(--purple);background:var(--purple-bg);">' +
-                        '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--purple);"></i> ' + (p.status === 'Expired' ? 'Permit Expired — Extend to Resume' : 'Need More Time?') + '</div>' +
+                        '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--purple);"></i> Need More Time?</div>' +
                         '<div class="aa-desc">Request an extension in 10-minute increments &mdash; request and approvals must complete before <b>06:30 PM IST</b>; extended validity can run until <b>08:30 PM IST</b>. Requires reason, GPS, photo, and DPDP signature. ' + extChainDesc + '</div>' +
                         '<div class="form-error" style="display:flex;margin-bottom:10px;"><i class="fa-solid fa-circle-exclamation"></i> Cannot request extension before scheduled work start time (' + (p.startTime || 'validity start') + ' IST).</div>' +
                         '<button class="btn btn-primary" disabled><i class="fa-solid fa-stopwatch"></i> Request Extension</button>' +
                         '</div>';
                 } else {
                     html += '<div class="approval-action-card" style="border-color:var(--purple);background:var(--purple-bg);">' +
-                        '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--purple);"></i> ' + (p.status === 'Expired' ? 'Permit Expired — Extend to Resume' : 'Need More Time?') + '</div>' +
+                        '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--purple);"></i> Need More Time?</div>' +
                         '<div class="aa-desc">Request an extension in 10-minute increments &mdash; request and approvals must complete before <b>06:30 PM IST</b>; extended validity can run until <b>08:30 PM IST</b>. Requires reason, GPS, photo, and DPDP signature. ' + extChainDesc + '</div>' +
                         '<button class="btn btn-primary" onclick="openExtensionRequestModal(\'' + p.id + '\')"><i class="fa-solid fa-stopwatch"></i> Request Extension</button>' +
                         '</div>';
@@ -24719,7 +25027,7 @@ function trackerHtml(p) {
 
             // ---- CLOSURE & SURRENDER ----
             const canClose = isPermitteeForP;
-            if (canClose && ['Active', 'Active – Observation Open', 'Active - Observation Open', 'Expired'].includes(p.status)) {
+            if (canClose && ['Active', 'Extended', 'Active – Observation Open', 'Active - Observation Open'].includes(p.status)) {
                 if (obsOpen) {
                     html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);opacity:0.75;">' +
                         '<div class="aa-title"><i class="fa-solid fa-hand-holding" style="color:var(--green);"></i> Closure Blocked</div>' +
@@ -24929,6 +25237,7 @@ function trackerHtml(p) {
                     else if (action === 'obs-clear-ok') openCommentThenAct(p, rk, 'obs-ok', cap, false);
                     else if (action === 'obs-clear-reject') openCommentThenAct(p, rk, 'obs-clear-reject', cap, false);
                     else if (action === 'obs-cancel') openCommentThenAct(p, rk, 'obs-cancel', cap, false);
+                    else if (action === 'active-ehs-cancel') openCommentThenAct(p, rk, 'active-ehs-cancel', cap, false);
                 }
             });
         }
@@ -25135,7 +25444,7 @@ function trackerHtml(p) {
 
             const existingSigner = getPermitSignatory(p, rk);
             const hasStoredSigner = !!(existingSigner && existingSigner.name && existingSigner.sig);
-            const needsComment = ['rejected', 'cancelled', 'reject-engineer', 'reject-pm-engineer', 'reject-blasting-incharge', 'obs-cancel', 'obs-sh-rejected', 'obs-clear-reject'].includes(decision);
+            const needsComment = ['rejected', 'cancelled', 'reject-engineer', 'reject-pm-engineer', 'reject-blasting-incharge', 'obs-cancel', 'active-ehs-cancel', 'obs-sh-rejected', 'obs-clear-reject'].includes(decision);
 
             actionModalCtx = {
                 p,
@@ -25174,7 +25483,7 @@ function trackerHtml(p) {
             else if (decision === 'obs-sh-approved') modalTitle = '<i class="fa-solid fa-gavel" style="color:var(--green);"></i> ' + escapeHtml(shLabelModal) + ' Rectification Endorsement';
             else if (decision === 'obs-sh-rejected') modalTitle = '<i class="fa-solid fa-xmark" style="color:var(--red);"></i> Reject Observation &amp; Return to Supervisor';
             else if (decision === 'obs-clear-reject') modalTitle = '<i class="fa-solid fa-rotate-left" style="color:var(--red);"></i> Reject Observation Rectification &amp; Return to Supervisor';
-            else if (decision.includes('cancelled') || decision === 'cancelled' || decision === 'obs-cancel') modalTitle = '<i class="fa-solid fa-ban" style="color:var(--red);"></i> Confirm Cancellation';
+            else if (decision.includes('cancelled') || decision === 'cancelled' || decision === 'obs-cancel' || decision === 'active-ehs-cancel') modalTitle = '<i class="fa-solid fa-ban" style="color:var(--red);"></i> Confirm Stop-Work Cancellation';
             else if (decision.includes('rejected') || decision === 'rejected') modalTitle = '<i class="fa-solid fa-xmark" style="color:var(--red);"></i> Confirm Rejection / Return';
             else if (decision === 'obs-ok') modalTitle = '<i class="fa-solid fa-shield-check" style="color:var(--green);"></i> Clear Site Observation';
 
@@ -25405,7 +25714,7 @@ function trackerHtml(p) {
             let { p, rk, decision, gps, isExt, sig, signerVerified, signerName, isDay2, isBlastingAck } = actionModalCtx;
             const comment = (document.getElementById('actionComment') ? document.getElementById('actionComment').value : '').trim();
 
-            if (['rejected', 'cancelled', 'reject-engineer', 'reject-pm-engineer', 'reject-blasting-incharge', 'obs-cancel', 'obs-sh-rejected', 'obs-clear-reject'].includes(decision) && !comment) {
+            if (['rejected', 'cancelled', 'reject-engineer', 'reject-pm-engineer', 'reject-blasting-incharge', 'obs-cancel', 'active-ehs-cancel', 'obs-sh-rejected', 'obs-clear-reject'].includes(decision) && !comment) {
                 showToast('A reason is mandatory for rejection or cancellation.', 'warn');
                 return;
             }
@@ -25528,8 +25837,8 @@ function trackerHtml(p) {
                 rejectObservationEhs(p, { comment, sig, signerName, gps });
             } else if (decision === 'obs-ok') {
                 resolveObservation(p, true, { comment, sig, signerName, gps });
-            } else if (decision === 'obs-cancel') {
-                resolveObservation(p, false, { comment, sig, signerName, gps });
+            } else if (decision === 'obs-cancel' || decision === 'active-ehs-cancel') {
+                cancelActivePermit(p, { comment, sig, signerName, gps });
             } else if (isExt) {
                 decision === 'approved' ? approveExtensionStage(p, rk, gps, comment, sig, signerName) : rejectExtensionStage(p, rk, gps, comment, sig, signerName);
             } else {
@@ -25544,8 +25853,10 @@ function trackerHtml(p) {
 
         /* ---------- OBSERVATION MODALS (STRICT DPDP & SIGNATURE) ---------- */
         function openRaiseObservationModal(id) {
-            if (!['ehs-manager', 'ehs-officer'].includes(currentUser.key)) {
-                showToast('Access Denied: Only EHS Safety Managers or Officers can raise safety observations.', 'err');
+            const rk = normalizeRoleKey(currentUser && (currentUser.key || currentUser.role));
+            if (!['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(currentUser && currentUser.key) &&
+                !['ehs-supervisor', 'ehs-head'].includes(rk)) {
+                showToast('Access Denied: Only EHS Safety personnel can raise safety observations.', 'err');
                 return;
             }
             const p = PERMITS.find(x => x.id === id);
@@ -26350,31 +26661,60 @@ function trackerHtml(p) {
            ================================================================ */
         const PDF_NAVY = [15, 23, 42], PDF_NAVY_LIGHT = [30, 41, 59], PDF_ORANGE = [232, 96, 10], PDF_MUTED = [100, 116, 139], PDF_LINE = [203, 213, 225], PDF_BG_LIGHT = [248, 250, 252], PDF_HEADER_BG = [241, 245, 249];
         function pdfImgFormat(dataUrl) { return /^data:image\/jpe?g/i.test(dataUrl) ? 'JPEG' : 'PNG'; }
-        function canDownloadStatutoryPdf(p) {
-            if (!currentUser) return false;
-            const rk = String(currentUser.key || currentUser.role || '').toLowerCase();
-            if (['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager', 'super-admin'].includes(rk)) {
-                return true;
+        const POST_ACTIVATION_PDF_STATUSES = [
+            'Active',
+            'Approved – Scheduled',
+            'Active – Observation Open',
+            'Active - Observation Open',
+            'Observation Pending Site Engineer Acknowledgment',
+            'Observation Pending Section Head Review',
+            'Observation Pending Tower Incharge Review',
+            'Observation Pending Excavation Head Review',
+            'Observation Pending EHS Clearance',
+            'Extension Pending',
+            'Extended',
+            'Closed',
+            'Closed – Pending Surrender',
+            'Completed (Surrendered)',
+            'Auto-Closed',
+            'Expired'
+        ];
+        function isPostActivationPermit(p) {
+            if (!p) return false;
+            if (['Draft', 'Submitted', 'Approved – Scheduled', 'Expired Before Activation', 'Returned for Correction', 'Rejected'].includes(p.status)) return false;
+            return Boolean(p.activatedAt) || POST_ACTIVATION_PDF_STATUSES.includes(p.status);
+        }
+        function canDownloadStatutoryPdf(p, overrideRoleKey) {
+            const rawRole = overrideRoleKey || (currentUser && (currentUser.key || currentUser.role));
+            if (!rawRole) return false;
+            const rk = String(rawRole).trim().toLowerCase();
+            const normRk = normalizeRoleKey(rk);
+            const isEhs = ['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager'].includes(rk) ||
+                ['ehs-supervisor', 'ehs-head'].includes(normRk);
+            if (!isEhs) return false;
+            if (!p) return true;
+            if (!isPostActivationPermit(p)) return false;
+            if (p.projectId && currentUser && currentUser.projectId && !overrideRoleKey) {
+                if (normalizeProjectId(currentUser.projectId) !== normalizeProjectId(p.projectId)) return false;
             }
-            if (rk === 'admin' || rk === 'project-admin' || rk === 'site-admin') {
-                if (p && p.projectId && currentUser.projectId) {
-                    return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
-                }
-                return true;
-            }
-            return false;
+            return true;
         }
         function generatePermitPDF(id) {
             const p = (typeof id === 'string') ? PERMITS.find(x => x.id === id) : (id && id.id ? id : null);
-            if (!p) return;
+            if (!p) return false;
             if (!canDownloadStatutoryPdf(p)) {
-                showToast('Access Denied: Permit Report PDF download is restricted to EHS personnel, Super Admin, and site-scoped Site Admin.', 'err');
-                return;
+                showToast('Access Denied: Statutory PDF download is strictly restricted to EHS personnel after permit activation.', 'err');
+                return false;
+            }
+            if (p.statutoryDownload && p.statutoryDownload.isDownloaded === true) {
+                const byName = p.statutoryDownload.downloadedByName || p.statutoryDownload.downloadedBy || 'EHS Safety';
+                showToast('Single-Use PDF Limit Reached: Statutory PDF for ' + p.id + ' was already downloaded by ' + byName + '.', 'err');
+                return false;
             }
             const JsPdfClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
             if (!JsPdfClass) {
                 showToast('PDF library could not be loaded. Please check your internet connection and retry.', 'error');
-                return;
+                return false;
             }
             try {
                 const doc = new JsPdfClass('p', 'mm', 'a4');
@@ -27432,16 +27772,25 @@ function trackerHtml(p) {
                     doc.text('Page ' + i + ' of ' + totalPages, R, 291.5, { align: 'right' });
                 }
 
-                const fname = p.id + '_' + (p.status === 'Cancelled' ? 'Cancelled_Report' : p.status === 'Returned for Correction' ? 'Returned_Report' : p.status === 'Expired' ? 'Expired_Report' : (p.status.startsWith('Active') ? 'Active_Report' : 'Permit_Report')) + '.pdf';
+                const fname = p.id + '_' + (p.status === 'Cancelled' ? 'Cancelled_Report' : p.status === 'Returned for Correction' ? 'Returned_Report' : (p.status === 'Expired' || p.status === 'Auto-Closed') ? 'AutoClosed_Report' : (p.status.startsWith('Active') || p.status === 'Extended' ? 'Active_Report' : 'Permit_Report')) + '.pdf';
                 if (typeof window !== 'undefined') window.lastGeneratedPdf = doc;
                 if (typeof lastGeneratedPdf !== 'undefined') lastGeneratedPdf = doc;
                 doc.save(fname);
-                showToast('Official ' + (p.status === 'Cancelled' ? 'Cancelled ' : p.status === 'Returned for Correction' ? 'Returned ' : p.status === 'Expired' ? 'Expired ' : (p.status.startsWith('Active') ? 'Active ' : '')) + 'Permit Report PDF downloaded — ' + fname, 'ok', 'fa-file-pdf');
-                logActivity(p, 'Official Permit Report PDF downloaded by ' + (currentUser ? (currentUser.name || currentUser.label) : 'EHS Safety') + '.');
+                p.statutoryDownload = {
+                    isDownloaded: true,
+                    downloadedBy: (currentUser && (currentUser.uid || currentUser.key)) || 'ehs',
+                    downloadedByName: (currentUser && (currentUser.name || currentUser.label)) || 'EHS Safety',
+                    downloadedAt: nowTime()
+                };
+                syncStatutoryDownloadWithServer(p);
+                showToast('Official ' + (p.status === 'Cancelled' ? 'Cancelled ' : p.status === 'Returned for Correction' ? 'Returned ' : (p.status === 'Expired' || p.status === 'Auto-Closed') ? 'Auto-Closed ' : (p.status.startsWith('Active') || p.status === 'Extended' ? 'Active ' : '')) + 'Permit Report PDF downloaded — ' + fname, 'ok', 'fa-file-pdf');
+                logActivity(p, 'Official Single-Use Statutory Permit Report PDF downloaded by ' + (currentUser ? (currentUser.name || currentUser.label) : 'EHS Safety') + '. Subsequent downloads locked.');
                 saveState();
+                return true;
             } catch (err) {
                 console.error(err);
                 showToast('PDF generation failed: ' + err.message, 'error');
+                return false;
             }
         }
 
@@ -27811,12 +28160,16 @@ function trackerHtml(p) {
                 if (!p.approvals) p.approvals = newChain(ptypeOf(p));
                 const countdownMs = new Date(p.validTill) - nowTime();
                 let countdownHtml = '';
-                if (p.status === 'Active') {
+                if (['Active', 'Extended'].includes(p.status)) {
                     const mins = Math.round(countdownMs / 60000);
                     const cls = mins < 30 ? 'danger' : mins < 90 ? 'warn' : '';
                     countdownHtml = '<div class="countdown-strip ' + cls + '"><i class="fa-solid fa-hourglass-half"></i><div><b>' + (mins > 0 ? mins + ' minutes remaining' : 'Overdue') + '</b> until validity expiry at ' + fmtDateTime(p.validTill) + (mins < 60 ? ' — consider requesting an extension.' : '') + '</div></div>';
-                } else if (p.status === 'Expired') {
-                    countdownHtml = '<div class="countdown-strip danger"><i class="fa-solid fa-triangle-exclamation"></i><div><b>Expired</b> at ' + fmtDateTime(p.validTill) + '. Escalation notices are being sent every cycle until this permit is closed and surrendered, or extended.</div></div>';
+                } else if (p.status === 'Approved – Scheduled') {
+                    countdownHtml = '<div class="countdown-strip"><i class="fa-solid fa-calendar-check"></i><div><b>Approved – Scheduled</b>: EHS approved. Work window starts automatically at ' + fmtDateTime(p.startAt || p.validFrom) + ' through ' + fmtDateTime(p.validTill) + '.</div></div>';
+                } else if (p.status === 'Auto-Closed' || p.status === 'Expired') {
+                    countdownHtml = '<div class="countdown-strip danger"><i class="fa-solid fa-triangle-exclamation"></i><div><b>' + escapeHtml(p.status) + '</b> at ' + fmtDateTime(p.validTill) + '. Validity window elapsed; further extensions are prohibited.</div></div>';
+                } else if (p.status === 'Expired Before Activation') {
+                    countdownHtml = '<div class="countdown-strip danger"><i class="fa-solid fa-triangle-exclamation"></i><div><b>Expired Before Activation</b>: Validity end time (' + fmtDateTime(p.validTill) + ') elapsed before final EHS activation.</div></div>';
                 }
                 let extHtml = '';
                 if (p.extension) {
@@ -27827,22 +28180,25 @@ function trackerHtml(p) {
                         extTrackerHtml(p.extension, p) + '</div>';
                 }
                 const isEhsUser = canDownloadStatutoryPdf(p);
+                const alreadyDownloadedPdf = !!(p.statutoryDownload && p.statutoryDownload.isDownloaded === true);
                 let downloadBtnHtml = '';
                 if (isEhsUser) {
-                    const isActKind = p.status.startsWith('Active') || ['Completed (Surrendered)', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance', 'Closed – Pending Surrender'].includes(p.status);
-                    if (isActKind) {
-                        downloadBtnHtml = '<button class="btn btn-primary no-print" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download ' + (p.status === 'Completed (Surrendered)' ? 'Permit Report' : 'Active Permit Report') + ' (PDF)</button>';
-                    } else if (p.status === 'Cancelled') {
-                        downloadBtnHtml = '<button class="btn no-print" style="background:#C62828;color:#fff;border:none;padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Cancelled Permit Report (PDF)</button>';
-                    } else if (p.status === 'Returned for Correction') {
-                        downloadBtnHtml = '<button class="btn no-print" style="background:#E65100;color:#fff;border:none;padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Returned Permit Report (PDF)</button>';
-                    } else if (p.status === 'Expired') {
-                        downloadBtnHtml = '<button class="btn no-print" style="background:#4A148C;color:#fff;border:none;padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Expired Permit Report (PDF)</button>';
+                    if (alreadyDownloadedPdf) {
+                        downloadBtnHtml = '<span class="no-print" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:#F1F5F9;border:1px solid #CBD5E1;border-radius:6px;font-size:11.5px;color:#475569;font-weight:600;" title="Statutory single-use PDF already downloaded"><i class="fa-solid fa-circle-check" style="color:#16A34A;"></i> Statutory PDF Already Downloaded (1/1 Limit)</span>';
                     } else {
-                        downloadBtnHtml = '<button class="btn btn-outline no-print" style="border:1.5px solid var(--navy);color:var(--navy);padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Permit Report (PDF)</button>';
+                        const isActKind = p.status.startsWith('Active') || ['Extended', 'Extension Pending', 'Approved – Scheduled', 'Completed (Surrendered)', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance', 'Closed – Pending Surrender', 'Closed'].includes(p.status);
+                        if (isActKind) {
+                            downloadBtnHtml = '<button class="btn btn-primary no-print" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download ' + (p.status === 'Completed (Surrendered)' ? 'Permit Report' : 'Active Permit Report') + ' (PDF)</button>';
+                        } else if (p.status === 'Cancelled') {
+                            downloadBtnHtml = '<button class="btn no-print" style="background:#C62828;color:#fff;border:none;padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Cancelled Permit Report (PDF)</button>';
+                        } else if (p.status === 'Auto-Closed' || p.status === 'Expired') {
+                            downloadBtnHtml = '<button class="btn no-print" style="background:#4A148C;color:#fff;border:none;padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Auto-Closed Permit Report (PDF)</button>';
+                        } else {
+                            downloadBtnHtml = '<button class="btn btn-outline no-print" style="border:1.5px solid var(--navy);color:var(--navy);padding:8px 15px;border-radius:6px;font-weight:600;font-size:12.5px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;" onclick="generatePermitPDF(\'' + p.id + '\')"><i class="fa-solid fa-file-pdf"></i> Download Permit Report (PDF)</button>';
+                        }
                     }
                 } else {
-                    downloadBtnHtml = '<span class="no-print" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:var(--card-bg,#F8FAFC);border:1px solid var(--border,#CBD5E1);border-radius:6px;font-size:11.5px;color:var(--text-muted,#64748B);font-weight:600;" title="Per corporate PTW safety compliance policy, official audit-ready PDF report downloads are restricted exclusively to EHS Safety Officers and Managers."><i class="fa-solid fa-lock" style="color:#94A3B8;"></i> PDF Download restricted to EHS</span>';
+                    downloadBtnHtml = '<span class="no-print" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;background:var(--card-bg,#F8FAFC);border:1px solid var(--border,#CBD5E1);border-radius:6px;font-size:11.5px;color:var(--text-muted,#64748B);font-weight:600;" title="Per corporate PTW safety compliance policy, official statutory PDF downloads are restricted exclusively to EHS personnel after activation."><i class="fa-solid fa-lock" style="color:#94A3B8;"></i> ' + (isPostActivationPermit(p) ? 'PDF Download restricted to EHS (Single-Use)' : 'PDF Locked until EHS Activation') + '</span>';
                 }
 
                 const activityHtml = (p.activityLog && p.activityLog.length)
@@ -28132,7 +28488,7 @@ ptypeOf(p) === 'general' ?
                                 const tokenResult = await user.getIdTokenResult(true);
                                 const claims = tokenResult.claims || {};
                                 const safeUser = await resolveAuthenticatedUserProfile(user, claims);
-
+                                syncServerTimeOffset().catch(() => {});
                                 completeAuthenticatedLogin(safeUser);
                             } catch (err) {
                                 console.error('Auth state resolution error:', err);

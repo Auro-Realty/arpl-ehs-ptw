@@ -445,25 +445,19 @@ evalInVM("respondToObservation(p, { comment: 'Spoil heap pushed back 2.5 meters 
 permit = evalInVM("PERMITS.find(x => x.id === '" + excPermitId + "');");
 assert.strictEqual(permit.status, 'Observation Pending Site Engineer Acknowledgment', "Rectification routes to Site Engineer");
 
-// 2. Site Engineer verifies on site
+// 2. Site Engineer verifies on site -> routes directly to EHS Clearance (3-stage loop)
 evalInVM("currentUser = { key: 'site-engineer', name: 'Eng Eric' };");
 evalInVM("acknowledgeObservationEng(p, { comment: 'Edge clearance verified on site', signerName: 'Eng Eric' });");
 permit = evalInVM("PERMITS.find(x => x.id === '" + excPermitId + "');");
-assert.strictEqual(permit.status, 'Observation Pending Section Head Review', "Verified rectification routes to Excavation Head");
+assert.strictEqual(permit.status, 'Observation Pending EHS Clearance', "Verified rectification routes directly to EHS Safety Authority");
 
-// 3. Excavation Head reviews & endorses
-evalInVM("currentUser = { key: 'excavation-head', name: 'Chief Evans' };");
-evalInVM("reviewObservationSectionHead(p, true, { comment: 'Spoil distance compliant with SOP', signerName: 'Chief Evans' });");
-permit = evalInVM("PERMITS.find(x => x.id === '" + excPermitId + "');");
-assert.strictEqual(permit.status, 'Observation Pending EHS Clearance', "Endorsement routes to EHS for clearance");
-
-// 4. EHS clears observation
+// 3. EHS clears observation
 evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Manager Smith' };");
 evalInVM("resolveObservation(p, true, { comment: 'Restored compliant condition', signerName: 'Safety Manager Smith' });");
 permit = evalInVM("PERMITS.find(x => x.id === '" + excPermitId + "');");
 assert.strictEqual(permit.status, 'Active', "Clearing observation restores status to Active");
 assert.strictEqual(permit.observation.status, 'Resolved', "Observation status is Resolved");
-console.log('  ✓ PASS: Complete 4-stage observation lifecycle executed cleanly');
+console.log('  ✓ PASS: Complete 3-stage observation lifecycle executed cleanly');
 
 // --- 13. Exclusive Closure & Surrender Gate ---
 console.log('\n--- 13. Exclusive Closure & Surrender Gate ---');

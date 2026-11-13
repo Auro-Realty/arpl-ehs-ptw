@@ -1099,21 +1099,22 @@
             <span class="node-detail">
               • Verifies emergency rescue gear, trench boxes, and PPE<br/>
               • Confirms flash-lighting, perimeter sentries, and signage<br/>
-              • First-Wins Gate: Either EHS Manager or Officer activates
+              • First-Wins Atomic Gate: Server transaction prevents concurrent EHS races<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b> until start time; overdue unapproved permits move to <b>Expired Before Activation</b>
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="step-node node-active">
-            <span class="node-seq">Work Front Active</span>
+            <span class="node-seq">Work Front Active (Server IST Sync)</span>
             <span class="node-action">Excavation Operations Authorized</span>
             <span class="node-detail">
               • Continuous monitoring of tension cracks and soil sloughing<br/>
-              • Surcharge buffer (&ge;1.5m) continuously enforced<br/>
-              • Valid within certified daylight window (Max 19:30 IST)
+              • Server-calibrated <b>T-30 min</b> expiry alert dispatched dynamically<br/>
+              • EHS retains Direct Stop-Work Cancel &amp; 1-Use Post-Activation PDF download
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
-          <span class="lane-handoff-tag"><i class="fa-solid fa-arrow-down"></i> Shift Conclusion</span>
+          <span class="lane-handoff-tag"><i class="fa-solid fa-arrow-down"></i> Shift Conclusion / Auto-Close</span>
         </div>
       </div>
 
@@ -1122,17 +1123,17 @@
         <div class="lane-actor-col actor-surrender">
           <span class="actor-title">Surrender Custodian</span>
           <span class="actor-role-desc">Site Supervisor (Permittee Exclusive)</span>
-          <span class="actor-badge">Permit Closeout</span>
+          <span class="actor-badge">Closeout / Auto-Close</span>
         </div>
         <div class="lane-track-col">
           <div class="step-node node-end">
-            <span class="node-seq">Step 6 · Statutory Surrender</span>
+            <span class="node-seq">Step 6 · Statutory Surrender or Auto-Closed</span>
             <span class="node-action">Trench Restoration &amp; Handback</span>
             <span class="node-detail">
               • Confirms trench backfilled OR shoring safely left anchored<br/>
-              • Verifies Class-A rigid barricades and warning blinkers erected<br/>
-              • Excavation machinery parked &gt;2m away with hydraulics grounded<br/>
-              • Mandatory on-site restoration photograph + GPS + DPDP digital signature
+              • Verifies Class-A rigid barricades, blinkers &amp; machinery parked &gt;2m away<br/>
+              • Mandatory on-site restoration photo + GPS + DPDP digital signature<br/>
+              • Unclosed permits automatically transition to <b>Auto-Closed</b> at <code>validTill</code> (blocking late extensions)
             </span>
           </div>
         </div>
@@ -5155,22 +5156,22 @@
         </div>
         <div class="lane-track-col">
           <div class="step-node node-highlight" style="border-color: var(--halt);">
-            <span class="node-seq" style="color: var(--halt);">EHS Observation Raised</span>
+            <span class="node-seq" style="color: var(--halt);">EHS Observation / Direct Cancel</span>
             <span class="node-action">Immediate Work Intervention</span>
             <span class="node-detail">
-              • Minor Deviation: Status becomes Active – Observation Open<br/>
-              • Hard Operational Gate: Extension and Closure strictly BLOCKED<br/>
-              • Critical Hazard: EHS issues terminal Cancelled stop-work directive
+              • Minor Deviation: Logs <code>OBS-#</code> in <code>observations[]</code> &rarr; <b>Active – Observation Open</b><br/>
+              • Hard Operational Gate: Extension &amp; Manual Closure strictly BLOCKED until cleared<br/>
+              • Critical Hazard: EHS issues direct terminal <b>Cancel Permit (Stop Work)</b>
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
           <div class="step-node">
-            <span class="node-seq">Remediation Spine</span>
-            <span class="node-action">Multi-Stage Rectification Clearance</span>
+            <span class="node-seq">3-Stage Remediation Loop</span>
+            <span class="node-action">Supervisor &rarr; Site Engineer &rarr; EHS</span>
             <span class="node-detail">
-              • Permittee rectifies site condition + attaches evidence photo<br/>
-              • Site Engineer acknowledges &rarr; Section Head reviews<br/>
-              • EHS Safety endorses resolution &rarr; Extension and Closure restored
+              • Site Supervisor rectifies site condition + attaches evidence photo<br/>
+              • Site Engineer acknowledges &rarr; routes directly to EHS Safety Authority<br/>
+              • EHS clears (restoring Active) OR rejects back to Site Supervisor for rework
             </span>
           </div>
         </div>
@@ -5180,17 +5181,17 @@
       <div class="swimlane-row">
         <div class="lane-actor-col actor-engineer">
           <span class="actor-title">Protocol C: Extension</span>
-          <span class="actor-role-desc">18:30 Cutoff &amp; 20:30 Ceiling Governance</span>
+          <span class="actor-role-desc">T-30 Alert, Ceiling &amp; Expiry Guard</span>
           <span class="actor-badge">Time Extension</span>
         </div>
         <div class="lane-track-col">
           <div class="step-node">
-            <span class="node-seq">Extension Request (Before 18:30)</span>
+            <span class="node-seq">Extension Request (Before Expiry)</span>
             <span class="node-action">Permittee Requests Up to 120 Min</span>
             <span class="node-detail">
-              • Request must be submitted before 18:30 IST sunset threshold<br/>
-              • Hard validity ceiling enforced at 20:30 IST (18:30 for blasting)<br/>
-              • Requires justification reason + additional safety briefing
+              • Strictly BLOCKED once <b>Auto-Closed</b> / <b>Expired</b>; preserves <code>originalValidTill</code><br/>
+              • Dynamic <b>T-30 min</b> expiry alert dispatched (Site Eng, Supervisor, EHS)<br/>
+              • Requires justification reason + additional safety briefing (cutoff 18:30 / 20:30 max)
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
@@ -5198,30 +5199,30 @@
             <span class="node-seq">Extension Approval Spine</span>
             <span class="node-action">Field Eng &rarr; Section Head &rarr; EHS Safety</span>
             <span class="node-detail">
-              • Site Engineer acknowledges lighting and overtime fatigue controls<br/>
-              • Section Head reviews shift coverage &rarr; EHS provides final endorsement<br/>
-              • Status remains Active with extended validTill timestamp
+              • Status enters <b>Extension Pending</b> during review<br/>
+              • Upon EHS endorsement &rarr; transitions to <b>Extended</b> with updated <code>validTill</code><br/>
+              • Resets <code>warned30</code> so a fresh T-30 alert fires for the extended window
             </span>
           </div>
         </div>
       </div>
 
-      <!-- Lane 4: Lifecycle D - Statutory Surrender Gate -->
+      <!-- Lane 4: Lifecycle D - Statutory Surrender & Auto-Close Gate -->
       <div class="swimlane-row">
         <div class="lane-actor-col actor-surrender">
-          <span class="actor-title">Protocol D: Surrender Gate</span>
-          <span class="actor-role-desc">Mandatory Demobilization &amp; PDF Release</span>
-          <span class="actor-badge">Permit Surrender</span>
+          <span class="actor-title">Protocol D: Closeout &amp; PDF Gate</span>
+          <span class="actor-role-desc">Manual Surrender, Auto-Closed &amp; 1-Use PDF</span>
+          <span class="actor-badge">Closeout &amp; Audit</span>
         </div>
         <div class="lane-track-col">
           <div class="step-node node-end">
-            <span class="node-seq">Statutory Surrender Execution</span>
-            <span class="node-action">Discipline Declarations &amp; Digital Sign-Off</span>
+            <span class="node-seq">Closeout &amp; EHS Single-Use PDF Release</span>
+            <span class="node-action">Discipline Declarations &amp; Server Lock</span>
             <span class="node-detail">
-              • Exclusive Permittee Authority: Site Engineer has NO closure option<br/>
-              • Enforces discipline-specific restoration checklists (trench, fire watch, LOTO, nets)<br/>
-              • Captures restoration photograph + device GPS within geofence perimeter<br/>
-              • DPDP Act 2023 digital signature &rarr; Unlocks official PDF report
+              • Manual Surrender: Exclusive Permittee authority (blocks if observations remain open)<br/>
+              • Automatic Expiry: Server &amp; client sweep sets status to <b>Auto-Closed</b> at <code>validTill</code><br/>
+              • <b>Approved – Scheduled</b> promotes to Active at <code>validFromMs</code> (pre-start overdue &rarr; <b>Expired Before Activation</b>)<br/>
+              • Statutory PDF strictly restricted to EHS roles post-activation with 1-use download lock
             </span>
           </div>
         </div>

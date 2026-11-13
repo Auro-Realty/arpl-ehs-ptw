@@ -462,25 +462,19 @@ evalInVM("respondToObservation(hwPermit, { comment: 'Cartons removed to external
 permit = evalInVM("PERMITS.find(x => x.id === '" + hwPermitId + "');");
 assert.strictEqual(permit.status, 'Observation Pending Site Engineer Acknowledgment', "Rectification routes to Site Engineer");
 
-// 2. Site Engineer verifies on site
+// 2. Site Engineer verifies on site -> routes directly to EHS Clearance
 evalInVM("currentUser = { key: 'site-engineer', name: 'Eng Eric' };");
 evalInVM("acknowledgeObservationEng(hwPermit, { comment: 'Site inspected; combustible clearance confirmed', signerName: 'Eng Eric' });");
 permit = evalInVM("PERMITS.find(x => x.id === '" + hwPermitId + "');");
-assert.strictEqual(permit.status, 'Observation Pending Section Head Review', "Rectification advances to Tower Incharge");
+assert.strictEqual(permit.status, 'Observation Pending EHS Clearance', "Rectification advances directly to EHS for clearance");
 
-// 3. Tower Incharge reviews & endorses
-evalInVM("currentUser = { key: 'hw-section-head', name: 'Tower Incharge Tiwari' };");
-evalInVM("reviewObservationSectionHead(hwPermit, true, { comment: 'Tower housekeeping compliant', signerName: 'Tower Incharge Tiwari' });");
-permit = evalInVM("PERMITS.find(x => x.id === '" + hwPermitId + "');");
-assert.strictEqual(permit.status, 'Observation Pending EHS Clearance', "Endorsement routes to EHS for clearance");
-
-// 4. EHS resolves observation
+// 3. EHS resolves observation
 evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Manager Smith' };");
 evalInVM("resolveObservation(hwPermit, true, { comment: 'Condition restored; hot work may proceed', signerName: 'Safety Manager Smith' });");
 permit = evalInVM("PERMITS.find(x => x.id === '" + hwPermitId + "');");
 assert.strictEqual(permit.status, 'Active', "Clearing observation restores status to Active");
 assert.strictEqual(permit.observation.status, 'Resolved', "Observation marked Resolved");
-console.log('  ✓ PASS: Complete 4-stage observation lifecycle executed cleanly');
+console.log('  ✓ PASS: Complete 3-stage observation lifecycle executed cleanly');
 
 // --- 13. Exclusive Closure & Mandatory 1-Hour Fire Watch Certification ---
 console.log('\n--- 13. Exclusive Closure & Mandatory 1-Hour Fire Watch Certification ---');

@@ -556,13 +556,16 @@ console.log('  ✓ PASS: Permit surrendered successfully with electrical de-isol
 
 // --- 10. PDF Generation ---
 console.log('\n--- 10. PDF Generation Verification ---');
+evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Manager Smith', role: 'EHS Safety Manager' };");
 
 // Generate PDF for Batching Plant permit
-evalInVM("generatePermitPDF(PERMITS.find(p => p.id === '" + bpPermitActive.id + "').id);");
+const bpPdfOk = evalInVM("generatePermitPDF(PERMITS.find(p => p.id === '" + bpPermitActive.id + "').id);");
+assert.strictEqual(bpPdfOk, true, "EHS PDF generation must succeed on Batching Plant permit (first download)");
 console.log('  ✓ PASS: PDF generation executes cleanly for Batching Plant electrical permit');
 
 // Generate PDF for Site electrical permit
-evalInVM("generatePermitPDF(PERMITS.find(p => p.id === '" + surrenderedP.id + "').id);");
+const sitePdfOk = evalInVM("generatePermitPDF(PERMITS.find(p => p.id === '" + surrenderedP.id + "').id);");
+assert.strictEqual(sitePdfOk, true, "EHS PDF generation must succeed on surrendered Site electrical permit");
 console.log('  ✓ PASS: PDF generation executes cleanly for Site electrical permit (surrendered with de-isolation certified)');
 
 // --- 11. Detail View Verification ---
@@ -682,7 +685,10 @@ assert(trackerHtml.includes('EHS Safety'), "Tracker must include EHS Safety node
 assert(trackerHtml.includes('Work Resumed'), "Tracker must include Work Resumed node");
 console.log('  ✓ PASS: extTrackerHtml renders 5-node Batching Plant workflow: Electrician -> P&M -> Quality Engineer -> EHS -> Resumed');
 
-evalInVM("generatePermitPDF(PERMITS.find(p => p.id === '" + bpPermitActive.id + "').id);");
+// Clone active permit cleanly for post-extension PDF verification (preserving single-use lock on original permit)
+evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Manager Smith', role: 'EHS Safety Manager' };");
+const extPdfOk = evalInVM("(function(){ var orig = PERMITS.find(function(p){ return p.id === '" + bpPermitActive.id + "'; }); var copy = Object.assign({}, orig, { id: orig.id + '-EXTPDF', statutoryDownload: null }); PERMITS.push(copy); return generatePermitPDF(copy.id); })()");
+assert.strictEqual(extPdfOk, true, "EHS PDF generation with Batching Plant extension history must execute cleanly");
 console.log('  ✓ PASS: PDF generation with Batching Plant extension history executes cleanly');
 
 console.log('\n==================================================');

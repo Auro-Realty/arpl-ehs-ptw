@@ -138,11 +138,12 @@ const exportsFn = new Function(
         rejectPermitStage, resubmitReturnedPermit, activatePermit,
         acknowledgeSiteEngineer, rejectSiteEngineer, approvePermitStage,
         respondToObservation, acknowledgeObservationEng, reviewObservationSectionHead, resolveObservation,
+        raiseObservation, cancelActivePermit, canDownloadStatutoryPdf, hasPerm, actionPanelHtml,
         requestExtension, approveExtensionStage, rejectExtensionStage,
         closeAndSurrenderPermit,
         getPermitSignatory, makeSimSignature,
         notify, notifsForCurrentUser, refreshNotifBell, markAllRead,
-        runEscalationTick, STAGE1_MS, STAGE2_MS, stageLabelFor,
+        runEscalationTick, STAGE1_MS, STAGE2_MS, stageLabelFor, SERVER_TIME_OFFSET_MS,
         generatePermitPDF,
         buildRegisterTable, buildDashboard,
         CONFINED_GAS_THRESHOLDS, isGasReadingSafe,
@@ -311,10 +312,10 @@ runSuite('Escalation Engine (Stage 1, Stage 2, Expiry & Warnings)', () => {
     app.PERMITS.push(pExp);
 
     app.runEscalationTick();
-    assert(pExp.status === 'Expired', 'Active permit past validTill automatically transitions to Expired');
-    assert(app.NOTIFICATIONS.some(n => n.permitId === 'ESC-EXP-001' && n.message.includes('has EXPIRED without closure')), 'Expiry escalation notification dispatched');
+    assert(pExp.status === 'Auto-Closed', 'Active permit past validTill automatically transitions to Auto-Closed');
+    assert(app.NOTIFICATIONS.some(n => n.permitId === 'ESC-EXP-001' && n.message.includes('AUTO-CLOSED')), 'Auto-Closed escalation notification dispatched');
 
-    // 5. Open Observation Auto-Cancellation on Expiry
+    // 5. Open Observation Auto-Close on Expiry (preserves open observation audit trail)
     const pObsExp = {
         id: 'ESC-OBSEXP-001',
         ptype: 'excavation',
@@ -326,9 +327,9 @@ runSuite('Escalation Engine (Stage 1, Stage 2, Expiry & Warnings)', () => {
     app.PERMITS.push(pObsExp);
 
     app.runEscalationTick();
-    assert(pObsExp.status === 'Cancelled', 'Permit with open observation past expiry is AUTO-CANCELLED');
-    assert(pObsExp.isCancelled === true, 'Auto-cancelled permit flagged with isCancelled: true');
-    assert(app.NOTIFICATIONS.some(n => n.permitId === 'ESC-OBSEXP-001' && n.message.includes('AUTO-CANCELLED: validity expired')), 'Auto-cancel notification dispatched');
+    assert(pObsExp.status === 'Auto-Closed', 'Permit with open observation past expiry transitions to Auto-Closed (preserving observation trail)');
+    assert(!pObsExp.isCancelled, 'Time-expired permit with open observation is Auto-Closed rather than Cancelled');
+    assert(app.NOTIFICATIONS.some(n => n.permitId === 'ESC-OBSEXP-001' && n.message.includes('AUTO-CLOSED')), 'Auto-Closed notification dispatched for overdue observation permit');
 });
 
 // ------------------------------------------------------------------
@@ -368,27 +369,26 @@ runSuite('PDF Generation & Strict EHS Security', () => {
     };
     app.PERMITS.push(pPdf);
 
-    // Negative Security Tests: Non-authorized operational roles MUST BE DENIED
-    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it'];
+    // Negative Security Tests: Non-EHS roles (including Admin & Super Admin) MUST BE DENIED
+    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it', 'admin', 'super-admin'];
     nonEhsRoles.forEach(r => {
         setRole(r);
-        app.generatePermitPDF(pPdf.id);
-        assert(mockDoc.getElementById('mock_toast') || true, `Role ${r} is strictly denied from PDF generation`);
+        const deniedRes = app.generatePermitPDF(pPdf.id);
+        assert(deniedRes === false && (!pPdf.statutoryDownload || !pPdf.statutoryDownload.isDownloaded), `Role ${r} is strictly denied from PDF generation`);
     });
 
-    // Positive Security Tests: EHS Supervisor, EHS Head, Legacy EHS, Super Admin, and site-scoped Site Admin allowed
-    ['ehs-manager', 'ehs-officer', 'super-admin', 'admin'].forEach(authRole => {
-        setRole(authRole);
-        let authThrew = false;
-        try {
-            app.generatePermitPDF(pPdf.id);
-        } catch (e) {
-            authThrew = true;
-        }
-        assert(!authThrew, `Role ${authRole} generates statutory PDF without errors`);
-    });
+    // Positive Security Test: EHS Role downloads once cleanly, then 2nd download is locked (single-use)
+    pPdf.activatedAt = new Date();
+    setRole('ehs-manager');
+    const firstOk = app.generatePermitPDF(pPdf.id);
+    assert(firstOk === true, 'EHS Manager generates statutory PDF cleanly on first download');
+    assert(pPdf.statutoryDownload && pPdf.statutoryDownload.isDownloaded === true, 'Single-use statutoryDownload lock is stamped after download');
+    setRole('ehs-officer');
+    const secondOk = app.generatePermitPDF(pPdf.id);
+    assert(secondOk === false, 'Second EHS PDF download attempt on the same permit is strictly blocked');
 
-    // Content completeness check on all permit types
+    // Content completeness check on all permit types (as EHS Manager)
+    setRole('ehs-manager');
     const types = ['excavation', 'hotwork', 'guardrail', 'confined', 'shaft'];
     types.forEach(tp => {
         const testP = {
@@ -594,6 +594,124 @@ runSuite('My Permits Filters, Search & Scoping', () => {
     const idxP2 = tbodyEl.innerHTML.indexOf('FILTER-HW-002');
     const idxP1 = tbodyEl.innerHTML.indexOf('FILTER-EXC-001');
     assert(idxP3 < idxP2 && idxP2 < idxP1, 'Register sorts newest created permit first');
+});
+
+// ------------------------------------------------------------------
+// SUITE 23: FRS Critical Remediation (Fixes 1-6 Verification)
+// ------------------------------------------------------------------
+runSuite('FRS Critical Remediation Verification (Fixes 1-6)', () => {
+    const fs = require('fs');
+    const path = require('path');
+
+    // Fix 1 & 2 Static Server Verification: functions/index.js & firestore.rules
+    const fnSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    const rulesSrc = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
+    assert(fnSrc.includes('exports.getServerTime'), 'Fix 3: functions/index.js exports getServerTime callable');
+    assert(fnSrc.includes('db.runTransaction'), 'Fix 1: transitionPermitStage runs inside db.runTransaction');
+    assert(fnSrc.includes("data.approvals.mep.status === \"approved\"") && fnSrc.includes("data.approvals.pm.status === \"approved\""), 'Fix 1: PTW-001 3-way parallel gate verified on server');
+    assert(fnSrc.includes('Expired Before Activation') && fnSrc.includes('Approved – Scheduled'), 'Fix 5: Backend handles Scheduled & Expired Before Activation');
+    assert(fnSrc.includes('Auto-Closed'), 'Fix 2: escalationSweep uses Auto-Closed instead of legacy Expired');
+    assert(rulesSrc.includes('/_time_sync/{syncId}'), 'Fix 3: firestore.rules includes /_time_sync collection match');
+    assert(rulesSrc.includes('statutoryDownload'), 'Fix 4: firestore.rules enforces EHS-only statutoryDownload lock');
+
+    // Fix 3: Server clock offset calibration symbol & dynamic T-30 alert content
+    assert(typeof app.SERVER_TIME_OFFSET_MS === 'number', 'Fix 3: SERVER_TIME_OFFSET_MS initialized cleanly');
+    const tNow = Date.now();
+    const pDyn = {
+        id: 'FRS-T30-001',
+        ptype: 'excavation',
+        project: 'The Pearl by Auro Realty',
+        tower: 'Tower A',
+        location: 'West Retaining Trench',
+        createdBy: 'Supervisor Kiran',
+        status: 'Active',
+        validFrom: new Date(tNow - 4 * 3600000),
+        validTill: new Date(tNow + 15 * 60000),
+        warned30: false,
+        activityLog: []
+    };
+    app.PERMITS.push(pDyn);
+    app.runEscalationTick();
+    const dynNotif = app.NOTIFICATIONS.find(n => n.permitId === 'FRS-T30-001' && n.message.includes('EXPIRY ALERT (T-30 min)'));
+    assert(!!dynNotif, 'Fix 3: Dynamic T-30 expiry alert dispatched');
+    assert(dynNotif && dynNotif.message.includes('The Pearl by Auro Realty') && dynNotif.message.includes('West Retaining Trench') && !dynNotif.message.includes('06:30 PM'), 'Fix 3: Dynamic T-30 alert includes project & location with zero hardcoded 06:30 PM');
+
+    // Fix 5: Approved – Scheduled -> Active promotion & Expired Before Activation
+    const pSched = {
+        id: 'FRS-SCHED-001',
+        ptype: 'excavation',
+        project: 'The Pearl by Auro Realty',
+        status: 'Pending EHS Approval',
+        startTime: '23:55',
+        validFromMs: tNow + 2 * 3600000,
+        validTill: new Date(tNow + 4 * 3600000),
+        approvals: { mep: { status: 'approved' }, pm: { status: 'approved' }, it: { status: 'approved' }, sectionHead: { status: 'approved' }, ehsManager: { status: 'pending' }, ehsOfficer: { status: 'pending' } },
+        activityLog: []
+    };
+    app.PERMITS.push(pSched);
+    setRole('ehs-manager');
+    app.approvePermitStage(pSched, 'ehs-manager', { lat: 17.4435, lng: 78.3772, within: true }, 'Approved ahead of start', app.makeSimSignature('EHS'), 'Safety Manager');
+    assert(pSched.status === 'Approved – Scheduled', 'Fix 5: Pre-start EHS approval transitions into Approved – Scheduled');
+    assert(!app.canDownloadStatutoryPdf(pSched, 'ehs-manager'), 'Fix 4/5: PDF remains blocked while permit is Approved – Scheduled (pre-activation)');
+    pSched.validFromMs = tNow - 1000;
+    app.runEscalationTick();
+    assert(pSched.status === 'Active' && !!pSched.activatedAt, 'Fix 5: Escalation tick auto-activates Approved – Scheduled once validFromMs arrives');
+
+    const pPreExp = {
+        id: 'FRS-PREEXP-001',
+        ptype: 'excavation',
+        status: 'Pending Section Head',
+        validFromMs: tNow - 120000,
+        validTillMs: tNow - 60000,
+        validTill: new Date(tNow - 60000),
+        activityLog: []
+    };
+    app.PERMITS.push(pPreExp);
+    app.runEscalationTick();
+    assert(pPreExp.status === 'Expired Before Activation', 'Fix 5: Overdue pre-activation permit transitions to Expired Before Activation');
+
+    // Fix 2: Immutable originalValidTill & post-expiry extension block
+    const origTill = new Date(tNow + 3600000);
+    const pAuto = {
+        id: 'FRS-AUTO-001',
+        ptype: 'excavation',
+        status: 'Auto-Closed',
+        originalValidTill: origTill,
+        validTill: origTill,
+        activityLog: []
+    };
+    app.PERMITS.push(pAuto);
+    setRole('site-supervisor');
+    const extBlocked = app.requestExtension(pAuto, { minutes: 30, reason: 'Late request' });
+    assert(extBlocked === false, 'Fix 2: requestExtension strictly blocked after Auto-Closed');
+    const closeBlocked = app.closeAndSurrenderPermit(pAuto, { remarks: 'Late closure' });
+    assert(closeBlocked === false, 'Fix 2: closeAndSurrenderPermit strictly blocked after Auto-Closed');
+
+    // Fix 6: Direct EHS Stop-Work Cancel & Multiple Sequential Observations (observations[])
+    const pObsArr = {
+        id: 'FRS-OBS-001',
+        ptype: 'excavation',
+        project: 'The Pearl by Auro Realty',
+        status: 'Active',
+        validTill: new Date(tNow + 3 * 3600000),
+        activityLog: []
+    };
+    app.PERMITS.push(pObsArr);
+    setRole('ehs-manager');
+    const panelHtml = app.actionPanelHtml(pObsArr);
+    assert(panelHtml.includes('Cancel Permit (Stop Work)') && panelHtml.includes('Raise Safety Observation'), 'Fix 6: EHS action panel exposes both Cancel Permit (Stop Work) and Raise Safety Observation');
+    app.raiseObservation(pObsArr, { comment: 'Install toe-boards on East wall', signerName: 'Safety Manager' });
+    assert(Array.isArray(pObsArr.observations) && pObsArr.observations.length === 1 && pObsArr.observations[0].id === 'OBS-FRS-OBS-001-1', 'Fix 6: First observation stored in observations[] with unique ID -1');
+    setRole('site-supervisor');
+    app.respondToObservation(pObsArr, { comment: 'Toe-boards installed', photo: 'p1', sig: 's1' });
+    setRole('site-engineer');
+    app.acknowledgeObservationEng(pObsArr, { comment: 'Verified toe-boards' });
+    setRole('ehs-manager');
+    app.resolveObservation(pObsArr, true, { comment: 'Cleared #1', signerName: 'Safety Manager' });
+    app.raiseObservation(pObsArr, { comment: 'Relocate diesel generator >3m from trench', signerName: 'Safety Manager' });
+    assert(pObsArr.observations.length === 2 && pObsArr.observations[1].id === 'OBS-FRS-OBS-001-2', 'Fix 6: Second sequential observation appends cleanly with unique ID -2');
+    const cancelledOk = app.cancelActivePermit(pObsArr, { comment: 'Immediate slope tension crack hazard', signerName: 'Safety Manager' });
+    assert(cancelledOk === true && pObsArr.status === 'Cancelled' && pObsArr.isCancelled === true, 'Fix 6: Direct EHS Stop-Work Cancel immediately cancels Active permit');
 });
 
 // ==================================================================

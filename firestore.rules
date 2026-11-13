@@ -234,6 +234,12 @@ service cloud.firestore {
       );
     }
 
+    // Server clock calibration doc (read-only)
+    match /_time_sync/{syncId} {
+      allow read: if isAuthenticated();
+      allow write: if false;
+    }
+
     // ----------------------------------------------------------------------------
     // 7. PERMITS COLLECTION (Strict Project Scoping & Immutable Archiving)
     // ----------------------------------------------------------------------------
@@ -245,6 +251,16 @@ service cloud.firestore {
       allow create: if isAuthenticated() && (
         request.resource.data.projectId != null &&
         hasProjectAccess(request.resource.data.projectId)
+      ) && (
+        request.resource.data.status in [
+          'Draft',
+          'Submitted',
+          'Pending Site Engineer Acknowledgment',
+          'Pending P&M Acknowledgment'
+        ] || isSuperAdmin()
+      ) && (
+        !('statutoryDownload' in request.resource.data) ||
+        request.resource.data.statutoryDownload.get(['isDownloaded'], false) != true
       );
       allow update: if isAuthenticated() && (
         resource.data.projectId != null &&
@@ -252,6 +268,19 @@ service cloud.firestore {
       ) && (
         !(resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true) ||
         request.resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['statutoryDownload']) ||
+        isEhsRole()
+      ) && (
+        isSuperAdmin() ||
+        request.resource.data.status == resource.data.status ||
+        (
+          !(resource.data.status in ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Completed (Surrendered)', 'Cancelled', 'Rejected']) &&
+          (
+            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activatedAt', 'autoClosedAt', 'expiredBeforeActivationAt']) ||
+            isEhsRole()
+          )
+        )
       );
       allow delete: if false; // Strict DPDP Act 2023 requirement: Permits can never be deleted
 

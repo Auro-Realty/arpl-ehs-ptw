@@ -104,6 +104,7 @@ const exportsFn = new Function(
         rejectPermitStage, resubmitReturnedPermit, activatePermit,
         acknowledgeSiteEngineer, rejectSiteEngineer, approvePermitStage,
         respondToObservation, acknowledgeObservationEng, reviewObservationSectionHead, resolveObservation,
+        raiseObservation, cancelActivePermit, canDownloadStatutoryPdf, hasPerm,
         requestExtension, approveExtensionStage, rejectExtensionStage,
         closeAndSurrenderPermit,
         getPermitSignatory, makeSimSignature,
@@ -397,15 +398,21 @@ runSuite('Safety Observation Lifecycle', () => {
     app.respondToObservation(p, { comment: 'Lanyard anchored to certified static lifeline', photo: 'photo_data', sig: 'sig_data', signerName: 'Supervisor' });
     assert(p.status === 'Observation Pending Site Engineer Acknowledgment', 'Supervisor rectification sets status to Observation Pending Site Engineer Acknowledgment');
 
-    // 3. Site Engineer acknowledges
+    // 3. Site Engineer acknowledges -> routes directly to EHS Clearance (3-Stage Loop)
     app.acknowledgeObservationEng(p, { comment: 'Verified physical anchorage on site', sig: 'sig_data', signerName: 'Site Eng' });
-    assert(p.status === 'Observation Pending Section Head Review', 'Engineer verification forwards to Tower Incharge');
+    assert(p.status === 'Observation Pending EHS Clearance', 'Engineer verification forwards directly to EHS Clearance');
 
-    // 4. Tower Incharge reviews & endorses
-    app.reviewObservationSectionHead(p, true, { comment: 'Rectification approved', sig: 'sig_data', signerName: 'Tower Incharge' });
-    assert(p.status === 'Observation Pending EHS Clearance', 'Tower Incharge endorsement forwards to EHS for clearance');
+    // 3b. EHS rejection returns permit to Site Supervisor without cancelling the permit
+    app.resolveObservation(p, false, { comment: 'Photo blurry — re-capture clearer closeup', sig: 'sig_data', signerName: 'EHS Officer' });
+    assert(p.status === 'Active – Observation Open', 'EHS observation rejection returns to Active – Observation Open (does NOT cancel permit)');
+    assert(!p.isCancelled, 'EHS observation rejection never marks permit cancelled');
 
-    // 5. EHS clears observation
+    // 3c. Re-rectify and re-verify by Site Engineer
+    app.respondToObservation(p, { comment: 'Clear closeup uploaded and re-tested', photo: 'photo_data_2', sig: 'sig_data', signerName: 'Supervisor' });
+    app.acknowledgeObservationEng(p, { comment: 'Closeup anchorage re-verified', sig: 'sig_data', signerName: 'Site Eng' });
+    assert(p.status === 'Observation Pending EHS Clearance', 'Re-verified rectification advances directly to EHS Clearance');
+
+    // 4. EHS clears observation
     app.resolveObservation(p, true, { comment: 'Cleared after physical inspection', sig: 'sig_data', signerName: 'EHS Officer' });
     assert(p.status === 'Active', 'EHS clearance returns permit status back to Active');
     assert(p.observation.status === 'Resolved', 'Observation status marked Resolved');
@@ -492,28 +499,29 @@ runSuite('Permit Closure & Surrender Lifecycle', () => {
 // SUITE 8: PDF Download Access Control & Timing
 // ------------------------------------------------------------------
 runSuite('PDF Download Access Control & Timing', () => {
-    // Pre-approval stage permit
-    const pDraft = { id: 'HW-DRAFT', status: 'Pending Parallel Approval' };
-    const isActOrTermDraft = ['Active', 'Active – Observation Open', 'Completed (Surrendered)', 'Cancelled', 'Returned for Correction', 'Expired'].includes(pDraft.status);
-    assert(!isActOrTermDraft, 'PDF Download is strictly unavailable during pre-approval chain');
-
-    // Active stage permit
-    const pActive = { id: 'HW-ACTIVE', status: 'Active' };
-    const isActOrTermActive = ['Active', 'Active – Observation Open', 'Completed (Surrendered)', 'Cancelled', 'Returned for Correction', 'Expired'].includes(pActive.status);
-    assert(isActOrTermActive, 'PDF Download becomes available once permit is Active or in terminal state');
-
-    // Role restrictions: EHS Head/Supervisor, Super Admin, and site-scoped Site Admin
-    const pdfAuthorizedRoles = ['ehs-manager', 'ehs-officer', 'ehs-head', 'ehs-supervisor', 'super-admin', 'admin'];
-    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it'];
-
-    pdfAuthorizedRoles.forEach(r => {
-        assert(app.canDownloadStatutoryPdf ? app.canDownloadStatutoryPdf({ id: 'HW-ACTIVE', projectId: app.PROJECTS[0].id, project: app.PROJECTS[0].name }, r) || ['super-admin', 'admin', 'ehs-head', 'ehs-supervisor', 'ehs-manager', 'ehs-officer'].includes(r) : true, `Role ${r} is authorized to download official PDF`);
+    const prj = app.PROJECTS[0];
+    // Pre-activation permits (Pending, Returned, Scheduled, Expired Before Activation) are strictly denied
+    ['Draft', 'Pending Parallel Approval', 'Returned for Correction', 'Approved – Scheduled', 'Expired Before Activation'].forEach(st => {
+        const preP = { id: 'HW-' + st, status: st, projectId: prj.id, project: prj.name };
+        assert(!app.canDownloadStatutoryPdf(preP, 'ehs-manager'), `Pre-activation status "${st}" strictly blocks Statutory PDF download even for EHS`);
     });
 
-    nonEhsRoles.forEach(r => {
-        const isAllowed = ['ehs-manager', 'ehs-officer', 'ehs-head', 'ehs-supervisor', 'super-admin', 'admin'].includes(r);
-        assert(!isAllowed, `Role ${r} is LOCKED from downloading official PDF`);
+    // Post-activation permit allowed ONLY for EHS roles
+    const pActive = { id: 'HW-ACTIVE', status: 'Active', activatedAt: new Date(), projectId: prj.id, project: prj.name };
+    const ehsRoles = ['ehs-manager', 'ehs-officer', 'ehs-head', 'ehs-supervisor'];
+    const deniedRoles = ['super-admin', 'admin', 'site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it'];
+
+    ehsRoles.forEach(r => {
+        assert(app.canDownloadStatutoryPdf(pActive, r), `EHS Role ${r} is authorized to download post-activation PDF`);
     });
+
+    deniedRoles.forEach(r => {
+        assert(!app.canDownloadStatutoryPdf(pActive, r), `Non-EHS Role ${r} is LOCKED from downloading official PDF`);
+    });
+
+    // Single-use download lock
+    pActive.statutoryDownload = { isDownloaded: true, downloadedBy: 'EHS Head', downloadedAt: new Date() };
+    assert(!app.canDownloadStatutoryPdf(pActive, 'ehs-manager'), 'Second Statutory PDF download is strictly locked once statutoryDownload.isDownloaded is true');
 });
 
 // ------------------------------------------------------------------

@@ -56,6 +56,20 @@
         }
       },
       {
+        "source": "/api/transitionPermitStage",
+        "function": {
+          "functionId": "transitionPermitStage",
+          "region": "asia-south1"
+        }
+      },
+      {
+        "source": "/api/getServerTime",
+        "function": {
+          "functionId": "getServerTime",
+          "region": "asia-south1"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

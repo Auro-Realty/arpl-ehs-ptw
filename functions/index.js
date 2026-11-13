@@ -493,10 +493,36 @@ exports.downloadStatutoryPdf = onRequest(
           throw new Error("PERMISSION_DENIED: Access restricted to assigned project");
         }
 
-        // Verify Statutory PDF Role (EHS Supervisor/Head + legacy Officer/Manager, Super Admin, and site-scoped Site Admin)
-        const allowedRoles = ["ehs-supervisor", "ehs-head", "ehs-manager", "ehs-officer", "super-admin", "project-admin", "site-admin", "admin"];
-        if (!isSuperAdmin && !allowedRoles.includes(callerRole)) {
-          throw new Error("PERMISSION_DENIED: Statutory PDF download is restricted to EHS personnel, Super Admin, and site-scoped Site Admin");
+        // Verify Statutory PDF Role (STRICT EHS-ONLY: ehs-supervisor, ehs-head, ehs-officer, ehs-manager)
+        const callerRole = String(decodedToken.role || "").trim().toLowerCase();
+        const callerNormRole = normalizeRoleKey(callerRole);
+        const allowedEhsRoles = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"];
+        if (!allowedEhsRoles.includes(callerRole) && !allowedEhsRoles.includes(callerNormRole)) {
+          throw new Error("PERMISSION_DENIED: Statutory PDF download is strictly restricted to EHS personnel.");
+        }
+
+        // Verify Post-Activation Gate (pre-activation & scheduled permits cannot generate PDF)
+        const postActivationStatuses = [
+          "Active",
+          "Active – Observation Open",
+          "Active - Observation Open",
+          "Observation Pending Site Engineer Acknowledgment",
+          "Observation Pending Section Head Review",
+          "Observation Pending Tower Incharge Review",
+          "Observation Pending Excavation Head Review",
+          "Observation Pending EHS Clearance",
+          "Extension Pending",
+          "Extended",
+          "Closed",
+          "Closed – Pending Surrender",
+          "Completed (Surrendered)",
+          "Auto-Closed",
+          "Expired"
+        ];
+        const isPostActivation = !["Approved – Scheduled", "Expired Before Activation"].includes(data.status) &&
+          (Boolean(data.activatedAt) || postActivationStatuses.includes(data.status));
+        if (!isPostActivation) {
+          throw new Error(`FAILED_PRECONDITION: Statutory PDF can only be downloaded after EHS activation (current status: ${data.status || "Unknown"}).`);
         }
 
         // Check Single-Use Download Gate
@@ -655,16 +681,26 @@ exports.compileStatutoryPdf = onCall(
 
     const p = permitSnap.data();
 
-    // Verify Role & Project Access (CHECK 02: IDOR Prevention)
+    // Verify Role, Post-Activation & Project Access (STRICT EHS-ONLY PDF Compilation)
     const callerRole = String(request.auth.token.role || "").trim().toLowerCase();
-    const isSuperAdmin = request.auth.token.superAdmin === true || callerRole === "super-admin";
-    const allowedPdfRoles = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager", "super-admin", "project-admin", "site-admin", "admin"];
-    if (!isSuperAdmin && !allowedPdfRoles.includes(callerRole)) {
-      throw new HttpsError("permission-denied", "Statutory PDF compilation is restricted to EHS personnel, Super Admin, and site-scoped Site Admin.");
+    const callerNormRole = normalizeRoleKey(callerRole);
+    const allowedPdfRoles = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"];
+    if (!allowedPdfRoles.includes(callerRole) && !allowedPdfRoles.includes(callerNormRole)) {
+      throw new HttpsError("permission-denied", "Statutory PDF compilation is strictly restricted to EHS personnel.");
+    }
+    const postActivationStatuses = [
+      "Active", "Active – Observation Open", "Active - Observation Open",
+      "Observation Pending Site Engineer Acknowledgment", "Observation Pending Section Head Review",
+      "Observation Pending Tower Incharge Review", "Observation Pending Excavation Head Review",
+      "Observation Pending EHS Clearance", "Extension Pending", "Extended",
+      "Closed", "Closed – Pending Surrender", "Completed (Surrendered)", "Auto-Closed", "Expired"
+    ];
+    if (["Approved – Scheduled", "Expired Before Activation"].includes(p.status) || (!p.activatedAt && !postActivationStatuses.includes(p.status))) {
+      throw new HttpsError("failed-precondition", "Statutory PDF can only be compiled after permit activation.");
     }
     const callerProjectId = normalizeProjectId(request.auth.token.projectId);
     const permitProjectId = normalizeProjectId(p.projectId);
-    if (!isSuperAdmin && callerProjectId !== permitProjectId) {
+    if (callerProjectId && callerProjectId !== permitProjectId) {
       throw new HttpsError("permission-denied", "Access restricted to your assigned project site.");
     }
 
@@ -2612,31 +2648,104 @@ exports.switchActiveRole = onCall({ region: REGION }, async (request) => {
 // ============================================================================
 // 7. ATOMIC PERMIT STATE TRANSITION & GEOFENCE ENFORCEMENT
 // ============================================================================
+exports.getServerTime = onCall({ region: REGION }, async () => {
+  const nowMs = Date.now();
+  return {
+    serverTimeMs: nowMs,
+    iso: new Date(nowMs).toISOString(),
+    timeZone: "Asia/Kolkata"
+  };
+});
+
+function toEpochMsServer(val) {
+  if (val == null) return null;
+  if (typeof val === "number") return Number.isFinite(val) ? val : null;
+  if (typeof val.toMillis === "function") return val.toMillis();
+  if (typeof val.toDate === "function") return val.toDate().getTime();
+  if (val instanceof Date) return Number.isFinite(val.getTime()) ? val.getTime() : null;
+  if (typeof val === "object" && typeof val.seconds === "number") {
+    return val.seconds * 1000 + Math.floor((val.nanoseconds || 0) / 1e6);
+  }
+  const d = new Date(val);
+  return Number.isFinite(d.getTime()) ? d.getTime() : null;
+}
+
+function formatIstWindowServer(ms) {
+  if (!ms) return "N/A";
+  return new Date(ms).toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+    timeZone: "Asia/Kolkata"
+  });
+}
+
 exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required");
 
   // Rate limit: max 30 permit state transitions per minute per user
   await enforceRateLimit(request.auth.uid, "transitionPermitStage", 30, 60);
 
-  const { permitId, targetStatus, action, userLat, userLng, signatureData, comments } = request.data || {};
+  const {
+    permitId,
+    targetStatus,
+    action,
+    userLat,
+    userLng,
+    signatureData,
+    comments,
+    validFromMs: reqValidFromMs,
+    validTillMs: reqValidTillMs,
+    extensionMinutes,
+    observationId
+  } = request.data || {};
   if (!permitId || !validatePermitId(permitId) || !targetStatus) {
     throw new HttpsError("invalid-argument", "Valid permitId and targetStatus are required.");
   }
 
   const permitRef = db.collection("permits").doc(permitId);
+  const userRef = db.collection("users").doc(request.auth.uid);
 
   return await db.runTransaction(async (transaction) => {
-    const permitSnap = await transaction.get(permitRef);
+    const [permitSnap, userSnap] = await Promise.all([
+      transaction.get(permitRef),
+      transaction.get(userRef)
+    ]);
     if (!permitSnap.exists) throw new HttpsError("not-found", "Permit not found");
 
     const p = permitSnap.data();
-    const userRole = request.auth.token.role;
-    const userProj = request.auth.token.projectId;
-    const isSuperAdmin = request.auth.token.superAdmin === true;
+    const userDoc = userSnap.exists ? userSnap.data() : {};
+    const userRole = String(userDoc.role || request.auth.token.role || "").trim().toLowerCase();
+    const normRole = normalizeRoleKey(userRole);
+    const userProj = normalizeProjectId(userDoc.projectId || request.auth.token.projectId);
+    const permitProj = normalizeProjectId(p.projectId);
+    const isSuperAdmin = request.auth.token.superAdmin === true || normRole === "super-admin";
+    const isEhsCaller = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"].includes(userRole) ||
+      ["ehs-supervisor", "ehs-head"].includes(normRole);
 
     // Strict multi-tenant isolation check (CHECK 02)
-    if (!isSuperAdmin && userProj !== p.projectId) {
+    if (!isSuperAdmin && userProj !== permitProj) {
       throw new HttpsError("permission-denied", "User not assigned to permit's project site.");
+    }
+
+    // Tower / Location scope enforcement for non-EHS, non-campus-wide operational roles
+    const permitTower = String(p.tower || p.locationName || p.location || "").trim();
+    const isCampusWidePermit = !permitTower || CAMPUS_WIDE_TOWER_ALIASES.some((a) => a.toLowerCase() === permitTower.toLowerCase());
+    if (!isSuperAdmin && !isEhsCaller && !userDoc.campusWide && !isCampusWidePermit) {
+      const assignedLocs = [];
+      if (userDoc.locationName) assignedLocs.push(String(userDoc.locationName).trim());
+      if (Array.isArray(userDoc.locationAssignments)) {
+        userDoc.locationAssignments.forEach((loc) => {
+          if (loc && loc.projectId && normalizeProjectId(loc.projectId) !== permitProj) return;
+          if (loc && loc.locationName) assignedLocs.push(String(loc.locationName).trim());
+        });
+      }
+      if (assignedLocs.length > 0) {
+        const hasCampusGrant = assignedLocs.some((l) => CAMPUS_WIDE_TOWER_ALIASES.some((a) => a.toLowerCase() === l.toLowerCase()));
+        if (!hasCampusGrant && !assignedLocs.some((l) => l.toLowerCase() === permitTower.toLowerCase())) {
+          throw new HttpsError("permission-denied", `User location scope (${assignedLocs.join(", ")}) does not cover permit location '${permitTower}'.`);
+        }
+      }
     }
 
     // Geolocation Verification
@@ -2661,64 +2770,213 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
 
     const cleanAction = sanitizeString(action || "STAGE_APPROVED", 64);
     const cleanComments = sanitizeString(comments || "", 500);
-    const cleanTargetStatus = sanitizeString(targetStatus, 100);
+    const requestedTargetStatus = sanitizeString(targetStatus, 100);
+    const currentStatus = String(p.status || "Draft");
+    const ptype = String(p.ptype || "").toLowerCase();
+    const isBatchingElec = ptype === "electrical" && (p.electricalSiteType === "batching_plant" || p.facilityScope === "batching_plant");
 
-    // State machine & role authorization validation (README Section 4.2 & 6.1)
-    // Super Admins bypass stage role restrictions for enterprise oversight
+    const TERMINAL_STATUSES = [
+      "Completed (Surrendered)",
+      "Auto-Closed",
+      "Expired",
+      "Expired Before Activation",
+      "Cancelled",
+      "Rejected"
+    ];
+
+    // Block post-expiry or terminal mutation
+    if (TERMINAL_STATUSES.includes(currentStatus) && !isSuperAdmin) {
+      throw new HttpsError(
+        "failed-precondition",
+        `Permit is in terminal state '${currentStatus}' and cannot transition to '${requestedTargetStatus}'.`
+      );
+    }
+
+    // Block extension requests / approvals after expiry or closure or open observation
+    const isExtensionTransition = cleanAction.includes("EXT") ||
+      requestedTargetStatus === "Extension Pending" ||
+      requestedTargetStatus === "Extended";
+    if (isExtensionTransition) {
+      const validExtPermitStates = ["Active", "Extended", "Extension Pending"];
+      if (!validExtPermitStates.includes(currentStatus)) {
+        throw new HttpsError("failed-precondition", `Extensions are blocked while permit status is '${currentStatus}'.`);
+      }
+      const openObs = (Array.isArray(p.observations) && p.observations.some((o) => o && o.status !== "Resolved")) ||
+        (p.observation && p.observation.status && p.observation.status !== "Resolved");
+      if (openObs) {
+        throw new HttpsError("failed-precondition", "Extensions are strictly blocked while a safety observation remains unresolved.");
+      }
+    }
+
+    // Role authorization per target status
     const ALLOWED_STAGE_ROLES = {
-      "Pending Site Engineer Acknowledgment": ["site-supervisor", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "electrician", "site-engineer"],
-      "Pending Site Engineer Re-Acknowledgment": ["site-supervisor", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "electrician", "site-engineer"],
-      "Pending Blasting In-charge Acknowledgment": ["blasting-incharge", "blasting-in-charge"],
-      "Pending Blasting In-charge Re-Acknowledgment": ["blasting-incharge", "blasting-in-charge"],
+      "Submitted": ["site-supervisor", "blasting-in-charge", "lifting-supervisor", "electrician", "night-supervisor"],
+      "Pending Site Engineer Acknowledgment": ["site-supervisor", "blasting-in-charge", "lifting-supervisor", "electrician", "site-engineer"],
+      "Pending Site Engineer Re-Acknowledgment": ["site-supervisor", "blasting-in-charge", "lifting-supervisor", "electrician", "site-engineer"],
+      "Pending Blasting In-charge Acknowledgment": ["blasting-in-charge"],
+      "Pending Blasting In-charge Re-Acknowledgment": ["blasting-in-charge"],
       "Pending P&M Acknowledgment": ["electrician", "pm", "mep"],
       "Pending P&M Re-Acknowledgment": ["electrician", "pm", "mep"],
+      "Pending P&M Approval": ["site-engineer", "pm"],
       "Pending Quality Engineer Approval": ["pm", "quality-engineer"],
-      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it", "it-in-charge"],
+      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it-in-charge"],
       "Pending MEP Clearance": ["site-engineer", "mep"],
       "Pending MEP or P&M Approval": ["site-engineer", "mep", "pm", "electrician"],
-      "Pending Section Head": ["site-engineer", "mep", "pm", "it", "it-in-charge", "quality-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "section-head"],
-      "Pending Project Manager Acknowledgment": ["hw-section-head", "tower-in-charge", "project-manager", "pm"],
-      "Pending EHS Approval": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "section-head", "project-manager", "quality-engineer", "pm", "mep", "it", "it-in-charge", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Night Shift Approved – Awaiting Linked Permit": ["hw-section-head", "tower-in-charge", "section-head"],
-      "Approved – Pending Night Handover": ["hw-section-head", "tower-in-charge", "section-head", "site-supervisor"],
+      "Pending Section Head": ["site-engineer", "mep", "pm", "it-in-charge", "quality-engineer", "tower-in-charge", "excavation-head"],
+      "Pending Project Manager Acknowledgment": ["tower-in-charge", "project-manager", "pm"],
+      "Pending EHS Approval": ["site-engineer", "tower-in-charge", "excavation-head", "project-manager", "quality-engineer", "pm", "mep", "it-in-charge", "ehs-head", "ehs-supervisor"],
+      "Night Shift Approved – Awaiting Linked Permit": ["tower-in-charge"],
+      "Approved – Pending Night Handover": ["tower-in-charge", "site-supervisor"],
       "Pending P&M Night Acknowledgment": ["night-supervisor", "pm"],
-      "Active": ["ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Active – Observation Open": ["ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Observation Pending Site Engineer Acknowledgment": ["site-supervisor", "site-engineer"],
-      "Observation Pending Section Head Review": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head"],
-      "Observation Pending EHS Clearance": ["hw-section-head", "tower-in-charge", "excavation-head", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Pending Site Engineer": ["site-supervisor", "lifting-supervisor", "lift-supervisor", "blasting-incharge", "blasting-in-charge", "site-engineer"],
-      "Returned for Correction": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "mep", "pm", "it", "it-in-charge", "quality-engineer", "project-manager", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Returned to Night Supervisor": ["ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head", "night-supervisor"],
-      "Completed (Surrendered)": ["site-supervisor", "electrician", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Closed – Pending Surrender": ["site-supervisor", "electrician", "blasting-incharge", "blasting-in-charge", "lifting-supervisor", "lift-supervisor", "night-supervisor", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head"],
-      "Cancelled": ["site-engineer", "hw-section-head", "tower-in-charge", "excavation-head", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head", "project-admin", "super-admin"],
-      "Expired": ["system", "site-supervisor", "ehs-manager", "ehs-officer", "ehs-supervisor", "ehs-head", "super-admin"]
+      "Approved – Scheduled": ["ehs-head", "ehs-supervisor"],
+      "Active": ["ehs-head", "ehs-supervisor"],
+      "Active – Observation Open": ["ehs-head", "ehs-supervisor"],
+      "Observation Pending Site Engineer Acknowledgment": ["site-supervisor", "electrician", "blasting-in-charge", "lifting-supervisor", "site-engineer"],
+      "Observation Pending Section Head Review": ["site-engineer", "tower-in-charge", "excavation-head"],
+      "Observation Pending EHS Clearance": ["site-engineer", "tower-in-charge", "excavation-head", "ehs-head", "ehs-supervisor"],
+      "Pending Site Engineer": ["site-supervisor", "lifting-supervisor", "blasting-in-charge", "site-engineer"],
+      "Extension Pending": ["site-supervisor", "lifting-supervisor", "blasting-in-charge", "electrician", "site-engineer", "pm", "quality-engineer", "tower-in-charge", "excavation-head", "ehs-head", "ehs-supervisor"],
+      "Extended": ["ehs-head", "ehs-supervisor"],
+      "Returned for Correction": ["site-engineer", "tower-in-charge", "excavation-head", "mep", "pm", "it-in-charge", "quality-engineer", "project-manager", "ehs-head", "ehs-supervisor"],
+      "Returned to Night Supervisor": ["ehs-head", "ehs-supervisor", "night-supervisor"],
+      "Closed": ["site-supervisor", "electrician", "blasting-in-charge", "lifting-supervisor", "night-supervisor", "ehs-head", "ehs-supervisor"],
+      "Completed (Surrendered)": ["site-supervisor", "electrician", "blasting-in-charge", "lifting-supervisor", "night-supervisor", "ehs-head", "ehs-supervisor"],
+      "Closed – Pending Surrender": ["site-supervisor", "electrician", "blasting-in-charge", "lifting-supervisor", "night-supervisor", "ehs-head", "ehs-supervisor"],
+      "Cancelled": ["site-engineer", "tower-in-charge", "excavation-head", "ehs-head", "ehs-supervisor", "project-admin", "super-admin"],
+      "Rejected": ["site-engineer", "tower-in-charge", "excavation-head", "mep", "pm", "it-in-charge", "quality-engineer", "project-manager", "ehs-head", "ehs-supervisor"],
+      "Expired Before Activation": ["system", "ehs-head", "ehs-supervisor", "super-admin"],
+      "Auto-Closed": ["system", "ehs-head", "ehs-supervisor", "super-admin"],
+      "Expired": ["system", "site-supervisor", "ehs-head", "ehs-supervisor", "super-admin"]
     };
 
-    if (!isSuperAdmin && ALLOWED_STAGE_ROLES[cleanTargetStatus]) {
-      const allowedRoles = ALLOWED_STAGE_ROLES[cleanTargetStatus];
-      const normRole = normalizeRoleKey(userRole);
-      const isAuthorized = allowedRoles.includes(userRole) ||
-                           allowedRoles.includes(normRole) ||
-                           allowedRoles.includes("super-admin") ||
-                           (normRole === "ehs-head" && (allowedRoles.includes("ehs-manager") || allowedRoles.includes("ehs-officer") || allowedRoles.includes("ehs-head"))) ||
-                           (normRole === "tower-in-charge" && (allowedRoles.includes("hw-section-head") || allowedRoles.includes("tower-in-charge") || allowedRoles.includes("section-head")));
+    if (!isSuperAdmin && ALLOWED_STAGE_ROLES[requestedTargetStatus]) {
+      const allowedRoles = ALLOWED_STAGE_ROLES[requestedTargetStatus];
+      const isAuthorized = allowedRoles.includes(userRole) || allowedRoles.includes(normRole);
       if (!isAuthorized) {
         throw new HttpsError(
           "permission-denied",
-          `Role '${userRole}' is not authorized to transition permit to '${cleanTargetStatus}'.`
+          `Role '${userRole}' is not authorized to transition permit to '${requestedTargetStatus}'.`
         );
       }
     }
 
-    // Mutate State
-    transaction.update(permitRef, {
-      status: cleanTargetStatus,
+    // Prior-state & Workflow Gate Validation
+    const approvals = (p.approvals && typeof p.approvals === "object") ? JSON.parse(JSON.stringify(p.approvals)) : {};
+    if (requestedTargetStatus === "Pending Section Head" && !isSuperAdmin) {
+      if (ptype === "excavation" && currentStatus === "Pending Parallel Approval") {
+        if (normRole === "mep" && approvals.mep) approvals.mep.status = "approved";
+        if (normRole === "pm" && approvals.pm) approvals.pm.status = "approved";
+        if (normRole === "it-in-charge" && approvals.it) approvals.it.status = "approved";
+        const mepOk = approvals.mep && approvals.mep.status === "approved";
+        const pmOk = approvals.pm && approvals.pm.status === "approved";
+        const itOk = approvals.it && approvals.it.status === "approved";
+        if (!(mepOk && pmOk && itOk)) {
+          throw new HttpsError(
+            "failed-precondition",
+            "PTW-001 Excavation requires ALL 3 parallel clearances (MEP, P&M, and IT) before advancing to Excavation Head."
+          );
+        }
+      } else if (ptype === "electrical" && !isBatchingElec && currentStatus === "Pending MEP or P&M Approval") {
+        if (!["mep", "pm"].includes(normRole)) {
+          throw new HttpsError("permission-denied", "PTW-006 Site Electrical parallel gate requires MEP or P&M role.");
+        }
+      } else if (["Pending Site Engineer Acknowledgment", "Pending Parallel Approval", "Pending MEP Clearance", "Pending MEP or P&M Approval", "Pending Quality Engineer Approval", "Pending Section Head"].indexOf(currentStatus) === -1) {
+        throw new HttpsError("failed-precondition", `Cannot advance to Section Head from status '${currentStatus}'.`);
+      }
+    }
+
+    // Concurrent EHS Race Protection (first-wins atomic check)
+    const nowMs = Date.now();
+    const isInitialEhsDecision = currentStatus === "Pending EHS Approval" &&
+      ["Active", "Approved – Scheduled", "Expired Before Activation", "Returned for Correction", "Cancelled", "Rejected"].includes(requestedTargetStatus);
+    if (isInitialEhsDecision) {
+      if (!isEhsCaller && !isSuperAdmin) {
+        throw new HttpsError("permission-denied", "Only EHS authority may finalize Pending EHS Approval.");
+      }
+      const mgrDone = approvals.ehsManager && approvals.ehsManager.status && approvals.ehsManager.status !== "pending";
+      const offDone = approvals.ehsOfficer && approvals.ehsOfficer.status && approvals.ehsOfficer.status !== "pending";
+      if (mgrDone || offDone) {
+        throw new HttpsError("aborted", "CONFLICT: Another EHS authority already recorded a decision for this permit.");
+      }
+      if (requestedTargetStatus === "Cancelled" || requestedTargetStatus === "Rejected" || requestedTargetStatus === "Returned for Correction") {
+        if (!cleanComments) {
+          throw new HttpsError("invalid-argument", "Mandatory comment is required for rejection or cancellation.");
+        }
+      }
+    }
+
+    // Direct EHS Stop-Work Cancel on Active / Approved – Scheduled / Extended / Observation permits
+    if (requestedTargetStatus === "Cancelled" && ["Active", "Approved – Scheduled", "Extended", "Extension Pending", "Active – Observation Open", "Observation Pending Site Engineer Acknowledgment", "Observation Pending Section Head Review", "Observation Pending EHS Clearance"].includes(currentStatus)) {
+      if (!isEhsCaller && !isSuperAdmin) {
+        throw new HttpsError("permission-denied", "Only EHS personnel can execute Stop-Work Cancellation on active permits.");
+      }
+      if (!cleanComments) {
+        throw new HttpsError("invalid-argument", "Mandatory stop-work reason is required to cancel an active permit.");
+      }
+    }
+
+    // Compute Effective Target Status (Scheduled vs Active vs Expired Before Activation)
+    let effectiveTargetStatus = requestedTargetStatus;
+    const validFromMs = toEpochMsServer(reqValidFromMs) || p.validFromMs || toEpochMsServer(p.startAt) || toEpochMsServer(p.validFrom);
+    const validTillMs = toEpochMsServer(reqValidTillMs) || p.validTillMs || toEpochMsServer(p.validTill);
+    const updatePayload = {
       lastAction: cleanAction,
       lastActionAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActionBy: request.auth.uid
-    });
+    };
+    if (validFromMs) updatePayload.validFromMs = validFromMs;
+    if (validTillMs) updatePayload.validTillMs = validTillMs;
+    if (!p.originalValidTill && (p.validTill || validTillMs)) {
+      updatePayload.originalValidTill = p.validTill || new Date(validTillMs);
+      updatePayload.originalValidTillMs = p.originalValidTillMs || validTillMs;
+    }
+
+    if (effectiveTargetStatus === "Active" && currentStatus === "Pending EHS Approval") {
+      if (validTillMs && nowMs >= validTillMs) {
+        effectiveTargetStatus = "Expired Before Activation";
+        updatePayload.expiredBeforeActivationAt = admin.firestore.FieldValue.serverTimestamp();
+      } else if (validFromMs && nowMs < validFromMs) {
+        effectiveTargetStatus = "Approved – Scheduled";
+        updatePayload.scheduledActivationAt = admin.firestore.FieldValue.serverTimestamp();
+      } else {
+        updatePayload.activatedAt = admin.firestore.FieldValue.serverTimestamp();
+      }
+    }
+
+    if (currentStatus === "Observation Pending EHS Clearance" && effectiveTargetStatus === "Active") {
+      if (!isEhsCaller && !isSuperAdmin) {
+        throw new HttpsError("permission-denied", "Only EHS authority can clear a safety observation.");
+      }
+    }
+
+    if (effectiveTargetStatus === "Extended" && extensionMinutes && validTillMs) {
+      const nextValidTillMs = validTillMs + Number(extensionMinutes) * 60 * 1000;
+      updatePayload.validTillMs = nextValidTillMs;
+      updatePayload.validTill = new Date(nextValidTillMs);
+      updatePayload.warned30 = false;
+    }
+
+    if (effectiveTargetStatus === "Cancelled") {
+      updatePayload.isCancelled = true;
+      updatePayload.cancelledAt = admin.firestore.FieldValue.serverTimestamp();
+      updatePayload.cancelReason = cleanComments || "Cancelled by authority";
+    }
+
+    if (isInitialEhsDecision) {
+      const decKey = (userRole === "ehs-officer") ? "ehsOfficer" : "ehsManager";
+      approvals[decKey] = {
+        status: ["Returned for Correction", "Cancelled", "Rejected"].includes(effectiveTargetStatus) ? "rejected" : "approved",
+        by: sanitizeString(request.auth.token.name || request.auth.token.email || normRole, 100),
+        at: nowMs,
+        comment: cleanComments
+      };
+      updatePayload.approvals = approvals;
+    }
+
+    updatePayload.status = effectiveTargetStatus;
+    updatePayload.stageEnteredAt = admin.firestore.FieldValue.serverTimestamp();
+
+    transaction.update(permitRef, updatePayload);
 
     // Write Tamper-Proof Activity Log Entry
     const logRef = permitRef.collection("activity_log").doc();
@@ -2727,15 +2985,24 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       permitId: permitId,
       action: cleanAction,
       actorRole: userRole || "unknown",
+      actorNormRole: normRole || "unknown",
       actorUid: request.auth.uid,
       actorName: sanitizeString(request.auth.token.name || request.auth.token.email || "Signatory", 100),
-      targetStatus: cleanTargetStatus,
+      priorStatus: currentStatus,
+      targetStatus: effectiveTargetStatus,
+      observationId: observationId ? sanitizeString(observationId, 64) : null,
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
       comments: cleanComments,
       gps: (userLat && userLng) ? { lat: Number(userLat), lng: Number(userLng) } : null
     });
 
-    return { success: true, permitId, newStatus: targetStatus };
+    return {
+      success: true,
+      permitId,
+      priorStatus: currentStatus,
+      newStatus: effectiveTargetStatus,
+      serverTimeMs: nowMs
+    };
   });
 });
 
@@ -2746,47 +3013,128 @@ exports.escalationSweep = onSchedule(
   { region: REGION, schedule: "every 5 minutes", timeoutSeconds: 120 },
   async () => {
     const now = admin.firestore.Timestamp.now();
-    let activePermits;
+    const nowMs = now.toMillis();
+    const batch = db.batch();
+    let autoClosedCount = 0;
+    let promotedCount = 0;
+    let expiredBeforeActivationCount = 0;
+    let warned30Count = 0;
+
+    // 1. Auto-Close active & extended permits (including Active – Observation Open — NEVER auto-cancel observations on time expiry)
+    const activeStatusesToSweep = [
+      "Active",
+      "active",
+      "Extended",
+      "Active – Observation Open",
+      "Active - Observation Open",
+      "Observation Pending Site Engineer Acknowledgment",
+      "Observation Pending Section Head Review",
+      "Observation Pending EHS Clearance",
+      "Extension Pending"
+    ];
+    let activeSnap;
     try {
-      activePermits = await db
+      activeSnap = await db
         .collection("permits")
-        .where("status", "==", "active")
-        .where("validTill", "<=", now)
-        .limit(100)
+        .where("status", "in", activeStatusesToSweep)
+        .limit(200)
         .get();
-    } catch (idxErr) {
-      console.warn("Index fallback in escalationSweep (falling back to status-only query with in-memory filter):", idxErr);
-      const snap = await db.collection("permits").where("status", "==", "active").limit(100).get();
-      const filteredDocs = snap.docs.filter((d) => {
-        const vt = d.data().validTill;
-        if (!vt) return false;
-        const vtMillis = vt.toMillis ? vt.toMillis() : new Date(vt).getTime();
-        return vtMillis <= now.toMillis();
-      });
-      activePermits = { forEach: (fn) => filteredDocs.forEach(fn), size: filteredDocs.length };
+    } catch (e) {
+      console.warn("Active status sweep fallback:", e);
+      activeSnap = { docs: [] };
     }
 
-    const batch = db.batch();
-    activePermits.forEach((doc) => {
-      batch.update(doc.ref, {
-        status: "expired",
-        expiredAt: now
-      });
+    (activeSnap.docs || []).forEach((doc) => {
+      const d = doc.data() || {};
+      const validTillMs = d.validTillMs || toEpochMsServer(d.validTill);
+      const validFromMs = d.validFromMs || toEpochMsServer(d.startAt) || toEpochMsServer(d.validFrom);
+      if (!validTillMs) return;
 
-      const logRef = doc.ref.collection("activity_log").doc();
-      batch.set(logRef, {
-        id: logRef.id,
-        permitId: doc.id,
-        action: "AUTO_EXPIRED_BY_SYSTEM",
-        actorRole: "system",
-        actorUid: "system-cron",
-        actorName: "SLA Escalation Engine",
-        timestamp: now,
-        details: "Validity window elapsed; permit automatically expired."
-      });
+      const remMs = validTillMs - nowMs;
+
+      // Rich T-30 min Expiry Notification (to Site Engineer & Site Supervisor)
+      if (["Active", "Extended", "Active – Observation Open", "Active - Observation Open"].includes(d.status) &&
+          remMs > 0 && remMs <= 30 * 60 * 1000 && !d.warned30) {
+        warned30Count++;
+        batch.update(doc.ref, { warned30: true, warned30At: now });
+        const fromStr = formatIstWindowServer(validFromMs);
+        const tillStr = formatIstWindowServer(validTillMs);
+        const msg = `EXPIRY ALERT (T-30 min): Permit ${doc.id} (${String(d.ptype || "PTW").toUpperCase()}) at ${d.project || d.projectId || "Site"} / ${d.tower || d.location || "Worksite"} (${fromStr} – ${tillStr} IST) for Supervisor ${d.createdBy || "Site Supervisor"} expires within 30 minutes. Request an extension or close the permit.`;
+        const notifRef = db.collection("notifications").doc();
+        batch.set(notifRef, {
+          id: notifRef.id,
+          permitId: doc.id,
+          projectId: d.projectId || "",
+          targetRoles: ["site-engineer", "site-supervisor"],
+          severity: "warn",
+          type: "T_MINUS_30_EXPIRY_ALERT",
+          message: msg,
+          createdAt: now,
+          read: false
+        });
+      }
+
+      // Overdue Active / Extended / Observation-Open -> Auto-Closed
+      if (nowMs >= validTillMs) {
+        autoClosedCount++;
+        batch.update(doc.ref, {
+          status: "Auto-Closed",
+          autoClosedAt: now,
+          closedAt: now,
+          expiredAt: now
+        });
+        const logRef = doc.ref.collection("activity_log").doc();
+        batch.set(logRef, {
+          id: logRef.id,
+          permitId: doc.id,
+          action: "AUTO_CLOSED_BY_SYSTEM",
+          actorRole: "system",
+          actorUid: "system-cron",
+          actorName: "SLA Escalation Engine",
+          timestamp: now,
+          details: "Approved validity end time reached without manual closure; permit transitioned to Auto-Closed."
+        });
+      }
     });
 
-    // Sweep pending approval permits past stage SLA thresholds (README Section 9)
+    // 2. Promote Approved – Scheduled permits once validFromMs arrives (or Expire Before Activation if past validTillMs)
+    try {
+      const scheduledSnap = await db.collection("permits").where("status", "==", "Approved – Scheduled").limit(100).get();
+      scheduledSnap.forEach((doc) => {
+        const d = doc.data() || {};
+        const validFromMs = d.validFromMs || toEpochMsServer(d.startAt) || toEpochMsServer(d.validFrom);
+        const validTillMs = d.validTillMs || toEpochMsServer(d.validTill);
+        if (validTillMs && nowMs >= validTillMs) {
+          expiredBeforeActivationCount++;
+          batch.update(doc.ref, {
+            status: "Expired Before Activation",
+            expiredBeforeActivationAt: now
+          });
+        } else if (validFromMs && nowMs >= validFromMs) {
+          promotedCount++;
+          batch.update(doc.ref, {
+            status: "Active",
+            activatedAt: d.activatedAt || now,
+            scheduledPromotedAt: now
+          });
+          const logRef = doc.ref.collection("activity_log").doc();
+          batch.set(logRef, {
+            id: logRef.id,
+            permitId: doc.id,
+            action: "PROMOTED_SCHEDULED_TO_ACTIVE",
+            actorRole: "system",
+            actorUid: "system-cron",
+            actorName: "SLA Escalation Engine",
+            timestamp: now,
+            details: "Scheduled start time reached; permit promoted from Approved – Scheduled to Active."
+          });
+        }
+      });
+    } catch (schedErr) {
+      console.warn("Scheduled promotion sweep note:", schedErr);
+    }
+
+    // 3. Sweep pending pre-activation permits whose validTillMs elapsed -> Expired Before Activation & track stage SLA breaches
     try {
       const pendingStages = [
         { status: "Pending Site Engineer Acknowledgment", slaMins: 30 },
@@ -2794,15 +3142,41 @@ exports.escalationSweep = onSchedule(
         { status: "Pending Section Head", slaMins: 45 },
         { status: "Pending EHS Approval", slaMins: 30 },
         { status: "Pending P&M Acknowledgment", slaMins: 30 },
-        { status: "Pending Quality Engineer Approval", slaMins: 30 }
+        { status: "Pending Quality Engineer Approval", slaMins: 30 },
+        { status: "Pending MEP Clearance", slaMins: 30 },
+        { status: "Pending MEP or P&M Approval", slaMins: 30 },
+        { status: "Pending P&M Approval", slaMins: 30 },
+        { status: "Pending Blasting In-charge Acknowledgment", slaMins: 30 },
+        { status: "Pending Project Manager Acknowledgment", slaMins: 45 },
+        { status: "Returned for Correction", slaMins: 45 }
       ];
       for (const st of pendingStages) {
         const pSnap = await db.collection("permits").where("status", "==", st.status).limit(50).get();
         pSnap.forEach((doc) => {
-          const d = doc.data();
+          const d = doc.data() || {};
+          const validTillMs = d.validTillMs || toEpochMsServer(d.validTill);
+          if (validTillMs && nowMs >= validTillMs) {
+            expiredBeforeActivationCount++;
+            batch.update(doc.ref, {
+              status: "Expired Before Activation",
+              expiredBeforeActivationAt: now
+            });
+            const logRef = doc.ref.collection("activity_log").doc();
+            batch.set(logRef, {
+              id: logRef.id,
+              permitId: doc.id,
+              action: "EXPIRED_BEFORE_ACTIVATION",
+              actorRole: "system",
+              actorUid: "system-cron",
+              actorName: "SLA Escalation Engine",
+              timestamp: now,
+              details: `Validity window elapsed while permit remained pre-activation (${st.status}); transitioned to Expired Before Activation.`
+            });
+            return;
+          }
           if (d.stageEnteredAt) {
-            const enteredMs = d.stageEnteredAt.toMillis ? d.stageEnteredAt.toMillis() : new Date(d.stageEnteredAt).getTime();
-            const elapsedMins = (now.toMillis() - enteredMs) / (60 * 1000);
+            const enteredMs = toEpochMsServer(d.stageEnteredAt);
+            const elapsedMins = (nowMs - enteredMs) / (60 * 1000);
             const esc = d.escalation || { stage1: false, stage2: false };
             let updated = null;
             if (elapsedMins >= st.slaMins * 2 && !esc.stage2) {
@@ -2832,7 +3206,7 @@ exports.escalationSweep = onSchedule(
     }
 
     await batch.commit();
-    console.log(`Auto-expired ${activePermits.size} elapsed permits and swept pending SLA stages.`);
+    console.log(`escalationSweep: autoClosed=${autoClosedCount}, promoted=${promotedCount}, expiredBeforeActivation=${expiredBeforeActivationCount}, warned30=${warned30Count}`);
   }
 );
 

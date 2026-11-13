@@ -494,17 +494,11 @@ evalInVM(`respondToObservation(genPermit, { comment: 'Safety briefing repeated. 
 activePermit = evalInVM(`PERMITS.find(x => x.id === '${pGeneralId}')`);
 assert.strictEqual(activePermit.status, 'Observation Pending Site Engineer Acknowledgment', "Rectification routes to Site Engineer");
 
-// Site Engineer verifies on site
+// Site Engineer verifies on site -> routes directly to EHS Clearance
 evalInVM("currentUser = { key: 'site-engineer', name: 'Eng Eric' };");
 evalInVM(`acknowledgeObservationEng(genPermit, { comment: 'Anchor points verified on site', signerName: 'Eng Eric' });`);
 activePermit = evalInVM(`PERMITS.find(x => x.id === '${pGeneralId}')`);
-assert.strictEqual(activePermit.status, 'Observation Pending Section Head Review', "Rectification advances to Tower Incharge");
-
-// Tower Incharge reviews & endorses
-evalInVM("currentUser = { key: 'hw-section-head', name: 'Tower Incharge Tiwari' };");
-evalInVM(`reviewObservationSectionHead(genPermit, true, { comment: 'Tower facade compliance confirmed', signerName: 'Tower Incharge Tiwari' });`);
-activePermit = evalInVM(`PERMITS.find(x => x.id === '${pGeneralId}')`);
-assert.strictEqual(activePermit.status, 'Observation Pending EHS Clearance', "Endorsement routes to EHS for clearance");
+assert.strictEqual(activePermit.status, 'Observation Pending EHS Clearance', "Rectification advances directly to EHS for clearance");
 
 // EHS resolves observation
 evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Manager Smith' };");
@@ -512,7 +506,7 @@ evalInVM(`resolveObservation(genPermit, true, { comment: 'Field audit verified s
 activePermit = evalInVM(`PERMITS.find(x => x.id === '${pGeneralId}')`);
 assert.strictEqual(activePermit.status, 'Active', "Clearing observation restores status to Active");
 assert.strictEqual(activePermit.observation.status, 'Resolved', "Observation marked Resolved");
-console.log('  ✓ PASS: Complete 4-stage observation lifecycle executed cleanly for General Work');
+console.log('  ✓ PASS: Complete 3-stage observation lifecycle executed cleanly for General Work');
 
 // --- 11. Extension Workflow ---
 console.log('\n--- 11. Extension Workflow ---');
