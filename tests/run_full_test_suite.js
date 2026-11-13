@@ -104,7 +104,7 @@ const exportsFn = new Function(
         rejectPermitStage, resubmitReturnedPermit, activatePermit,
         acknowledgeSiteEngineer, rejectSiteEngineer, approvePermitStage,
         respondToObservation, acknowledgeObservationEng, reviewObservationSectionHead, resolveObservation,
-        raiseObservation, cancelActivePermit, canDownloadStatutoryPdf,
+        raiseObservation, cancelActivePermit, canDownloadStatutoryPdf, generatePermitPDF,
         requestExtension, approveExtensionStage, rejectExtensionStage,
         closeAndSurrenderPermit,
         getPermitSignatory, makeSimSignature,
@@ -521,11 +521,14 @@ runSuite('PDF Download Access Control & Timing', () => {
 
     // Single-use download lock enforced on generatePermitPDF while preserving viewDetail role eligibility
     const prevUser = app.currentUser;
-    pActive.statutoryDownload = { isDownloaded: true, downloadedBy: 'EHS Head', downloadedAt: new Date() };
-    app.currentUser = { key: 'ehs-manager', name: 'EHS Head', projectId: prj.id };
-    assert(app.canDownloadStatutoryPdf(pActive, 'ehs-manager'), 'canDownloadStatutoryPdf stays true for EHS UI badge state');
-    assert(app.generatePermitPDF(pActive) === false, 'Second Statutory PDF download is strictly locked once statutoryDownload.isDownloaded is true');
-    app.currentUser = prevUser;
+    try {
+        pActive.statutoryDownload = { isDownloaded: true, downloadedBy: 'EHS Head', downloadedAt: new Date() };
+        app.currentUser = { key: 'ehs-manager', name: 'EHS Head', projectId: prj.id };
+        assert(app.canDownloadStatutoryPdf(pActive, 'ehs-manager'), 'canDownloadStatutoryPdf stays true for EHS UI badge state');
+        assert(app.generatePermitPDF(pActive) === false, 'Second Statutory PDF download is strictly locked once statutoryDownload.isDownloaded is true');
+    } finally {
+        app.currentUser = prevUser;
+    }
 });
 
 // ------------------------------------------------------------------
