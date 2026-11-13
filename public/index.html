@@ -15777,9 +15777,10 @@
                         p.warned30 = true;
                         const fromTxt = fmtIstClock(validFromMs || p.submittedAt || p.createdAt) || (p.startTime || 'Start');
                         const tillTxt = fmtIstClock(validTillMs) || fmtDateTime(p.validTill);
+                        const locText = p.tower ? (p.tower + (p.location ? ' — ' + p.location : '')) : (p.location || 'Worksite');
                         notify(
                             ['site-supervisor', 'site-engineer'],
-                            'EXPIRY ALERT (T-30 min): ' + pLabel(p) + ' (' + String(ptypeOf(p) || 'PTW').toUpperCase() + ') at ' + (p.project || p.projectId || 'Site') + ' / ' + (p.tower || p.location || 'Worksite') + ' (' + fromTxt + ' – ' + tillTxt + ' IST) for Supervisor ' + (p.createdBy || 'Site Supervisor') + ' expires in 30 minutes. Request an extension or complete work and close & surrender the permit.',
+                            'EXPIRY ALERT (T-30 min): ' + pLabel(p) + ' (' + String(ptypeOf(p) || 'PTW').toUpperCase() + ') at ' + (p.project || p.projectId || 'Site') + ' / ' + locText + ' (' + fromTxt + ' – ' + tillTxt + ' IST) for Supervisor ' + (p.createdBy || 'Site Supervisor') + ' expires in 30 minutes. Request an extension or complete work and close & surrender the permit.',
                             'warn',
                             p.id
                         );

@@ -76,6 +76,10 @@ class MockJSPDF {
         this._font = 'helvetica';
     }
     addPage() { this.pages++; }
+    getNumberOfPages() { return this.pages; }
+    setPage() {}
+    save() {}
+    roundedRect(x, y, w, h) { this.rects.push({ x, y, w, h }); }
     text(txt, x, y, opt) { this.texts.push({ txt, x, y, opt }); }
     rect(x, y, w, h, style) { this.rects.push({ x, y, w, h, style }); }
     line(x1, y1, x2, y2) { this.lines.push({ x1, y1, x2, y2 }); }
@@ -299,7 +303,7 @@ runSuite('Escalation Engine (Stage 1, Stage 2, Expiry & Warnings)', () => {
 
     app.runEscalationTick();
     assert(pWarn.warned30 === true, '30-minute expiry warning flagged');
-    assert(app.NOTIFICATIONS.some(n => n.permitId === 'ESC-WARN-001' && n.message.includes('CLOSE REMINDER (T-30 min)')), '30-minute close reminder notification dispatched to supervisor & engineer');
+    assert(app.NOTIFICATIONS.some(n => n.permitId === 'ESC-WARN-001' && n.message.includes('EXPIRY ALERT (T-30 min)')), '30-minute close reminder notification dispatched to supervisor & engineer');
 
     // 4. Auto-expiry of Active Permit
     const pExp = {
@@ -608,7 +612,7 @@ runSuite('FRS Critical Remediation Verification (Fixes 1-6)', () => {
     const rulesSrc = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
     assert(fnSrc.includes('exports.getServerTime'), 'Fix 3: functions/index.js exports getServerTime callable');
     assert(fnSrc.includes('db.runTransaction'), 'Fix 1: transitionPermitStage runs inside db.runTransaction');
-    assert(fnSrc.includes("data.approvals.mep.status === \"approved\"") && fnSrc.includes("data.approvals.pm.status === \"approved\""), 'Fix 1: PTW-001 3-way parallel gate verified on server');
+    assert(fnSrc.includes('approvals.mep.status === "approved"') && fnSrc.includes('approvals.pm.status === "approved"') && fnSrc.includes('approvals.it.status === "approved"'), 'Fix 1: PTW-001 3-way parallel gate verified on server');
     assert(fnSrc.includes('Expired Before Activation') && fnSrc.includes('Approved – Scheduled'), 'Fix 5: Backend handles Scheduled & Expired Before Activation');
     assert(fnSrc.includes('Auto-Closed'), 'Fix 2: escalationSweep uses Auto-Closed instead of legacy Expired');
     assert(rulesSrc.includes('/_time_sync/{syncId}'), 'Fix 3: firestore.rules includes /_time_sync collection match');
