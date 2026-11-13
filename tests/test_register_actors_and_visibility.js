@@ -23,9 +23,9 @@ assert(src.includes('<p id="registerSub">Digital safety authorization &amp; perm
 assert(src.includes('<option value="electrical">Electrical Work (PTW-006)</option>'),
     "regTypeFilter must include Electrical Work (PTW-006)");
 
-// Check PTYPE_META for blasting has Tower Incharge as Section Head
-assert(src.includes("blasting: { key: 'blasting', code: 'PTW-007', name: 'Drilling and Blasting', short: 'Drilling & Blasting', prefix: 'PTW-007', form: 'PTW-007', sh: 'hw-section-head', shLabel: 'Tower Incharge' }"),
-    "PTYPE_META.blasting must have sh: 'hw-section-head' and shLabel: 'Tower Incharge'");
+// Check PTYPE_META for blasting skips Section Head (Blasting In-Charge -> Site Engineer -> EHS)
+assert(src.includes("blasting: { key: 'blasting', code: 'PTW-007', name: 'Drilling and Blasting', short: 'Drilling & Blasting', prefix: 'PTW-007', form: 'PTW-007', sh: null, shLabel: 'Site Engineer' }"),
+    "PTYPE_META.blasting must have sh: null and shLabel: 'Site Engineer'");
 
 console.log('  ✓ PASS: Static UI headings, filter options, and PTW-007 Section Head metadata verified');
 
@@ -206,8 +206,8 @@ assert.strictEqual(evalInVM("shRoleFor(p)"), 'quality-engineer', "Batching Plant
 // Test Drilling & Blasting
 sandbox.p = mockPermits.blasting;
 assert.strictEqual(evalInVM("requestedByLabelFor(p)"), 'Blasting In-charge', "Drilling & Blasting Requested By must be Blasting In-charge");
-assert.strictEqual(evalInVM("shLabelFor(p)"), 'Tower Incharge', "Drilling & Blasting Section Head must be Tower Incharge");
-assert.strictEqual(evalInVM("shRoleFor(p)"), 'hw-section-head', "Drilling & Blasting Section Head role must be hw-section-head");
+assert.strictEqual(evalInVM("shLabelFor(p)"), 'EHS Safety (Direct)', "Drilling & Blasting routes directly to EHS after Site Engineer");
+assert.strictEqual(evalInVM("shRoleFor(p)"), null, "Drilling & Blasting Section Head role must be null (no Section Head stage)");
 
 console.log('  ✓ PASS: Statutory Requested By and Section Head actor rules strictly verified across all 7 permit types');
 
@@ -232,8 +232,8 @@ assert(!siteElecFlow.includes('site-supervisor') && !siteElecFlow.includes('qual
 
 sandbox.p = mockPermits.blasting;
 const blastFlow = evalInVM("stakeholdersFor(p)");
-assert(blastFlow.includes('blasting-incharge') && blastFlow.includes('site-engineer') && blastFlow.includes('hw-section-head') && blastFlow.includes('ehs-manager'));
-assert(!blastFlow.includes('site-supervisor') && !blastFlow.includes('electrician') && !blastFlow.includes('quality-engineer') && !blastFlow.includes('excavation-head') && !blastFlow.includes('mep') && !blastFlow.includes('pm'));
+assert(blastFlow.includes('blasting-incharge') && blastFlow.includes('site-engineer') && blastFlow.includes('ehs-manager'));
+assert(!blastFlow.includes('hw-section-head') && !blastFlow.includes('site-supervisor') && !blastFlow.includes('electrician') && !blastFlow.includes('quality-engineer') && !blastFlow.includes('excavation-head') && !blastFlow.includes('mep') && !blastFlow.includes('pm'));
 
 // Role visibility checks using isPermitVisibleToRole
 // Site Supervisor visibility
@@ -273,7 +273,7 @@ assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'quality-engineer')"), fal
 
 // Tower Incharge visibility
 sandbox.p = mockPermits.blasting;
-assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'hw-section-head')"), true, "Blasting permit MUST be visible to Tower Incharge (Section Head)");
+assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'hw-section-head')"), false, "Blasting permit must NOT be visible to Tower Incharge (routes Blasting In-Charge -> Site Engineer -> EHS)");
 sandbox.p = mockPermits.electricalSite;
 assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'hw-section-head')"), true, "Site Electrical permit MUST be visible to Tower Incharge");
 sandbox.p = mockPermits.electricalBatching;

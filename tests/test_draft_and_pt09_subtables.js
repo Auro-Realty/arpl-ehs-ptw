@@ -236,19 +236,28 @@ assert(tension > 3.3 && tension < 3.4, 'Tension per sling should be ~3.38 MT');
 assert(pct > 65 && pct < 70, 'SWL percentage should be ~68%');
 assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', 'Stress <= 80% remains routine');
 
-// Test promotion on high stress > 80%
+// High stress > 80% alone with load <= 5 MT non-tandem must remain routine (Part A, no PM escalation)
 evalInVM(`
 draft.slingSwl = 3.5; // Tension ~3.38 MT / 3.5 SWL = ~96% (> 80%)
 updateLiftingCalculationsUI();
 `);
-assert.strictEqual(evalInVM('draft.liftingClassification'), 'critical', 'Stress > 80% must auto-promote to critical');
-assert.strictEqual(evalInVM('draft.ptype'), 'liftplan', 'Ptype must switch to liftplan');
+assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', 'Stress > 80% on <= 5 MT non-tandem lift remains routine (strict > 5 MT / Tandem rule)');
+assert.strictEqual(evalInVM('draft.ptype'), 'lifting', 'Ptype remains lifting on <= 5 MT non-tandem lift');
+
+// Tandem lift promotes to critical (Part B)
+evalInVM(`
+draft.liftingTandemLift = true;
+updateLiftingCalculationsUI();
+`);
+assert.strictEqual(evalInVM('draft.liftingClassification'), 'critical', 'Tandem lift must promote to critical');
+assert.strictEqual(evalInVM('draft.ptype'), 'liftplan', 'Ptype must switch to liftplan on tandem lift');
 
 // Step 1 now renders Part B
 s1 = evalInVM('step1Html()');
 assert(s1.includes('Sub-Table 2: Part B &mdash; Statutory Documentation &amp; On-Site Controls (Complex / Critical / Heavy Lifts)'), 'Step 1 must now render Part B for critical lifting');
+evalInVM("draft.liftingTandemLift = false; updateLiftingCalculationsUI();");
 
-console.log('  ✓ PASS: Sub-Table 4 in-place calculations and auto-promotion to Part B verified');
+console.log('  ✓ PASS: Sub-Table 4 in-place calculations and strict critical promotion verified');
 
 // --- 5.1 Bi-Directional Weight Threshold Synchronization (<= 5 MT Part A vs > 5 MT Part B) ---
 console.log('\n--- 5.1 Bi-Directional Weight Threshold Synchronization (<= 5 MT Part A vs > 5 MT Part B) ---');

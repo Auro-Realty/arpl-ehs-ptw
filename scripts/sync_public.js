@@ -15,25 +15,17 @@ if (!fs.existsSync(PUBLIC_DIR)) {
     fs.mkdirSync(PUBLIC_DIR, { recursive: true });
 }
 
-// Canonical file pairs to synchronize (rootSource -> publicDestination)
+// Canonical file pairs to synchronize (ONE-WAY: rootSource -> publicDestination)
 const FILE_MAPPINGS = [
     { root: 'index.html', public: 'public/index.html' },
-    { root: 'firebase-config.js', public: 'public/firebase-config.js' },
-    { root: 'patch-auth.js', public: 'public/patch-auth.js' },
     { root: 'ptw_swimlanes.html', public: 'public/ptw_swimlanes.html' },
-    { root: '404.html', public: 'public/404.html' },
-    { root: 'pptxgen.bundle.js', public: 'public/pptxgen.bundle.js' },
     { root: 'config.projects.json', public: 'public/config.projects.json' },
+    { root: 'firebase-config.js', public: 'public/firebase-config.js' },
+    { root: '404.html', public: 'public/404.html' },
     { root: 'auro-realty-logo.png', public: 'public/auro-realty-logo.png' },
-    { root: 'auro-realty-gradient.png', public: 'public/auro-realty-gradient.png' }
+    { root: 'auro-realty-gradient.png', public: 'public/auro-realty-gradient.png' },
+    { root: 'pptxgen.bundle.js', public: 'public/pptxgen.bundle.js' }
 ];
-
-// Special two-way check for config.projects.json if only one existed
-const rootConfig = path.join(ROOT_DIR, 'config.projects.json');
-const pubConfig = path.join(ROOT_DIR, 'public/config.projects.json');
-if (!fs.existsSync(rootConfig) && fs.existsSync(pubConfig)) {
-    fs.copyFileSync(pubConfig, rootConfig);
-}
 
 function getHash(filePath) {
     const buf = fs.readFileSync(filePath);
@@ -41,7 +33,7 @@ function getHash(filePath) {
 }
 
 console.log('================================================================');
-console.log('CANONICAL ASSET SYNCHRONIZATION: ROOT <--> /public');
+console.log('CANONICAL ASSET SYNCHRONIZATION: ONE-WAY ROOT -> /public');
 console.log('================================================================');
 
 let allMatched = true;
@@ -51,17 +43,11 @@ for (const mapping of FILE_MAPPINGS) {
     const pubPath = path.join(ROOT_DIR, mapping.public);
 
     if (!fs.existsSync(rootPath)) {
-        if (fs.existsSync(pubPath)) {
-            // If exists only in public, copy back to root
-            fs.copyFileSync(pubPath, rootPath);
-            console.log(`[RESTORED] Copied ${mapping.public} -> ${mapping.root}`);
-        } else {
-            console.warn(`[WARN] Skipping optional asset (not found): ${mapping.root}`);
-            continue;
-        }
+        console.warn(`[WARN] Skipping optional asset (not found in root): ${mapping.root}`);
+        continue;
     }
 
-    // Copy canonical root file to public
+    // One-way copy: canonical root file -> public
     fs.copyFileSync(rootPath, pubPath);
 
     // Compute checksums

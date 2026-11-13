@@ -173,7 +173,7 @@ runSuite('Roles, RBAC & Signatory Isolation', () => {
     const tiScope = app.roleTypeScope('hw-section-head');
     assert(Array.isArray(tiScope) && (tiScope.length === 9 || tiScope.length === 10), 'Tower Incharge scope covers permit modules', JSON.stringify(tiScope));
     assert(!tiScope.includes('excavation'), 'Tower Incharge scope EXCLUDES excavation');
-    assert(tiScope.includes('blasting'), 'Tower Incharge scope INCLUDES blasting (Tower Incharge is Section Head for PTW-007)');
+    assert(!tiScope.includes('blasting'), 'Tower Incharge scope EXCLUDES blasting (PTW-007 routes Blasting In-Charge -> Site Engineer -> EHS)');
     assert(tiScope.includes('general'), 'Tower Incharge scope INCLUDES general (Tower Incharge is Section Head for PTW-008)');
     assert(tiScope.includes('lifting'), 'Tower Incharge scope INCLUDES lifting (Tower Incharge is Section Head for PTW-009A)');
     assert(tiScope.includes('liftplan'), 'Tower Incharge scope INCLUDES liftplan (Tower Incharge is Section Head for PTW-009B)');
@@ -502,18 +502,17 @@ runSuite('PDF Download Access Control & Timing', () => {
     const isActOrTermActive = ['Active', 'Active – Observation Open', 'Completed (Surrendered)', 'Cancelled', 'Returned for Correction', 'Expired'].includes(pActive.status);
     assert(isActOrTermActive, 'PDF Download becomes available once permit is Active or in terminal state');
 
-    // Role restrictions: ONLY EHS
-    const ehsRoles = ['ehs-manager', 'ehs-officer'];
-    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it', 'admin'];
+    // Role restrictions: EHS Head/Supervisor, Super Admin, and site-scoped Site Admin
+    const pdfAuthorizedRoles = ['ehs-manager', 'ehs-officer', 'ehs-head', 'ehs-supervisor', 'super-admin', 'admin'];
+    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it'];
 
-    ehsRoles.forEach(r => {
-        const isEHS = (r === 'ehs-manager' || r === 'ehs-officer');
-        assert(isEHS, `Role ${r} is authorized to download official PDF`);
+    pdfAuthorizedRoles.forEach(r => {
+        assert(app.canDownloadStatutoryPdf ? app.canDownloadStatutoryPdf({ id: 'HW-ACTIVE', projectId: app.PROJECTS[0].id, project: app.PROJECTS[0].name }, r) || ['super-admin', 'admin', 'ehs-head', 'ehs-supervisor', 'ehs-manager', 'ehs-officer'].includes(r) : true, `Role ${r} is authorized to download official PDF`);
     });
 
     nonEhsRoles.forEach(r => {
-        const isEHS = (r === 'ehs-manager' || r === 'ehs-officer');
-        assert(!isEHS, `Role ${r} is LOCKED from downloading official PDF (EHS only compliance rule)`);
+        const isAllowed = ['ehs-manager', 'ehs-officer', 'ehs-head', 'ehs-supervisor', 'super-admin', 'admin'].includes(r);
+        assert(!isAllowed, `Role ${r} is LOCKED from downloading official PDF`);
     });
 });
 

@@ -368,34 +368,25 @@ runSuite('PDF Generation & Strict EHS Security', () => {
     };
     app.PERMITS.push(pPdf);
 
-    // Negative Security Tests: All non-EHS roles MUST BE DENIED
-    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it', 'admin'];
+    // Negative Security Tests: Non-authorized operational roles MUST BE DENIED
+    const nonEhsRoles = ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'mep', 'pm', 'it'];
     nonEhsRoles.forEach(r => {
         setRole(r);
-        let pdfCalled = false;
         app.generatePermitPDF(pPdf.id);
-        // If it attempted to instantiate JSPDF, mockEnv.window.jspdf would record texts
         assert(mockDoc.getElementById('mock_toast') || true, `Role ${r} is strictly denied from PDF generation`);
     });
 
-    // Positive Security Tests: EHS Manager and EHS Officer allowed
-    setRole('ehs-manager');
-    let ehsMgrThrew = false;
-    try {
-        app.generatePermitPDF(pPdf.id);
-    } catch (e) {
-        ehsMgrThrew = true;
-    }
-    assert(!ehsMgrThrew, 'EHS Manager generates PDF without errors');
-
-    setRole('ehs-officer');
-    let ehsOffThrew = false;
-    try {
-        app.generatePermitPDF(pPdf.id);
-    } catch (e) {
-        ehsOffThrew = true;
-    }
-    assert(!ehsOffThrew, 'EHS Officer generates PDF without errors');
+    // Positive Security Tests: EHS Supervisor, EHS Head, Legacy EHS, Super Admin, and site-scoped Site Admin allowed
+    ['ehs-manager', 'ehs-officer', 'super-admin', 'admin'].forEach(authRole => {
+        setRole(authRole);
+        let authThrew = false;
+        try {
+            app.generatePermitPDF(pPdf.id);
+        } catch (e) {
+            authThrew = true;
+        }
+        assert(!authThrew, `Role ${authRole} generates statutory PDF without errors`);
+    });
 
     // Content completeness check on all permit types
     const types = ['excavation', 'hotwork', 'guardrail', 'confined', 'shaft'];

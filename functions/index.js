@@ -71,11 +71,22 @@ function validatePermitId(id) {
   return typeof id === "string" && /^[A-Za-z0-9_-]{1,64}$/.test(id);
 }
 
+function normalizeProjectId(id) {
+  if (!id || typeof id !== "string") return "";
+  const raw = id.trim();
+  const up = raw.toUpperCase();
+  if (up === "PRJ-PRL" || up === "PRJ-PEARL" || up === "THE PEARL" || up === "PEARL") return "PRJ-PEARL";
+  if (up === "PRJ-RGT" || up === "PRJ-REGENT" || up === "THE REGENT" || up === "REGENT") return "PRJ-REGENT";
+  if (up === "PRJ-SNC" || up === "PRJ-SANSA" || up === "PRJ-SA" || up === "SANSA COUNTY" || up === "SANSA") return "PRJ-SANSA";
+  return raw;
+}
+
 /**
  * Validate Project ID format: strictly PRJ- followed by alphanumeric/hyphen
  */
 function validateProjectId(id) {
-  return typeof id === "string" && /^PRJ-[A-Za-z0-9_-]{2,32}$/.test(id);
+  const norm = normalizeProjectId(id);
+  return typeof norm === "string" && /^PRJ-[A-Za-z0-9_-]{2,32}$/.test(norm);
 }
 
 /**
@@ -155,7 +166,7 @@ function validateProjectTower(projectId, towerNameOrLocId) {
   if (CAMPUS_WIDE_TOWER_ALIASES.some(a => a.toLowerCase() === clean.toLowerCase())) {
     return true;
   }
-  const allowed = AUTHORITATIVE_PROJECT_TOWERS[projectId];
+  const allowed = AUTHORITATIVE_PROJECT_TOWERS[normalizeProjectId(projectId)];
   if (!allowed) {
     return true;
   }
@@ -277,10 +288,9 @@ const PERMIT_APPROVAL_MATRIX = {
     short: "Drilling & Blasting",
     initiatorRole: "blasting-incharge",
     stages: [
-      { order: 1, name: "Initiation & Shot-Firer Drill Plan", roleKey: "blasting-incharge", roleLabel: "Blasting In-charge (Shot Firer)", canonicalRoles: ["blasting-incharge"] },
+      { order: 1, name: "Initiation & Shot-Firer Drill Plan", roleKey: "blasting-incharge", roleLabel: "Blasting In-Charge (Shot Firer)", canonicalRoles: ["blasting-incharge"] },
       { order: 2, name: "Drill Hole & Warning Siren Check", roleKey: "site-engineer", roleLabel: "Site Engineer (Verification)", canonicalRoles: ["site-engineer"] },
-      { order: 3, name: "Blast Perimeter & Danger Zone Review", roleKey: "section-head", roleLabel: "Tower In-Charge / Section Head", canonicalRoles: ["section-head", "hw-section-head"] },
-      { order: 4, name: "Statutory Explosives & Controlled Blast Endorsement", roleKey: ["ehs-officer", "ehs-manager"], roleLabel: "EHS Safety Officer / Manager", canonicalRoles: ["ehs-officer", "ehs-manager"] }
+      { order: 3, name: "Statutory Explosives & Controlled Blast Endorsement", roleKey: ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"], roleLabel: "EHS Supervisor / EHS Head", canonicalRoles: ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"] }
     ]
   },
   "PTW-008": {
@@ -473,19 +483,20 @@ exports.downloadStatutoryPdf = onRequest(
         }
 
         const data = permitSnap.data();
-        const callerRole = decodedToken.role;
-        const callerProjectId = decodedToken.projectId;
-        const isSuperAdmin = decodedToken.superAdmin === true;
+        const callerRole = String(decodedToken.role || "").trim().toLowerCase();
+        const callerProjectId = normalizeProjectId(decodedToken.projectId);
+        const permitProjectId = normalizeProjectId(data.projectId);
+        const isSuperAdmin = decodedToken.superAdmin === true || callerRole === "super-admin";
 
         // Verify Project Isolation (CHECK 02: IDOR Prevention)
-        if (!isSuperAdmin && callerProjectId !== data.projectId) {
+        if (!isSuperAdmin && callerProjectId !== permitProjectId) {
           throw new Error("PERMISSION_DENIED: Access restricted to assigned project");
         }
 
-        // Verify EHS Role
-        const allowedRoles = ["ehs-manager", "ehs-officer"];
+        // Verify Statutory PDF Role (EHS Supervisor/Head + legacy Officer/Manager, Super Admin, and site-scoped Site Admin)
+        const allowedRoles = ["ehs-supervisor", "ehs-head", "ehs-manager", "ehs-officer", "super-admin", "project-admin", "site-admin", "admin"];
         if (!isSuperAdmin && !allowedRoles.includes(callerRole)) {
-          throw new Error("PERMISSION_DENIED: Statutory PDF download is restricted to EHS Officers and Managers");
+          throw new Error("PERMISSION_DENIED: Statutory PDF download is restricted to EHS personnel, Super Admin, and site-scoped Site Admin");
         }
 
         // Check Single-Use Download Gate
@@ -644,10 +655,16 @@ exports.compileStatutoryPdf = onCall(
 
     const p = permitSnap.data();
 
-    // Verify Project Access (CHECK 02: IDOR Prevention)
-    const isSuperAdmin = request.auth.token.superAdmin === true;
-    const callerProjectId = request.auth.token.projectId;
-    if (!isSuperAdmin && callerProjectId !== p.projectId) {
+    // Verify Role & Project Access (CHECK 02: IDOR Prevention)
+    const callerRole = String(request.auth.token.role || "").trim().toLowerCase();
+    const isSuperAdmin = request.auth.token.superAdmin === true || callerRole === "super-admin";
+    const allowedPdfRoles = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager", "super-admin", "project-admin", "site-admin", "admin"];
+    if (!isSuperAdmin && !allowedPdfRoles.includes(callerRole)) {
+      throw new HttpsError("permission-denied", "Statutory PDF compilation is restricted to EHS personnel, Super Admin, and site-scoped Site Admin.");
+    }
+    const callerProjectId = normalizeProjectId(request.auth.token.projectId);
+    const permitProjectId = normalizeProjectId(p.projectId);
+    if (!isSuperAdmin && callerProjectId !== permitProjectId) {
       throw new HttpsError("permission-denied", "Access restricted to your assigned project site.");
     }
 
@@ -744,7 +761,8 @@ exports.adminCreateProjectAdmin = onCall({ region: REGION }, async (request) => 
     throw new HttpsError("permission-denied", "Only Super Admin can provision Project Admins.");
   }
 
-  const { email, password, displayName, name, projectId, projectName, empId, phone } = request.data || {};
+  const { email, password, displayName, name, projectId: rawProjectId, projectName, empId, phone } = request.data || {};
+  const projectId = normalizeProjectId(rawProjectId);
   if (!email || !projectId) {
     throw new HttpsError("invalid-argument", "email and projectId are mandatory.");
   }
@@ -1408,13 +1426,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     uid
   } = request.data || {};
 
-  let effectiveProjectId = projectId;
-  if (effectiveProjectId === "The Pearl" || effectiveProjectId === "PRJ-PEARL") effectiveProjectId = "PRJ-PEARL";
-  else if (effectiveProjectId === "The Regent" || effectiveProjectId === "PRJ-REGENT") effectiveProjectId = "PRJ-REGENT";
-  else if (effectiveProjectId === "Sansa County" || effectiveProjectId === "PRJ-SANSA") effectiveProjectId = "PRJ-SANSA";
+  let effectiveProjectId = normalizeProjectId(projectId);
 
   const callerEmail = (request.auth.token.email || "").toLowerCase();
-  const isSuperAdminCaller =
+  let isSuperAdminCaller =
     request.auth.token.superAdmin === true ||
     request.auth.token.role === "super-admin" ||
     callerEmail === "aic1176@aurogroup.com";
@@ -1454,7 +1469,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       request.auth.token.role === "ehs-manager" ||
       request.auth.token.role === "ehs-officer" ||
       request.auth.token.admin === true) &&
-      (!effectiveProjectId || request.auth.token.projectId === effectiveProjectId || !request.auth.token.projectId));
+      (!effectiveProjectId || normalizeProjectId(request.auth.token.projectId) === effectiveProjectId || !request.auth.token.projectId));
 
   if (!isProjAdmin && effectiveProjectId) {
     const callerDoc = await db.collection("users").doc(request.auth.uid).get();
@@ -1857,10 +1872,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
     await recordServerAuditLog(
       "STAFF_STATUS_TOGGLED",
-      `Staff ${uid} status changed to ${statusStr} on project ${projectId}`,
+      `Staff ${uid} status changed to ${statusStr} on project ${effectiveProjectId}`,
       request.auth.uid,
       callerEmail,
-      projectId
+      effectiveProjectId
     );
 
     return { success: true, uid, disabled: updated.disabled };
@@ -1959,10 +1974,10 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
   const cleanLocationName = sanitizeString(locationName || "Full Worksite", 64);
 
   // Validate assigned tower/zone against project's authoritative towers (Reject cross-project or generic Tower A/B)
-  if (!validateProjectTower(projectId, cleanLocationName) && !validateProjectTower(projectId, cleanLocationId)) {
+  if (!validateProjectTower(effectiveProjectId, cleanLocationName) && !validateProjectTower(effectiveProjectId, cleanLocationId)) {
     throw new HttpsError(
       "invalid-argument",
-      `Invalid tower/zone '${cleanLocationName}' for project '${projectId}'. Permitted towers: ${(AUTHORITATIVE_PROJECT_TOWERS[projectId] || []).join(", ")}`
+      `Invalid tower/zone '${cleanLocationName}' for project '${effectiveProjectId}'. Permitted towers: ${(AUTHORITATIVE_PROJECT_TOWERS[effectiveProjectId] || []).join(", ")}`
     );
   }
 
@@ -2026,8 +2041,8 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Construct structured assignment object
   const newAssignment = {
-    projectId: projectId,
-    projectName: sanitizeString(projectName || projectId, 100),
+    projectId: effectiveProjectId,
+    projectName: sanitizeString(projectName || effectiveProjectId, 100),
     locationId: cleanLocationId,
     locationName: cleanLocationName,
     role: canonicalRole,
@@ -2036,7 +2051,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Upsert assignment entry: replace if exact match (projectId + role + location), else append
   const assignIdx = existingAssignments.findIndex(
-    a => a.projectId === projectId && a.role === canonicalRole && (a.locationName === cleanLocationName || a.locationId === cleanLocationId)
+    a => normalizeProjectId(a.projectId) === effectiveProjectId && a.role === canonicalRole && (a.locationName === cleanLocationName || a.locationId === cleanLocationId)
   );
   if (assignIdx >= 0) {
     existingAssignments[assignIdx] = newAssignment;
@@ -2046,7 +2061,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Aggregate all unique roles and projectIds for backward compatibility
   const aggregatedRoles = Array.from(new Set(existingAssignments.map(a => a.role)));
-  const aggregatedProjects = Array.from(new Set(existingAssignments.map(a => a.projectId)));
+  const aggregatedProjects = Array.from(new Set(existingAssignments.map(a => normalizeProjectId(a.projectId))));
 
   // Set Custom Claims for Auth RBAC & Location/Workflow Scope (<1000 bytes token guard)
   await auth.setCustomUserClaims(userRecord.uid, {
@@ -2054,7 +2069,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     roles: aggregatedRoles,
     uiRole: canonicalRole,
     ptwRole: canonicalRole,
-    projectId: projectId,
+    projectId: effectiveProjectId,
     projectIds: aggregatedProjects,
     locationId: cleanLocationId,
     locationName: cleanLocationName,
@@ -2073,9 +2088,9 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     uiRole: canonicalRole,
     ptwRole: canonicalRole,
     roleLabel: cleanRoleLabel,
-    projectId: projectId,
+    projectId: effectiveProjectId,
     projectIds: aggregatedProjects,
-    projectName: sanitizeString(projectName || projectId, 100),
+    projectName: sanitizeString(projectName || effectiveProjectId, 100),
     locationId: cleanLocationId,
     locationName: cleanLocationName,
     location: cleanLocationName,
@@ -2096,13 +2111,13 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   await recordServerAuditLog(
     "STAFF_PERSONNEL_PROVISIONED",
-    `Staff ${cleanName} (${cleanEmail}) assigned role ${cleanRole} at ${projectId} (${cleanLocationName})`,
+    `Staff ${cleanName} (${cleanEmail}) assigned role ${canonicalRole} at ${effectiveProjectId} (${cleanLocationName})`,
     request.auth.uid,
     callerEmail,
-    projectId
+    effectiveProjectId
   );
 
-  return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role: cleanRole, projectId, locationId: cleanLocationId };
+  return { success: true, uid: userRecord.uid, email: cleanEmail, name: cleanName, role: canonicalRole, projectId: effectiveProjectId, locationId: cleanLocationId };
 });
 
 // ============================================================================
@@ -2242,13 +2257,11 @@ exports.adminDeleteUser = onCall({ region: REGION }, async (request) => {
       throw new HttpsError("permission-denied", "Only Super Admin and Site Admins have authority to delete user accounts.");
     }
 
-    let targetProjectId = targetDoc?.projectId || projectId;
-    if (targetProjectId === "The Pearl") targetProjectId = "PRJ-PEARL";
-    if (targetProjectId === "The Regent") targetProjectId = "PRJ-REGENT";
-    if (targetProjectId === "Sansa County") targetProjectId = "PRJ-SANSA";
+    let targetProjectId = normalizeProjectId(targetDoc?.projectId || projectId);
+    const normCallerProjectId = normalizeProjectId(callerProjectId);
 
-    if (callerProjectId && targetProjectId && callerProjectId !== targetProjectId) {
-      throw new HttpsError("permission-denied", `Site Administrators can only delete staff within their assigned project (${callerProjectId}).`);
+    if (normCallerProjectId && targetProjectId && normCallerProjectId !== targetProjectId) {
+      throw new HttpsError("permission-denied", `Site Administrators can only delete staff within their assigned project (${normCallerProjectId}).`);
     }
   }
 
@@ -2556,7 +2569,7 @@ exports.switchActiveRole = onCall({ region: REGION }, async (request) => {
     throw new HttpsError("permission-denied", `User is not authorized for role ${targetRole}.`);
   }
 
-  const newProjectId = targetProjectId || userData.projectId || request.auth.token.projectId || "PRJ-PEARL";
+  const newProjectId = normalizeProjectId(targetProjectId || userData.projectId || request.auth.token.projectId || "PRJ-PEARL");
 
   await auth.setCustomUserClaims(uid, {
     role: targetRole,

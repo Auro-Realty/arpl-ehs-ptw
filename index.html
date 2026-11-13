@@ -2343,6 +2343,40 @@
             background: rgba(10, 22, 40, .62);
         }
 
+        .live-cam-stage {
+            position: relative;
+            background: #0A1628;
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1.5px solid var(--border);
+            aspect-ratio: 4 / 3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .live-cam-stage video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .live-cam-controls {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .live-cam-status {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
         .modal-overlay.show {
             display: flex;
             animation: fadein .15s ease;
@@ -5235,7 +5269,7 @@
             align-items: flex-start;
             gap: 9px;
         }
-        #landingRoleSection, #roleCardsGrid, #roleFilterTabs, .role-grid, #quickPersonaDropdown, .persona-switcher {
+        #landingRoleSection, #roleCardsGrid, #roleFilterTabs, .role-grid, #quickPersonaDropdown, .persona-switcher, #daySimulatorWidget, #slaDemoModeBtn {
             display: none !important;
         }
 
@@ -6323,25 +6357,25 @@
                                                         </h3>
                                                         <p style="font-size:12px;color:var(--text-muted);margin:4px 0 0;">Configure escalation triggers, validity expiry reminders, and operational cutoffs.</p>
                                                     </div>
-                                                    <span id="slaCurrentModeBadge" class="badge st-parallel" style="font-size:12px;padding:6px 12px;">⚡ Fast Demo Mode</span>
+                                                    <span id="slaCurrentModeBadge" class="badge st-active" style="font-size:12px;padding:6px 12px;">🏭 Enterprise Production Mode (2h / 4h SLA)</span>
                                                 </div>
                     
                                                 <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:20px;">
                                                     <div style="font-weight:700;font-size:13px;color:var(--navy);margin-bottom:8px;">Operating Mode Selection</div>
                                                     <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                                                        <button type="button" class="btn btn-sm btn-primary" onclick="adminToggleSlaMode('demo')"><i class="fa-solid fa-bolt"></i> Fast Demo Mode (45s / 120s)</button>
-                                                        <button type="button" class="btn btn-sm btn-ghost" onclick="adminToggleSlaMode('production')"><i class="fa-solid fa-industry"></i> Enterprise Production Mode (2h / 4h)</button>
+                                                        <button type="button" id="slaDemoModeBtn" class="btn btn-sm btn-ghost" onclick="adminToggleSlaMode('demo')" style="display:none;"><i class="fa-solid fa-bolt"></i> Fast Demo Mode (45s / 120s)</button>
+                                                        <button type="button" class="btn btn-sm btn-primary" onclick="adminToggleSlaMode('production')"><i class="fa-solid fa-industry"></i> Enterprise Production Mode (2h / 4h)</button>
                                                     </div>
                                                 </div>
                     
                                                 <div class="form-grid" style="margin-bottom:16px;">
                                                     <div class="form-field">
                                                         <label>Stage 1 Overdue Escalation Threshold (Sec / Hours) <span class="req">*</span></label>
-                                                        <input type="number" id="inSlaStage1" min="1" step="1" value="45">
+                                                        <input type="number" id="inSlaStage1" min="1" step="1" value="2">
                                                     </div>
                                                     <div class="form-field">
                                                         <label>Stage 2 Critical Escalation Threshold (Sec / Hours) <span class="req">*</span></label>
-                                                        <input type="number" id="inSlaStage2" min="1" step="1" value="120">
+                                                        <input type="number" id="inSlaStage2" min="1" step="1" value="4">
                                                     </div>
                                                     <div class="form-field">
                                                         <label>Validity Expiry Warning Reminder (Minutes before end) <span class="req">*</span></label>
@@ -6438,18 +6472,18 @@
         </div>
     </div>
 
-    <!-- PHOTO MODAL -->
+    <!-- PHOTO MODAL (LIVE CAMERA ONLY) -->
     <div class="modal-overlay" id="photoModal" role="dialog" aria-modal="true" aria-labelledby="photoModalTitle">
         <div class="modal-box">
             <div class="modal-head">
-                <h3 id="photoModalTitle"><i class="fa-solid fa-camera"></i> Upload Photo Evidence</h3><button class="modal-close"
+                <h3 id="photoModalTitle"><i class="fa-solid fa-camera"></i> Live Camera Photo Capture</h3><button class="modal-close"
                     onclick="closeModal('photoModal')" aria-label="Close photo dialog"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div class="modal-body" id="photoModalBody"></div>
             <div class="modal-foot"><button class="btn btn-ghost"
                     onclick="closeModal('photoModal')">Cancel</button><button class="btn btn-primary"
                     id="photoConfirmBtn" disabled onclick="confirmPhoto()"><i class="fa-solid fa-check"></i> Attach
-                    Photo</button></div>
+                    Live Photo</button></div>
         </div>
     </div>
 
@@ -6497,7 +6531,6 @@
 
     <div class="toast-stack" id="toastStack"></div>
 
-    <input type="file" id="hiddenFileInput" accept="image/*" style="display:none;">
     <input type="file" id="drawingFileInput" accept=".pdf,.dwg,.dxf,image/*" style="display:none;">
     <input type="file" id="sigFileInput" accept=".png,.jpg,.jpeg,image/png,image/jpeg" style="display:none;">
     <input type="file" id="liftingSketchInput" accept=".pdf,.png,.jpg,.jpeg" style="display:none;" onchange="onLiftingSketchUploaded(this)">
@@ -8072,21 +8105,30 @@
         };
         window.AUTHORITATIVE_PROJECT_TOWERS = AUTHORITATIVE_PROJECT_TOWERS;
 
+        function normalizeProjectId(id) {
+            if (!id) return '';
+            const raw = String(id).trim();
+            const up = raw.toUpperCase();
+            if (up === 'ALL' || up === 'PRJ-MASTER' || up === 'ENTERPRISE-GLOBAL') return up;
+            if (up === 'PRJ-PRL' || up === 'PRJ-PEARL' || up === 'THE PEARL' || up === 'PEARL') return 'PRJ-PEARL';
+            if (up === 'PRJ-RGT' || up === 'PRJ-REGENT' || up === 'THE REGENT' || up === 'REGENT') return 'PRJ-REGENT';
+            if (up === 'PRJ-SNC' || up === 'PRJ-SANSA' || up === 'PRJ-SA' || up === 'SANSA COUNTY' || up === 'SANSA') return 'PRJ-SANSA';
+            return raw;
+        }
+        window.normalizeProjectId = normalizeProjectId;
+
         function getAuthoritativeTowers(projIdOrName) {
             if (!projIdOrName) return [];
-            const str = String(projIdOrName).trim().toLowerCase();
-            if (str === 'prj-pearl' || str === 'the pearl' || str === 'pearl') {
-                return (AUTHORITATIVE_PROJECT_TOWERS['PRJ-PEARL'] || []).slice();
-            }
-            if (str === 'prj-regent' || str === 'the regent' || str === 'regent') {
-                return (AUTHORITATIVE_PROJECT_TOWERS['PRJ-REGENT'] || []).slice();
-            }
-            if (str === 'prj-sansa' || str === 'prj-sa' || str === 'sansa county' || str === 'sansa') {
-                return (AUTHORITATIVE_PROJECT_TOWERS['PRJ-SANSA'] || []).slice();
+            const norm = normalizeProjectId(projIdOrName);
+            if (norm && AUTHORITATIVE_PROJECT_TOWERS[norm]) {
+                return AUTHORITATIVE_PROJECT_TOWERS[norm].slice();
             }
             const p = (typeof getProject === 'function') ? getProject(projIdOrName) : null;
-            if (p && p.id && AUTHORITATIVE_PROJECT_TOWERS[p.id]) {
-                return AUTHORITATIVE_PROJECT_TOWERS[p.id].slice();
+            if (p && p.id) {
+                const pNorm = normalizeProjectId(p.id);
+                if (AUTHORITATIVE_PROJECT_TOWERS[pNorm]) {
+                    return AUTHORITATIVE_PROJECT_TOWERS[pNorm].slice();
+                }
             }
             return [];
         }
@@ -8281,7 +8323,8 @@
         let _testAbpProject = null;
         function getProject(projIdOrName) {
             if (!projIdOrName) return PROJECTS[0] || null;
-            let match = PROJECTS.find(p => p.id === projIdOrName || p.name === projIdOrName);
+            const norm = normalizeProjectId(projIdOrName);
+            let match = PROJECTS.find(p => p.id === projIdOrName || p.name === projIdOrName || normalizeProjectId(p.id) === norm);
             if (!match && (typeof isTestEnvironment === 'function' ? isTestEnvironment() : false)) {
                 if (projIdOrName === 'Auro Grand Residency' || projIdOrName === 'PRJ-AGR') {
                     if (!_testAgrProject) {
@@ -8365,14 +8408,17 @@
         }
 
         function getSlaConfig() {
+            const isTestEnv = (typeof isTestEnvironment === 'function' && isTestEnvironment());
             if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla) {
-                if (typeof isTestEnvironment === 'function' && isTestEnvironment() && !APP_CONFIG.sla._modeExplicitlySet) {
+                if (isTestEnv && !APP_CONFIG.sla._modeExplicitlySet) {
                     APP_CONFIG.sla.mode = 'demo';
+                } else if (!isTestEnv) {
+                    APP_CONFIG.sla.mode = 'production';
                 }
                 return APP_CONFIG.sla;
             }
             return {
-                mode: 'demo',
+                mode: isTestEnv ? 'demo' : 'production',
                 stage1Ms: 45 * 1000,
                 stage2Ms: 120 * 1000,
                 stage1MsProd: 2 * 3600 * 1000,
@@ -8415,7 +8461,7 @@
             confined: { key: 'confined', code: 'PTW-004', name: 'Confined Space Entry', short: 'Confined Space', prefix: 'PTW-004', form: 'PTW-004', sh: 'hw-section-head', shLabel: 'Tower Incharge' },
             shaft: { key: 'shaft', code: 'PTW-005', name: 'Shaft Work', short: 'Shaft Work', prefix: 'PTW-005', form: 'PTW-005', sh: 'hw-section-head', shLabel: 'Tower Incharge' },
             electrical: { key: 'electrical', code: 'PTW-006', name: 'Electrical Work (HT/LT)', short: 'Electrical Work', prefix: 'PTW-006', form: 'PTW-006', sh: 'hw-section-head', shLabel: 'Tower Incharge' },
-            blasting: { key: 'blasting', code: 'PTW-007', name: 'Drilling and Blasting', short: 'Drilling & Blasting', prefix: 'PTW-007', form: 'PTW-007', sh: 'hw-section-head', shLabel: 'Tower Incharge' },
+            blasting: { key: 'blasting', code: 'PTW-007', name: 'Drilling and Blasting', short: 'Drilling & Blasting', prefix: 'PTW-007', form: 'PTW-007', sh: null, shLabel: 'Site Engineer' },
             general: { key: 'general', code: 'PTW-008', name: 'General Work', short: 'General Work', prefix: 'PTW-008', form: 'PTW-008', sh: 'hw-section-head', shLabel: 'Tower Incharge' },
             lifting: { key: 'lifting', code: 'PTW-009', name: 'General & Routine Lifting', short: 'Lifting Operations', prefix: 'PTW-009A', form: 'PTW-009A', sh: 'hw-section-head', shLabel: 'Tower Incharge' },
             liftplan: { key: 'liftplan', code: 'PTW-009B', name: 'Critical Lift Plan (Non-Routine / Complex)', short: 'Critical Lift Plan', prefix: 'PTW-009B', form: 'PTW-009B', hiddenFromGrid: true, sh: 'hw-section-head', shLabel: 'Tower Incharge' },
@@ -8515,8 +8561,7 @@
                 stages: [
                     { order: 1, name: 'Initiation & Shot-Firer Drill Plan', roleKey: 'blasting-incharge', roleLabel: 'Blasting In-charge (Shot Firer)', canonicalRoles: ['blasting-incharge'] },
                     { order: 2, name: 'Drill Hole & Warning Siren Check', roleKey: 'site-engineer', roleLabel: 'Site Engineer (Verification)', canonicalRoles: ['site-engineer'] },
-                    { order: 3, name: 'Blast Perimeter & Danger Zone Review', roleKey: 'section-head', roleLabel: 'Tower In-Charge / Section Head', canonicalRoles: ['section-head', 'hw-section-head'] },
-                    { order: 4, name: 'Statutory Explosives & Controlled Blast Endorsement', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
+                    { order: 3, name: 'Statutory Explosives & Controlled Blast Endorsement', roleKey: ['ehs-officer', 'ehs-manager'], roleLabel: 'EHS Safety Officer / Manager', canonicalRoles: ['ehs-officer', 'ehs-manager'] }
                 ]
             },
             'PTW-008': {
@@ -8598,11 +8643,13 @@
         function shRoleFor(p) {
             const pt = ptypeOf(p);
             if (pt === 'excavation') return 'excavation-head';
+            if (pt === 'blasting') return null;
             if (pt === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant')) return 'quality-engineer';
             return 'hw-section-head';
         }
         function shLabelFor(p) {
             const rk = shRoleFor(p);
+            if (!rk) return 'EHS Safety (Direct)';
             if (rk === 'quality-engineer') return 'Quality Engineer';
             if (rk === 'excavation-head') return 'Excavation Head';
             return 'Tower Incharge';
@@ -8636,7 +8683,7 @@
                 return ['electrician', 'site-engineer', 'mep', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'blasting') {
-                return ['blasting-incharge', 'site-engineer', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
+                return ['blasting-incharge', 'site-engineer', 'ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'];
             }
             if (ptypeOf(p) === 'lifting') {
                 return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
@@ -8656,7 +8703,18 @@
             return ['site-supervisor', 'site-engineer', 'mep', 'pm', 'it', 'excavation-head', 'ehs-manager', 'ehs-officer'];
         }
         function isPermitVisibleToRole(p, roleKey) {
-            if (!roleKey || roleKey === 'admin' || roleKey === 'super-admin') return true;
+            if (roleKey === 'super-admin') return true;
+            if (!roleKey || roleKey === 'admin' || roleKey === 'project-admin') {
+                if (currentUser && currentUser.projectId && p && p.projectId) {
+                    return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
+                }
+                return true;
+            }
+            if (currentUser && currentUser.projectId && p && p.projectId && !['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(roleKey)) {
+                const uPrj = normalizeProjectId(currentUser.projectId);
+                const pPrj = normalizeProjectId(p.projectId);
+                if (uPrj && pPrj && uPrj !== 'ALL' && uPrj !== pPrj) return false;
+            }
             // Draft Visibility: Author or permittee roles must always see their own drafts
             if (p && p.status === 'Draft') {
                 if (currentUser && (
@@ -8722,8 +8780,8 @@
             if (roleKey === 'lift-supervisor') return ['lifting', 'liftplan'];
             if (roleKey === 'project-manager') return ['liftplan'];
             if (roleKey === 'excavation-head') return ['excavation'];
-            if (roleKey === 'hw-section-head') return ['hotwork', 'shaft', 'guardrail', 'confined', 'electrical', 'blasting', 'general', 'lifting', 'liftplan', 'nightshift'];
-            if (roleKey === 'section-head') return ['hotwork', 'shaft', 'guardrail', 'confined', 'excavation', 'electrical', 'blasting', 'general', 'lifting', 'liftplan', 'nightshift'];
+            if (roleKey === 'hw-section-head') return ['hotwork', 'shaft', 'guardrail', 'confined', 'electrical', 'general', 'lifting', 'liftplan', 'nightshift'];
+            if (roleKey === 'section-head') return ['hotwork', 'shaft', 'guardrail', 'confined', 'excavation', 'electrical', 'general', 'lifting', 'liftplan', 'nightshift'];
             return null;
         }
         function permitMatchesScope(p, scope) {
@@ -9477,7 +9535,8 @@
         }
         function projectByName(nameOrId) {
             if (!nameOrId) return null;
-            return PROJECTS.find(p => p.name === nameOrId || p.id === nameOrId) || null;
+            const norm = normalizeProjectId(nameOrId);
+            return PROJECTS.find(p => p.name === nameOrId || p.id === nameOrId || normalizeProjectId(p.id) === norm) || null;
         }
         function getProjectSiteCoord(pOrProj) {
             if (!pOrProj) return { lat: 17.4125, lng: 78.3984, address: 'The Pearl (Enterprise Center)', radius: 200 };
@@ -10224,57 +10283,174 @@
         }
 
         /* ================================================================
-           PHOTO CAPTURE ENGINE
+           LIVE WEBRTC CAMERA CAPTURE ENGINE (ZERO SAVED-IMAGE UPLOADS)
            ================================================================ */
+        function stopLiveCamera() {
+            if (photoModalCtx && photoModalCtx.stream) {
+                try {
+                    photoModalCtx.stream.getTracks().forEach(t => t.stop());
+                } catch (_e) {}
+                photoModalCtx.stream = null;
+            }
+            const vid = document.getElementById('liveCameraVideo');
+            if (vid && vid.srcObject) {
+                try {
+                    const s = vid.srcObject;
+                    if (s && typeof s.getTracks === 'function') s.getTracks().forEach(t => t.stop());
+                } catch (_e) {}
+                vid.srcObject = null;
+            }
+        }
         function openPhotoModal(opts) {
-            photoModalCtx = Object.assign({ captured: null }, opts);
-            document.getElementById('photoConfirmBtn').disabled = true;
+            stopLiveCamera();
+            photoModalCtx = Object.assign({ captured: null, facingMode: 'environment', stream: null, error: null, gps: null }, opts);
+            const btn = document.getElementById('photoConfirmBtn');
+            if (btn) btn.disabled = true;
+            if (typeof navigator !== 'undefined' && navigator.geolocation && typeof navigator.geolocation.getCurrentPosition === 'function') {
+                try {
+                    navigator.geolocation.getCurrentPosition(
+                        function (pos) {
+                            if (photoModalCtx && pos && pos.coords) {
+                                photoModalCtx.gps = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                            }
+                        },
+                        function () {},
+                        { enableHighAccuracy: true, timeout: 4000, maximumAge: 30000 }
+                    );
+                } catch (_e) {}
+            }
             renderPhotoModalBody();
             openModal('photoModal');
+            startLiveCamera();
+        }
+        function startLiveCamera() {
+            stopLiveCamera();
+            if (!photoModalCtx || photoModalCtx.captured) return;
+            if (typeof navigator === 'undefined' || !navigator.mediaDevices || typeof navigator.mediaDevices.getUserMedia !== 'function') {
+                photoModalCtx.error = 'Live camera API (navigator.mediaDevices.getUserMedia) is unavailable on this browser/device. Saved-image upload is disabled by safety policy.';
+                renderPhotoModalBody();
+                return;
+            }
+            photoModalCtx.error = null;
+            const facing = photoModalCtx.facingMode || 'environment';
+            navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: facing } }, audio: false })
+                .then(function (stream) {
+                    if (!photoModalCtx || photoModalCtx.captured) {
+                        stream.getTracks().forEach(t => t.stop());
+                        return;
+                    }
+                    photoModalCtx.stream = stream;
+                    const vid = document.getElementById('liveCameraVideo');
+                    if (vid) {
+                        vid.srcObject = stream;
+                        if (typeof vid.play === 'function') vid.play().catch(function () {});
+                    }
+                    const statusEl = document.getElementById('liveCamStatusText');
+                    if (statusEl) statusEl.textContent = 'Live ' + (facing === 'user' ? 'Front' : 'Rear') + ' Camera Active · IST + GPS Watermark Armed';
+                })
+                .catch(function (err) {
+                    if (!photoModalCtx) return;
+                    photoModalCtx.error = 'Camera access denied or unavailable (' + (err && err.message ? err.message : 'Permission required') + '). Live camera capture is mandatory for photo evidence.';
+                    renderPhotoModalBody();
+                });
+        }
+        function flipCameraFacing() {
+            if (!photoModalCtx) return;
+            photoModalCtx.facingMode = (photoModalCtx.facingMode === 'environment') ? 'user' : 'environment';
+            startLiveCamera();
+        }
+        function captureCameraFrame() {
+            if (!photoModalCtx) return;
+            const vid = document.getElementById('liveCameraVideo');
+            const w = (vid && vid.videoWidth) ? vid.videoWidth : 640;
+            const h = (vid && vid.videoHeight) ? vid.videoHeight : 480;
+            const c = document.createElement('canvas');
+            c.width = w;
+            c.height = h;
+            const ctx2d = c.getContext('2d');
+            if (vid && vid.readyState >= 2) {
+                ctx2d.drawImage(vid, 0, 0, w, h);
+            } else {
+                ctx2d.fillStyle = '#0F172A';
+                ctx2d.fillRect(0, 0, w, h);
+            }
+            const gpsObj = photoModalCtx.gps || (typeof draft !== 'undefined' && draft && draft.gps) || (typeof actionModalCtx !== 'undefined' && actionModalCtx && actionModalCtx.gps) || null;
+            const gpsStr = (gpsObj && gpsObj.lat != null && gpsObj.lng != null)
+                ? ('GPS: ' + Number(gpsObj.lat).toFixed(5) + ', ' + Number(gpsObj.lng).toFixed(5))
+                : 'GPS: Site Verified';
+            const istStr = fmtDateTime(nowTime()) + ' IST';
+            const barH = Math.max(42, Math.round(h * 0.1));
+            ctx2d.fillStyle = 'rgba(10, 22, 40, 0.78)';
+            ctx2d.fillRect(0, h - barH, w, barH);
+            ctx2d.fillStyle = '#FFFFFF';
+            ctx2d.font = 'bold ' + Math.max(12, Math.round(barH * 0.34)) + 'px sans-serif';
+            ctx2d.fillText('ARPL PTW LIVE CAMERA · ' + istStr, 12, h - barH + Math.round(barH * 0.42));
+            ctx2d.font = Math.max(11, Math.round(barH * 0.28)) + 'px monospace';
+            ctx2d.fillStyle = '#FDBA74';
+            ctx2d.fillText(gpsStr, 12, h - Math.round(barH * 0.18));
+
+            photoModalCtx.captured = {
+                dataUrl: c.toDataURL('image/jpeg', 0.88),
+                name: 'live_photo_' + Date.now() + '.jpg',
+                ist: istStr,
+                gps: gpsStr
+            };
+            stopLiveCamera();
+            const btn = document.getElementById('photoConfirmBtn');
+            if (btn) btn.disabled = false;
+            renderPhotoModalBody();
         }
         function renderPhotoModalBody() {
             const ctx = photoModalCtx;
             let html = '';
             if (ctx.captured) {
-                html += '<div class="photo-preview"><img src="' + ctx.captured.dataUrl + '"><button class="rm" onclick="clearPhoto()" title="Remove Photo" aria-label="Remove Photo"><i class="fa-solid fa-xmark"></i></button></div>' +
-                    '<div class="form-hint" style="margin-top:8px;">' + ctx.captured.name + ' &middot; captured ' + fmtDateTime(nowTime()) + '</div>';
+                html += '<div class="photo-preview"><img src="' + ctx.captured.dataUrl + '" alt="Live captured site photo"><button class="rm" type="button" onclick="clearPhoto()" title="Retake Live Photo" aria-label="Retake Live Photo"><i class="fa-solid fa-xmark"></i></button></div>' +
+                    '<div class="form-hint" style="margin-top:8px;"><b>' + escapeHtml(ctx.captured.name) + '</b> &middot; ' + escapeHtml(ctx.captured.ist || (fmtDateTime(nowTime()) + ' IST')) + ' &middot; ' + escapeHtml(ctx.captured.gps || '') + '</div>' +
+                    '<div style="margin-top:10px;"><button type="button" class="btn btn-sm btn-ghost" onclick="clearPhoto()"><i class="fa-solid fa-rotate"></i> Retake Live Photo</button></div>';
+            } else if (ctx.error) {
+                html += '<div style="padding:18px;border:1.5px dashed #DC2626;border-radius:10px;background:#FEF2F2;color:#991B1B;font-size:12.5px;line-height:1.5;">' +
+                    '<div style="font-weight:700;margin-bottom:6px;"><i class="fa-solid fa-video-slash"></i> Live Camera Unavailable</div>' +
+                    '<div>' + escapeHtml(ctx.error) + '</div>' +
+                    '<button type="button" class="btn btn-sm btn-primary" style="margin-top:10px;" onclick="startLiveCamera()"><i class="fa-solid fa-rotate"></i> Retry Camera</button>' +
+                    '</div>';
             } else {
-                html += '<div class="photo-drop" onclick="document.getElementById(\'hiddenFileInput\').click()"><i class="fa-solid fa-camera"></i>Click to choose or capture a photo from this device<div class="form-hint" style="margin-top:4px;">JPG or PNG</div></div>';
+                html += '<div class="live-cam-stage">' +
+                    '<video id="liveCameraVideo" autoplay playsinline muted></video>' +
+                    '</div>' +
+                    '<div class="live-cam-controls">' +
+                    '<button type="button" class="btn btn-sm btn-ghost" onclick="flipCameraFacing()"><i class="fa-solid fa-camera-rotate"></i> Flip (' + (ctx.facingMode === 'user' ? 'Rear' : 'Front') + ')</button>' +
+                    '<button type="button" class="btn btn-primary" id="liveShutterBtn" onclick="captureCameraFrame()"><i class="fa-solid fa-circle-dot"></i> Capture Shutter</button>' +
+                    '</div>' +
+                    '<div class="live-cam-status"><i class="fa-solid fa-shield-halved" style="color:var(--orange);"></i><span id="liveCamStatusText">Initializing live camera stream... Saved image uploads disabled.</span></div>';
             }
             document.getElementById('photoModalBody').innerHTML = html;
         }
         document.addEventListener('DOMContentLoaded', function () {
-            document.getElementById('hiddenFileInput').addEventListener('change', function (e) {
-                const f = e.target.files[0]; if (!f) return;
-                const reader = new FileReader();
-                reader.onerror = function () { showToast('The selected file could not be read. Please try a different file.', 'error'); };
-                reader.onload = function (ev) {
-                    photoModalCtx.captured = { dataUrl: ev.target.result, name: f.name };
-                    document.getElementById('photoConfirmBtn').disabled = false;
-                    renderPhotoModalBody();
-                };
-                reader.readAsDataURL(f);
-                e.target.value = '';
-            });
             updateTopbarClock();
-            document.getElementById('sigFileInput').addEventListener('change', function (e) {
-                const f = e.target.files[0];
-                handleSigFile(f);
-                e.target.value = '';
-            });
-            document.getElementById('drawingFileInput').addEventListener('change', function (e) {
-                const f = e.target.files[0]; if (!f) return;
-                const isImage = /^image\//.test(f.type);
-                if (isImage) {
-                    const reader = new FileReader();
-                    reader.onerror = function () { showToast('The drawing file could not be read. Please try a different file.', 'error'); };
-                    reader.onload = function (ev) { attachDrawing({ name: f.name, at: nowTime(), dataUrl: ev.target.result, isImage: true }); };
-                    reader.readAsDataURL(f);
-                } else {
-                    attachDrawing({ name: f.name, at: nowTime(), dataUrl: null, isImage: false });
-                }
-                e.target.value = '';
-            });
+            const sigInput = document.getElementById('sigFileInput');
+            if (sigInput) {
+                sigInput.addEventListener('change', function (e) {
+                    const f = e.target.files[0];
+                    handleSigFile(f);
+                    e.target.value = '';
+                });
+            }
+            const drawInput = document.getElementById('drawingFileInput');
+            if (drawInput) {
+                drawInput.addEventListener('change', function (e) {
+                    const f = e.target.files[0]; if (!f) return;
+                    const isImage = /^image\//.test(f.type);
+                    if (isImage) {
+                        const reader = new FileReader();
+                        reader.onerror = function () { showToast('The drawing file could not be read. Please try a different file.', 'error'); };
+                        reader.onload = function (ev) { attachDrawing({ name: f.name, at: nowTime(), dataUrl: ev.target.result, isImage: true }); };
+                        reader.readAsDataURL(f);
+                    } else {
+                        attachDrawing({ name: f.name, at: nowTime(), dataUrl: null, isImage: false });
+                    }
+                    e.target.value = '';
+                });
+            }
         });
         function attachDrawing(dr) {
             if (!draft) return;
@@ -10300,26 +10476,18 @@
             attachDrawing({ name: 'excavation_layout_' + Date.now() + '.png', at: nowTime(), dataUrl: c.toDataURL('image/png'), isImage: true });
         }
         function removeDrawing() { if (draft) { draft.drawing = null; renderWizStep(); } }
-        function useDemoPhoto() {
-            const c = document.createElement('canvas'); c.width = 400; c.height = 280;
-            const ctx = c.getContext('2d');
-            const grad = ctx.createLinearGradient(0, 0, 400, 280); grad.addColorStop(0, '#3a4a5e'); grad.addColorStop(1, '#16283F');
-            ctx.fillStyle = grad; ctx.fillRect(0, 0, 400, 280);
-            ctx.fillStyle = 'rgba(255,255,255,.08)';
-            for (let i = 0; i < 6; i++) { ctx.fillRect(Math.random() * 400, Math.random() * 280, 60 + Math.random() * 60, 4); }
-            ctx.fillStyle = '#E8600A'; ctx.fillRect(0, 240, 400, 40);
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.fillText('SITE PHOTO — EXCAVATION AREA', 14, 264);
-            ctx.font = '11px sans-serif'; ctx.fillText(fmtDateTime(nowTime()), 14, 24);
-            ctx.strokeStyle = 'rgba(255,255,255,.5)'; ctx.lineWidth = 2; ctx.strokeRect(20, 50, 150, 100);
-            ctx.fillStyle = 'rgba(255,255,255,.15)'; ctx.fillRect(20, 50, 150, 100);
-            photoModalCtx.captured = { dataUrl: c.toDataURL('image/png'), name: 'site_photo_' + Date.now() + '.png' };
-            document.getElementById('photoConfirmBtn').disabled = false;
+        function clearPhoto() {
+            if (!photoModalCtx) return;
+            photoModalCtx.captured = null;
+            const btn = document.getElementById('photoConfirmBtn');
+            if (btn) btn.disabled = true;
             renderPhotoModalBody();
+            startLiveCamera();
         }
-        function clearPhoto() { photoModalCtx.captured = null; document.getElementById('photoConfirmBtn').disabled = true; renderPhotoModalBody(); }
         function confirmPhoto() {
-            if (!photoModalCtx.captured) return;
+            if (!photoModalCtx || !photoModalCtx.captured) return;
             const cap = photoModalCtx.captured; const cb = photoModalCtx.onConfirm;
+            stopLiveCamera();
             closeModal('photoModal');
             if (cb) cb(cap);
         }
@@ -10351,6 +10519,9 @@
         }
 
         function closeModal(id) {
+            if (id === 'photoModal' && typeof stopLiveCamera === 'function') {
+                stopLiveCamera();
+            }
             const el = document.getElementById(id);
             if (!el) return;
             el.classList.remove('show');
@@ -10425,7 +10596,7 @@
                 return { kind: 'shaft', mep: pend(), sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() };
             }
             if (type === 'blasting') {
-                return { kind: 'blasting', sectionHead: pend(), ehsManager: pend(), ehsOfficer: pend() };
+                return { kind: 'blasting', ehsManager: pend(), ehsOfficer: pend() };
             }
             if (type === 'electrical') {
                 const isBatching = (draftOrSub && typeof draftOrSub === 'object')
@@ -10483,11 +10654,8 @@
                 return 'complete';
             }
             if (chain.kind === 'blasting') {
-                if (chain.sectionHead && (chain.sectionHead.status === 'cancelled')) return 'cancelled-sectionhead';
-                if (chain.sectionHead && (chain.sectionHead.status === 'rejected')) return 'rejected-sectionhead';
                 if ((chain.ehsManager && chain.ehsManager.status === 'cancelled') || (chain.ehsOfficer && chain.ehsOfficer.status === 'cancelled')) return 'cancelled-ehs';
                 if ((chain.ehsManager && chain.ehsManager.status === 'rejected') || (chain.ehsOfficer && chain.ehsOfficer.status === 'rejected')) return 'rejected-ehs';
-                if (chain.sectionHead && chain.sectionHead.status !== 'approved') return 'section-head';
                 if ((!chain.ehsManager || chain.ehsManager.status !== 'approved') && (!chain.ehsOfficer || chain.ehsOfficer.status !== 'approved')) return 'ehs';
                 return 'complete';
             }
@@ -11107,12 +11275,12 @@
             }
 
             if (ptypeOf(p) === 'blasting') {
-                p.status = 'Pending Section Head';
+                p.status = 'Pending EHS Approval';
                 p.approvals = p.approvals || newChain('blasting');
-                logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Drilling & Blasting permit to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
-                notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
-                notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
+                logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Drilling & Blasting permit directly to EHS Safety Authority (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
+                notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' acknowledged by Site Engineer — EHS statutory endorsement required.', 'info', p.id);
+                notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to EHS Safety.', 'info', p.id);
+                showToast('Permit acknowledged & forwarded to EHS Safety.', 'ok');
                 saveState();
                 return;
             }
@@ -13558,15 +13726,35 @@
             }
         }
 
-        /* --- Firebase Secondary Auth Instance for Live Account Provisioning --- */
+        /* --- Firebase Secondary Auth Instance (inMemoryPersistence) for Live Account Provisioning --- */
         function getProvisioningAuth() {
             if (typeof firebase === 'undefined' || !firebase.apps || !firebase.apps.length) return null;
             let secApp = firebase.apps.find(a => a.name === 'ProvisioningApp');
             if (!secApp) {
                 secApp = firebase.initializeApp(firebase.app().options, 'ProvisioningApp');
             }
-            window.fbSecondaryAuth = secApp.auth();
+            const secAuth = secApp.auth();
+            if (secAuth && typeof secAuth.setPersistence === 'function' && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
+                secAuth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(function () {});
+            }
+            window.fbSecondaryAuth = secAuth;
             return window.fbSecondaryAuth;
+        }
+        async function callWithTimeout(promise, timeoutMs) {
+            const ms = timeoutMs || 5000;
+            let timerId;
+            try {
+                return await Promise.race([
+                    promise,
+                    new Promise(function (_resolve, reject) {
+                        timerId = setTimeout(function () {
+                            reject(new Error('Cloud Function call timed out after ' + ms + 'ms'));
+                        }, ms);
+                    })
+                ]);
+            } finally {
+                if (timerId) clearTimeout(timerId);
+            }
         }
 
         function generatePasswordInto(inputId) {
@@ -13612,131 +13800,177 @@
             const pwdEl = document.getElementById('superAdminNewAdminPassword');
             const empIdEl = document.getElementById('superAdminNewAdminEmpId');
             const phoneEl = document.getElementById('superAdminNewAdminPhone');
+            const btnProvision = document.getElementById('btnProvisionSiteAdminTab');
 
             if (!nameEl || !nameEl.value.trim() || !emailEl || !emailEl.value.trim()) {
                 showToast('Administrator Name and Corporate Email are mandatory.', 'warn');
                 return;
             }
             const prjId = prjSel ? prjSel.value : (PROJECTS[0] ? PROJECTS[0].id : '');
-            const targetPrj = PROJECTS.find(p => p.id === prjId) || PROJECTS[0];
+            const targetPrj = getProject(prjId) || PROJECTS.find(p => p.id === prjId) || PROJECTS[0];
+            const normAssProjId = normalizeProjectId(targetPrj.id);
             const name = nameEl.value.trim();
             const email = emailEl.value.trim().toLowerCase();
             const password = (pwdEl && pwdEl.value.trim().length >= 8) ? pwdEl.value.trim() : generateSecureRandomPasswordClient(16);
             const empId = (empIdEl && empIdEl.value.trim()) ? empIdEl.value.trim().toUpperCase() : ('ARPL-ADM-' + Math.floor(100 + Math.random() * 900));
             const phone = (phoneEl && phoneEl.value.trim()) ? phoneEl.value.trim() : '';
 
-            let authUid = null;
-            try {
-                const provAuth = getProvisioningAuth();
-                if (provAuth) {
-                    showToast('Provisioning Firebase Authentication account for ' + email + '...', 'info');
-                    try {
-                        const cred = await provAuth.createUserWithEmailAndPassword(email, password);
-                        if (cred && cred.user) {
-                            authUid = cred.user.uid;
-                            try { await cred.user.updateProfile({ displayName: name }); } catch (_e) {}
-                        }
-                        await provAuth.signOut();
-                    } catch (authErr) {
-                        if (authErr && authErr.code === 'auth/email-already-in-use') {
-                            showToast('Firebase Auth login already exists for ' + email + '; updating Site Admin assignment in Firestore.', 'info');
-                        } else {
-                            showToast('Firebase Auth Error: ' + (authErr.message || authErr), 'err');
-                            return;
-                        }
-                    }
-                }
-            } catch (e) {
-                console.warn('ProvisioningAuth warning:', e);
+            const origBtnHtml = btnProvision ? btnProvision.innerHTML : '';
+            if (btnProvision) {
+                btnProvision.disabled = true;
+                btnProvision.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Provisioning in Firebase...';
             }
 
-            const admRecord = {
-                id: authUid || ('adm-' + uid()),
-                uid: authUid || null,
-                name: name,
-                email: email,
-                role: 'project-admin',
-                uiRole: 'admin',
-                roleLabel: 'Site Administrator',
-                projectId: targetPrj.id,
-                projectName: targetPrj.name,
-                empId: empId,
-                employeeId: empId,
-                phone: phone,
-                tempPassword: password,
-                status: 'Active',
-                createdAt: nowTime(),
-                createdBy: (currentUser && currentUser.email) || 'aic1176@aurogroup.com'
-            };
+            try {
+                let authUid = null;
+                try {
+                    const provAuth = getProvisioningAuth();
+                    if (provAuth) {
+                        showToast('Provisioning Firebase Authentication account for ' + email + '...', 'info');
+                        try {
+                            const cred = await provAuth.createUserWithEmailAndPassword(email, password);
+                            if (cred && cred.user) {
+                                authUid = cred.user.uid;
+                                try { await cred.user.updateProfile({ displayName: name }); } catch (_e) {}
+                            }
+                            await provAuth.signOut();
+                        } catch (authErr) {
+                            if (authErr && authErr.code === 'auth/email-already-in-use') {
+                                showToast('Firebase Auth login already exists for ' + email + '; updating Site Admin assignment in Firestore.', 'info');
+                            } else {
+                                showToast('Firebase Auth Error: ' + (authErr.message || authErr), 'err');
+                                return;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('ProvisioningAuth warning:', e);
+                }
 
-            targetPrj.adminName = name;
-            targetPrj.adminEmail = email;
-            targetPrj.employeeId = empId;
-
-            const existingIdx = PROJECT_ADMINS.findIndex(a => a.email && a.email.toLowerCase() === email);
-            if (existingIdx >= 0) PROJECT_ADMINS[existingIdx] = admRecord;
-            else PROJECT_ADMINS.unshift(admRecord);
-
-            if (typeof firebase !== 'undefined' && firebase.firestore) {
-                const db = firebase.firestore();
-                const userDocData = {
-                    uid: authUid || admRecord.id,
+                const admRecord = {
+                    id: authUid || ('adm-' + uid()),
+                    uid: authUid || null,
                     name: name,
-                    displayName: name,
                     email: email,
                     role: 'project-admin',
                     uiRole: 'admin',
                     roleLabel: 'Site Administrator',
-                    projectId: targetPrj.id,
+                    projectId: normAssProjId,
                     projectName: targetPrj.name,
                     empId: empId,
                     employeeId: empId,
                     phone: phone,
-                    campusWide: true,
+                    tempPassword: password,
                     status: 'Active',
-                    createdBy: (currentUser && currentUser.email) || 'aic1176@aurogroup.com',
-                    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    createdAt: nowTime(),
+                    createdBy: (currentUser && currentUser.email) || 'aic1176@aurogroup.com'
                 };
-                db.collection('users').doc(authUid || admRecord.id).set(userDocData, { merge: true }).catch(() => {});
-                db.collection('project_admins').doc(admRecord.id).set(admRecord, { merge: true }).catch(() => {});
-                db.collection('projects').doc(targetPrj.id).set({
-                    adminUid: authUid || admRecord.id,
-                    adminName: name,
-                    adminEmail: email,
-                    employeeId: empId,
-                    updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                }, { merge: true }).catch(() => {});
+
+                targetPrj.adminName = name;
+                targetPrj.adminEmail = email;
+                targetPrj.employeeId = empId;
+
+                const existingIdx = PROJECT_ADMINS.findIndex(a => a.email && a.email.toLowerCase() === email);
+                if (existingIdx >= 0) PROJECT_ADMINS[existingIdx] = admRecord;
+                else PROJECT_ADMINS.unshift(admRecord);
+
+                if (typeof firebase !== 'undefined' && firebase.firestore) {
+                    const db = firebase.firestore();
+                    const userDocData = {
+                        uid: authUid || admRecord.id,
+                        name: name,
+                        displayName: name,
+                        email: email,
+                        role: 'project-admin',
+                        uiRole: 'admin',
+                        roleLabel: 'Site Administrator',
+                        projectId: normAssProjId,
+                        projectIds: [normAssProjId],
+                        projectName: targetPrj.name,
+                        assignments: [{
+                            projectId: normAssProjId,
+                            projectName: targetPrj.name,
+                            locationId: 'CAMPUS-WIDE',
+                            locationName: 'Full Worksite',
+                            role: 'project-admin',
+                            roleLabel: 'Site Administrator'
+                        }],
+                        empId: empId,
+                        employeeId: empId,
+                        phone: phone,
+                        campusWide: true,
+                        status: 'Active',
+                        createdBy: (currentUser && currentUser.email) || 'aic1176@aurogroup.com',
+                        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                    };
+                    await Promise.allSettled([
+                        db.collection('users').doc(authUid || admRecord.id).set(userDocData, { merge: true }),
+                        db.collection('project_admins').doc(admRecord.id).set(admRecord, { merge: true }),
+                        db.collection('projects').doc(normAssProjId).set({
+                            adminUid: authUid || admRecord.id,
+                            adminName: name,
+                            adminEmail: email,
+                            employeeId: empId,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true })
+                    ]);
+                }
+
+                if (typeof firebase !== 'undefined' && typeof firebase.functions === 'function') {
+                    try {
+                        const fn = firebase.functions().httpsCallable('adminCreateProjectAdmin');
+                        const cfRes = await callWithTimeout(fn({
+                            name,
+                            email,
+                            password,
+                            projectId: normAssProjId,
+                            projectName: targetPrj.name,
+                            empId,
+                            phone
+                        }), 5000);
+                        if (cfRes && cfRes.data && cfRes.data.uid) {
+                            admRecord.uid = cfRes.data.uid;
+                        }
+                    } catch (cfErr) {
+                        console.warn('adminCreateProjectAdmin callable bypassed/timeout (Firestore & Auth active):', cfErr && cfErr.message ? cfErr.message : cfErr);
+                    }
+                }
+
+                if (typeof recordAuditLog === 'function') {
+                    recordAuditLog('PROVISION_SITE_ADMIN', 'Provisioned Site Administrator ' + name + ' (' + email + ') for ' + targetPrj.name + ' (' + normAssProjId + ')', normAssProjId);
+                }
+
+                nameEl.value = '';
+                emailEl.value = '';
+                if (pwdEl) pwdEl.value = '';
+                if (empIdEl) empIdEl.value = '';
+                if (phoneEl) phoneEl.value = '';
+                saveState();
+                renderSuperAdminAdminsTab();
+                if (typeof renderProjectAdminsView === 'function') renderProjectAdminsView();
+
+                document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-user-check" style="color:var(--brand-primary);"></i> Site Administrator Account Provisioned';
+                document.getElementById('actionModalBody').innerHTML =
+                    '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.6;">' +
+                    '<div style="font-size:13px;font-weight:700;color:var(--brand-primary);margin-bottom:8px;"><i class="fa-solid fa-circle-check"></i> Firebase Authentication &amp; RBAC Profile Active</div>' +
+                    '<div><b>Administrator Name:</b> ' + escapeHtml(name) + '</div>' +
+                    '<div><b>Assigned Project:</b> <b>' + escapeHtml(targetPrj.name) + ' (' + escapeHtml(normAssProjId) + ')</b></div>' +
+                    '<div><b>Login Email ID:</b> <span class="mono">' + escapeHtml(email) + '</span></div>' +
+                    '<div style="margin:14px 0 8px;padding:12px;background:var(--bg);border:1px dashed var(--brand-primary);border-radius:6px;display:flex;align-items:center;justify-content:space-between;">' +
+                    '<div><div style="font-size:11px;color:var(--text-muted);">INITIAL LOGIN PASSWORD:</div><div class="mono" style="font-size:16px;font-weight:700;color:var(--brand-secondary);letter-spacing:1px;">' + escapeHtml(password) + '</div></div>' +
+                    '<button class="btn btn-xs btn-primary" onclick="navigator.clipboard.writeText(\'' + escapeHtml(password) + '\');showToast(\'Password copied to clipboard!\', \'ok\');"><i class="fa-solid fa-copy"></i> Copy Password</button>' +
+                    '</div>' +
+                    '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;"><i class="fa-solid fa-shield-halved"></i> This Site Administrator can now sign in at the unified login portal to configure Locations, GPS Geofences, Workflow Tags, Roles, and On-Site Personnel for <b>' + escapeHtml(targetPrj.name) + '</b>.</div>' +
+                    '</div>';
+                document.getElementById('actionModalFoot').innerHTML = '<button class="btn btn-primary" onclick="closeModal(\'actionModal\')">Done</button>';
+                openModal('actionModal');
+            } finally {
+                if (btnProvision) {
+                    btnProvision.disabled = false;
+                    btnProvision.innerHTML = origBtnHtml || '<i class="fa-solid fa-user-check"></i> Provision Administrator';
+                }
             }
-
-            if (typeof recordAuditLog === 'function') {
-                recordAuditLog('PROVISION_SITE_ADMIN', 'Provisioned Site Administrator ' + name + ' (' + email + ') for ' + targetPrj.name + ' (' + targetPrj.id + ')', targetPrj.id);
-            }
-
-            nameEl.value = '';
-            emailEl.value = '';
-            if (pwdEl) pwdEl.value = '';
-            if (empIdEl) empIdEl.value = '';
-            if (phoneEl) phoneEl.value = '';
-            saveState();
-            renderSuperAdminAdminsTab();
-            if (typeof renderProjectAdminsView === 'function') renderProjectAdminsView();
-
-            document.getElementById('actionModalTitle').innerHTML = '<i class="fa-solid fa-user-check" style="color:var(--brand-primary);"></i> Site Administrator Account Provisioned';
-            document.getElementById('actionModalBody').innerHTML =
-                '<div style="background:var(--card-bg);border:1px solid var(--border);border-radius:8px;padding:16px;font-size:12.5px;line-height:1.6;">' +
-                '<div style="font-size:13px;font-weight:700;color:var(--brand-primary);margin-bottom:8px;"><i class="fa-solid fa-circle-check"></i> Firebase Authentication &amp; RBAC Profile Active</div>' +
-                '<div><b>Administrator Name:</b> ' + escapeHtml(name) + '</div>' +
-                '<div><b>Assigned Project:</b> <b>' + escapeHtml(targetPrj.name) + ' (' + escapeHtml(targetPrj.id) + ')</b></div>' +
-                '<div><b>Login Email ID:</b> <span class="mono">' + escapeHtml(email) + '</span></div>' +
-                '<div style="margin:14px 0 8px;padding:12px;background:var(--bg);border:1px dashed var(--brand-primary);border-radius:6px;display:flex;align-items:center;justify-content:space-between;">' +
-                '<div><div style="font-size:11px;color:var(--text-muted);">INITIAL LOGIN PASSWORD:</div><div class="mono" style="font-size:16px;font-weight:700;color:var(--brand-secondary);letter-spacing:1px;">' + escapeHtml(password) + '</div></div>' +
-                '<button class="btn btn-xs btn-primary" onclick="navigator.clipboard.writeText(\'' + escapeHtml(password) + '\');showToast(\'Password copied to clipboard!\', \'ok\');"><i class="fa-solid fa-copy"></i> Copy Password</button>' +
-                '</div>' +
-                '<div style="font-size:11px;color:var(--text-muted);margin-top:6px;"><i class="fa-solid fa-shield-halved"></i> This Site Administrator can now sign in at the unified login portal to configure Locations, GPS Geofences, Workflow Tags, Roles, and On-Site Personnel for <b>' + escapeHtml(targetPrj.name) + '</b>.</div>' +
-                '</div>';
-            document.getElementById('actionModalFoot').innerHTML = '<button class="btn btn-primary" onclick="closeModal(\'actionModal\')">Done</button>';
-            openModal('actionModal');
         }
 
         function superAdminToggleAdminStatus(idx) {
@@ -14323,43 +14557,15 @@
 
             let finalUid = null;
             let provisionSuccess = false;
-
-            // Step 1: Attempt Provisioning via Cloud Function adminAssignProjectRole
-            if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
-                try {
-                    const functions = getFunctions(firebase.app(), 'asia-south1');
-                    const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
-                    const res = await assignFn({
-                        action: 'create',
-                        email: rawEmail,
-                        password: rawPwd,
-                        displayName: rawName,
-                        role: roleKey,
-                        roleLabel: roleText,
-                        projectId: targetPrj.id,
-                        projectName: targetPrj.name,
-                        locationId: isCampusWide ? 'CAMPUS-WIDE' : (locObj ? locObj.id : assignedTower),
-                        locationName: isCampusWide ? 'All Site Towers' : assignedTower,
-                        campusWide: isCampusWide,
-                        allowedWorkflows: allowedWfs,
-                        empId: rawEmpId,
-                        phone: phone
-                    });
-                    if (res && res.data && res.data.success) {
-                        finalUid = res.data.uid;
-                        provisionSuccess = true;
-                    }
-                } catch (cfErr) {
-                    console.warn('Callable adminAssignProjectRole notice, falling back to secondary client auth:', cfErr);
-                }
-            }
-
-            // Step 2: Fallback to Secondary Auth App + Direct Firestore Writes
-            if (!provisionSuccess) {
+            try {
+                // Step 1: Write immediately via Secondary inMemoryPersistence Auth + Direct Firestore /users Write
                 let authUid = null;
                 try {
                     const provAuth = getProvisioningAuth();
                     if (provAuth) {
+                        if (typeof provAuth.setPersistence === 'function' && firebase.auth && firebase.auth.Auth && firebase.auth.Auth.Persistence) {
+                            await provAuth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(function () {});
+                        }
                         try {
                             const cred = await provAuth.createUserWithEmailAndPassword(rawEmail, rawPwd);
                             if (cred && cred.user) {
@@ -14372,10 +14578,6 @@
                                 const ex = (SITE_PERSONNEL_ACCOUNTS || []).find(s => s && s.email && s.email.toLowerCase() === rawEmail);
                                 if (ex && ex.uid) authUid = ex.uid;
                             } else {
-                                if (submitBtn) {
-                                    submitBtn.disabled = false;
-                                    submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
-                                }
                                 showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-triangle-exclamation"></i> <b>Firebase Auth Error:</b> ' + escapeHtml(authErr.message || String(authErr)));
                                 showToast('Firebase Auth Error: ' + (authErr.message || authErr.code), 'err');
                                 return;
@@ -14386,6 +14588,7 @@
                     console.warn('Secondary auth provision notice:', secErr);
                 }
 
+                const normPrjId = normalizeProjectId(targetPrj.id);
                 finalUid = window.editingEmpanelStaffId || (existingInSamePrj && (existingInSamePrj.uid || existingInSamePrj.id)) || authUid || ('stf-' + uid());
 
                 let staffSig = window.empanelStaffSig || (existingInSamePrj && existingInSamePrj.signature) || null;
@@ -14397,20 +14600,20 @@
 
                 const prevAssignments = (existingInSamePrj && Array.isArray(existingInSamePrj.assignments)) ? existingInSamePrj.assignments.slice() : [];
                 const newAssignmentEntry = {
-                    projectId: targetPrj.id,
+                    projectId: normPrjId,
                     projectName: targetPrj.name,
                     locationId: isCampusWide ? 'CAMPUS-WIDE' : (locObj ? locObj.id : assignedTower),
                     locationName: isCampusWide ? 'All Site Towers' : assignedTower,
                     role: roleKey,
                     roleLabel: roleText
                 };
-                const dupAssIdx = prevAssignments.findIndex(a => a.projectId === newAssignmentEntry.projectId && a.role === newAssignmentEntry.role && a.locationName === newAssignmentEntry.locationName);
+                const dupAssIdx = prevAssignments.findIndex(a => normalizeProjectId(a.projectId) === normPrjId && a.role === newAssignmentEntry.role && a.locationName === newAssignmentEntry.locationName);
                 if (dupAssIdx >= 0) prevAssignments[dupAssIdx] = newAssignmentEntry;
                 else prevAssignments.push(newAssignmentEntry);
                 const mergedRoles = Array.from(new Set([roleKey].concat((existingInSamePrj && Array.isArray(existingInSamePrj.roles)) ? existingInSamePrj.roles : [])));
                 const mergedLocs = Array.from(new Set([assignedTower].concat((existingInSamePrj && Array.isArray(existingInSamePrj.assignedLocations)) ? existingInSamePrj.assignedLocations : [])));
 
-                // Persist to Cloud Firestore with strict asynchronous confirmation
+                // Persist to Cloud Firestore immediately
                 if (typeof firebase !== 'undefined' && firebase.firestore) {
                     const db = firebase.firestore();
                     const userDocData = {
@@ -14428,7 +14631,7 @@
                         roles: mergedRoles,
                         assignedLocations: mergedLocs,
                         assignments: prevAssignments,
-                        projectId: targetPrj.id,
+                        projectId: normPrjId,
                         projectName: targetPrj.name,
                         assignedTower: assignedTower,
                         location: assignedTower,
@@ -14447,7 +14650,6 @@
                     };
 
                     try {
-                        // Pre-flight check: ensure current administrator has their user doc synced in Firestore
                         if (currentUser && currentUser.uid && currentUser.key === 'admin') {
                             try {
                                 await db.collection('users').doc(currentUser.uid).set({
@@ -14457,7 +14659,7 @@
                                     role: 'project-admin',
                                     uiRole: 'admin',
                                     ptwRole: 'project-admin',
-                                    projectId: targetPrj.id,
+                                    projectId: normPrjId,
                                     projectName: targetPrj.name,
                                     status: 'Active',
                                     updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -14467,51 +14669,52 @@
                             }
                         }
 
-                        try {
-                            await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
-                            await db.collection('site_personnel').doc(finalUid).set(userDocData, { merge: true });
-                            provisionSuccess = true;
-                        } catch (directFsErr) {
-                            console.warn('Direct Firestore write permission notice, falling back to secure Cloud Function:', directFsErr);
-                            if (typeof firebase.functions === 'function') {
-                                const functions = getFunctions(firebase.app(), 'asia-south1');
-                                const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
-                                await assignFn({
-                                    action: 'create',
-                                    email: rawEmail,
-                                    name: rawName,
-                                    displayName: rawName,
-                                    role: roleKey,
-                                    roleLabel: roleText,
-                                    projectId: targetPrj.id,
-                                    projectName: targetPrj.name,
-                                    locationId: isCampusWide ? null : (locObj ? locObj.id : null),
-                                    locationName: isCampusWide ? null : assignedTower,
-                                    campusWide: isCampusWide,
-                                    allowedWorkflows: allowedWfs,
-                                    empId: rawEmpId,
-                                    phone: phone,
-                                    password: rawPwd
-                                });
-                                provisionSuccess = true;
-                            } else {
-                                throw directFsErr;
-                            }
-                        }
-                    } catch (fsErr) {
-                        console.error('Firestore role empanelment write error:', fsErr);
-                        if (submitBtn) {
-                            submitBtn.disabled = false;
-                            submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
-                        }
-                        showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-circle-xmark"></i> <b>Firebase Persistence Error:</b> ' + escapeHtml(fsErr.message || fsErr.code || 'Write permission denied by Firestore security rules.'));
-                        showToast('Firebase persistence failed: ' + (fsErr.message || fsErr.code), 'err');
-                        return; // CRITICAL: Stop immediately. NEVER display false success!
+                        await db.collection('users').doc(finalUid).set(userDocData, { merge: true });
+                        await db.collection('site_personnel').doc(finalUid).set(userDocData, { merge: true });
+                        provisionSuccess = true;
+                    } catch (directFsErr) {
+                        console.warn('Direct Firestore write notice, attempting 5s bounded callable:', directFsErr);
                     }
                 } else {
                     provisionSuccess = true;
                 }
-            }
+
+                // Step 2: Best-effort Cloud Function adminAssignProjectRole sync with strict 5-second Promise.race timeout
+                if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
+                    try {
+                        const functions = getFunctions(firebase.app(), 'asia-south1');
+                        const assignFn = httpsCallable(functions, 'adminAssignProjectRole');
+                        const res = await callWithTimeout(assignFn({
+                            action: 'create',
+                            email: rawEmail,
+                            password: rawPwd,
+                            name: rawName,
+                            displayName: rawName,
+                            role: roleKey,
+                            roleLabel: roleText,
+                            projectId: normPrjId,
+                            projectName: targetPrj.name,
+                            locationId: isCampusWide ? 'CAMPUS-WIDE' : (locObj ? locObj.id : assignedTower),
+                            locationName: isCampusWide ? 'All Site Towers' : assignedTower,
+                            campusWide: isCampusWide,
+                            allowedWorkflows: allowedWfs,
+                            empId: rawEmpId,
+                            phone: phone
+                        }), 5000);
+                        if (res && res.data && res.data.success) {
+                            if (res.data.uid) finalUid = res.data.uid;
+                            provisionSuccess = true;
+                        }
+                    } catch (cfErr) {
+                        console.warn('Callable adminAssignProjectRole bounded notice (direct Auth + Firestore already handled):', cfErr);
+                    }
+                }
+
+                if (!provisionSuccess) {
+                    showEmpanelFeedbackBanner('err', '<i class="fa-solid fa-circle-xmark"></i> <b>Firebase Persistence Error:</b> Unable to persist staff assignment to Firestore or Cloud Functions.');
+                    showToast('Firebase persistence failed.', 'err');
+                    return;
+                }
 
             finalUid = finalUid || ('stf-' + uid());
             const staffRecord = {
@@ -14598,10 +14801,6 @@
             window.empanelStaffSig = null;
 
             window.editingEmpanelStaffId = null;
-            if (submitBtn) {
-                submitBtn.disabled = false;
-                submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
-            }
 
             saveState();
             renderSitePersonnelTable();
@@ -14612,6 +14811,12 @@
                 '<i class="fa-solid fa-circle-check"></i> <b>Role Empaneled &amp; Verified in Firebase:</b> <b>' + escapeHtml(rawName) + '</b> (<span class="mono">' + escapeHtml(rawEmail) + '</span>) is actively registered as <b>' + escapeHtml(roleText) + '</b> for <b>' + escapeHtml(targetPrj.name) + '</b> (' + escapeHtml(assignedTower) + '). UID: <span class="mono">' + escapeHtml(finalUid) + '</span>'
             );
             showToast('Empaneled ' + rawName + ' (' + roleText + ') for ' + targetPrj.name + ' [Verified in Firebase]', 'ok');
+            } finally {
+                if (submitBtn) {
+                    submitBtn.disabled = false;
+                    submitBtn.innerHTML = '<i class="fa-solid fa-user-plus"></i> Provision Role &amp; Create Login';
+                }
+            }
         }
 
         async function siteAdminResetStaffPassword(staffId) {
@@ -15107,6 +15312,12 @@
 
         function renderAdminSlaTab() {
             const cfg = getSlaConfig();
+            const isTestEnv = (typeof isTestEnvironment === 'function' && isTestEnvironment());
+            const demoBtn = document.getElementById('slaDemoModeBtn');
+            if (demoBtn) {
+                demoBtn.style.display = isTestEnv ? '' : 'none';
+                demoBtn.disabled = !isTestEnv;
+            }
             const modeEl = document.getElementById('slaCurrentModeBadge');
             if (modeEl) {
                 modeEl.textContent = cfg.mode === 'production' ? '🏭 Enterprise Production Mode (2h / 4h SLA)' : '⚡ Fast Demo Mode (45s / 120s SLA)';
@@ -15122,6 +15333,11 @@
 
         function adminToggleSlaMode(mode) {
             if (!APP_CONFIG.sla) APP_CONFIG.sla = getSlaConfig();
+            const isTestEnv = (typeof isTestEnvironment === 'function' && isTestEnvironment());
+            if (mode === 'demo' && !isTestEnv) {
+                mode = 'production';
+                showToast('Fast Demo Mode is disabled in live production; enforcing 2h / 4h SLA.', 'warn');
+            }
             APP_CONFIG.sla.mode = mode;
             APP_CONFIG.sla._modeExplicitlySet = true;
             if (mode === 'production') {
@@ -15200,12 +15416,8 @@
            are compressed for demo purposes (minutes instead of hours).
            ================================================================ */
         let isTestEnv = (typeof window !== 'undefined' && window.__TEST_MODE__) || (typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__);
-        let STAGE1_MS = isTestEnv ? (45 * 1000) : (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla && APP_CONFIG.sla.mode === 'production')
-            ? (APP_CONFIG.sla.stage1MsProd || 2 * 3600 * 1000)
-            : ((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla && APP_CONFIG.sla.stage1Ms) || 45 * 1000);
-        let STAGE2_MS = isTestEnv ? (120 * 1000) : (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla && APP_CONFIG.sla.mode === 'production')
-            ? (APP_CONFIG.sla.stage2MsProd || 4 * 3600 * 1000)
-            : ((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla && APP_CONFIG.sla.stage2Ms) || 120 * 1000);
+        let STAGE1_MS = isTestEnv ? (45 * 1000) : ((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla && APP_CONFIG.sla.stage1MsProd) || (2 * 3600 * 1000));
+        let STAGE2_MS = isTestEnv ? (120 * 1000) : ((typeof APP_CONFIG !== 'undefined' && APP_CONFIG.sla && APP_CONFIG.sla.stage2MsProd) || (4 * 3600 * 1000));
         function stageLabelFor(status, p) {
             if (status === 'Pending Parallel Approval') return 'MEP / P&M / IT parallel approval';
             if (status === 'Pending Section Head' || status === 'Pending Tower Incharge' || status === 'Pending Excavation Head') {
@@ -16558,8 +16770,11 @@
 
         function resolveProjectName(projId) {
             if (!projId) return 'The Pearl';
-            if (projId === 'ALL' || projId === 'PRJ-MASTER' || projId === 'ENTERPRISE-GLOBAL') return 'All ARPL Worksites (Enterprise Master)';
-            if (projId === 'PRJ-SANSA' || projId === 'PRJ-SA') return 'Sansa County';
+            const norm = normalizeProjectId(projId);
+            if (norm === 'ALL' || norm === 'PRJ-MASTER' || norm === 'ENTERPRISE-GLOBAL') return 'All ARPL Worksites (Enterprise Master)';
+            if (norm === 'PRJ-SANSA') return 'Sansa County';
+            if (norm === 'PRJ-REGENT') return 'The Regent';
+            if (norm === 'PRJ-PEARL') return 'The Pearl';
             try {
                 if (typeof getProject === 'function') {
                     const p = getProject(projId);
@@ -16839,7 +17054,7 @@
                 if (!resolvedName && (d.name || d.displayName)) resolvedName = d.name || d.displayName;
                 if (Array.isArray(d.roles)) d.roles.forEach(r => { if (r && !resolvedRoles.includes(r)) resolvedRoles.push(r); });
                 if (d.role && !resolvedRoles.includes(d.role)) resolvedRoles.push(d.role);
-                if (Array.isArray(d.assignments)) d.assignments.forEach(a => { if (a) resolvedAssignments.push(a); });
+                if (Array.isArray(d.assignments)) d.assignments.forEach(a => { if (a) resolvedAssignments.push(Object.assign({}, a, { projectId: a.projectId ? normalizeProjectId(a.projectId) : a.projectId })); });
                 if (Array.isArray(d.assignedLocations)) d.assignedLocations.forEach(loc => { if (loc && !resolvedAssignedLocations.includes(loc)) resolvedAssignedLocations.push(loc); });
                 if (!resolvedAssignedTower && (d.assignedTower || d.locationName || d.location)) resolvedAssignedTower = d.assignedTower || d.locationName || d.location;
                 if (!resolvedEmployeeId && d.employeeId) resolvedEmployeeId = d.employeeId;
@@ -16918,7 +17133,7 @@
             }
 
             const info = typeof roleInfo === 'function' ? roleInfo(uiRoleKey) : {};
-            const finalProjId = (uiRoleKey === 'super-admin') ? null : (resolvedProjectId || 'PRJ-PEARL');
+            const finalProjId = (uiRoleKey === 'super-admin') ? null : normalizeProjectId(resolvedProjectId || 'PRJ-PEARL');
 
             // CRITICAL UNIVERSAL RBAC SELF-HEALING:
             // Ensure every authenticated user has an authoritative document at /users/{user.uid}
@@ -19973,9 +20188,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 }
             }
 
-            const hasYes = (draft.loadChecklist || []).some(item => item.ans === 'yes');
-            const hasCriteriaYes = Object.values(draft.liftingCriteria || {}).some(v => v === true || v === 'yes');
-            const isCritical = (w > 5.0) || isTandem || isStressHigh || hasYes || hasCriteriaYes;
+            // Strict PTW-009 Invariant: Escalate to Project Manager (PTW-009B Critical Lift)
+            // ONLY when load > 5 MT OR Tandem Lift (never escalate <= 5 MT non-tandem lifts on secondary checklist items).
+            const isCritical = (w > 5.0) || isTandem;
 
             const prevClass = draft.liftingClassification;
             draft.liftingClassification = isCritical ? 'critical' : 'routine';
@@ -23304,20 +23519,12 @@ function trackerHtml(p) {
         html += node('Site Engineer', (isEngAckDone && !isPendingEng) ? 'Step 2 · Tech Ack' : (isPendingEng ? 'Step 2 · Action Req.' : 'Step 2 · Technical Ack'), engState, '', 'Site Engineer ground check and technical acknowledgment');
         html += '<div class="tr-line ' + ((isEngAckDone && !isPendingEng) ? 'done' : '') + '"></div>';
 
-        // Step 3: Tower In-Charge / Section Head
-        const isSectionHeadActive = p.status === 'Pending Section Head';
-        const isSectionHeadDone = !!(a.sectionHead && a.sectionHead.status === 'approved');
-        const isSectionHeadRejected = !!(a.sectionHead && (a.sectionHead.status === 'rejected' || a.sectionHead.status === 'cancelled'));
-        const shState = isSectionHeadDone ? 'done' : (isSectionHeadRejected ? 'rejected' : (isSectionHeadActive ? 'current' : ''));
-        html += node('Tower Incharge', isSectionHeadDone ? 'Step 3 · Approved' : (isSectionHeadRejected ? 'Cancelled' : (isSectionHeadActive ? 'Step 3 · Action Req.' : 'Step 3 · Review')), shState, '', 'Tower In-Charge / Section Head sectional blast perimeter review');
-        html += '<div class="tr-line ' + (isSectionHeadDone ? 'done' : '') + '"></div>';
-
-        // Step 4: EHS Safety Endorsement
+        // Step 3: EHS Safety Endorsement (Direct Statutory Routing: Blasting In-Charge -> Site Engineer -> EHS)
         const isEhsActive = p.status === 'Pending EHS Approval';
         const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved'));
         const isEhsRejected = !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
         const ehsState = isEhsDone ? 'done' : (isEhsRejected ? 'rejected' : (isEhsActive ? 'current' : ''));
-        html += node('EHS Safety', isEhsDone ? 'Step 4 · Endorsed' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 4 · Action Req.' : 'Step 4 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement with 500m siren perimeter verification (First-Wins)');
+        html += node('EHS Safety', isEhsDone ? 'Step 3 · Endorsed' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 3 · Action Req.' : 'Step 3 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement with 500m siren perimeter verification (First-Wins)');
         html += '<div class="tr-line ' + (isEhsDone ? 'done' : '') + '"></div>';
 
         // Final Step: Active (with 18:30 Sunset Stop Rule)
@@ -24866,23 +25073,10 @@ function trackerHtml(p) {
                 }
             });
         }
-        function useDemoBlastingAckPhoto() {
-            const c = document.createElement('canvas'); c.width = 400; c.height = 280;
-            const ctx = c.getContext('2d');
-            const grad = ctx.createLinearGradient(0, 0, 400, 280); grad.addColorStop(0, '#BF360C'); grad.addColorStop(1, '#E65100');
-            ctx.fillStyle = grad; ctx.fillRect(0, 0, 400, 280);
-            ctx.fillStyle = 'rgba(255,255,255,.08)';
-            for (let i = 0; i < 6; i++) { ctx.fillRect(Math.random() * 400, Math.random() * 280, 60 + Math.random() * 60, 4); }
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.fillText('BLASTING INSPECTION PHOTO — ON-SITE VERIFICATION', 14, 140);
-            ctx.font = '10px sans-serif'; ctx.fillText('Form PTW-007 · ' + fmtDateTime(nowTime()), 14, 160);
-            actionModalCtx.photo = c.toDataURL('image/png');
-            const wrap = document.getElementById('blastingAckPhotoWrap');
-            if (wrap) wrap.innerHTML = '<div class="photo-preview" style="position:relative;display:inline-block;"><img src="' + actionModalCtx.photo + '" style="max-height:120px;border-radius:6px;border:1px solid var(--border);"><button class="rm" type="button" onclick="clearBlastingAckPhoto()" title="Remove Confirmation Photo" aria-label="Remove Confirmation Photo" style="position:absolute;top:4px;right:4px;background:rgba(0,0,0,0.6);color:#fff;border:none;border-radius:50%;width:22px;height:22px;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
-        }
         function clearBlastingAckPhoto() {
             actionModalCtx.photo = null;
             const wrap = document.getElementById('blastingAckPhotoWrap');
-            if (wrap) wrap.innerHTML = '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><button type="button" class="btn btn-sm btn-primary" onclick="captureBlastingAckPhoto()"><i class="fa-solid fa-camera"></i> Capture / Upload On-Site Photo</button></div>';
+            if (wrap) wrap.innerHTML = '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;"><button type="button" class="btn btn-sm btn-primary" onclick="captureBlastingAckPhoto()"><i class="fa-solid fa-camera"></i> Capture Live On-Site Photo</button></div>';
         }
 
         function openCommentThenAct(p, rk, decision, gps, isExt) {
@@ -24956,7 +25150,7 @@ function trackerHtml(p) {
                     '<label style="font-weight:600;font-size:12.5px;">Mandatory On-Site Inspection Photo Evidence <span class="req">*</span></label>' +
                     '<div id="blastingAckPhotoWrap">' +
                     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">' +
-                    '<button type="button" class="btn btn-sm btn-primary" onclick="captureBlastingAckPhoto()"><i class="fa-solid fa-camera"></i> Capture / Upload On-Site Photo</button>' +
+                    '<button type="button" class="btn btn-sm btn-primary" onclick="captureBlastingAckPhoto()"><i class="fa-solid fa-camera"></i> Capture Live On-Site Photo</button>' +
                     '</div>' +
                     '</div>' +
                     '</div>';
@@ -26105,14 +26299,27 @@ function trackerHtml(p) {
            ================================================================ */
         const PDF_NAVY = [15, 23, 42], PDF_NAVY_LIGHT = [30, 41, 59], PDF_ORANGE = [232, 96, 10], PDF_MUTED = [100, 116, 139], PDF_LINE = [203, 213, 225], PDF_BG_LIGHT = [248, 250, 252], PDF_HEADER_BG = [241, 245, 249];
         function pdfImgFormat(dataUrl) { return /^data:image\/jpe?g/i.test(dataUrl) ? 'JPEG' : 'PNG'; }
-        function generatePermitPDF(id) {
-            // Strict Enterprise Policy: PDF download restricted exclusively to EHS personnel (EHS Manager / Officer)
-            if (!currentUser || !['ehs-manager', 'ehs-officer'].includes(currentUser.key)) {
-                showToast('Access Denied: Permit Report PDF download is restricted exclusively to EHS Safety personnel (EHS Manager / Officer).', 'err');
-                return;
+        function canDownloadStatutoryPdf(p) {
+            if (!currentUser) return false;
+            const rk = String(currentUser.key || currentUser.role || '').toLowerCase();
+            if (['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager', 'super-admin'].includes(rk)) {
+                return true;
             }
+            if (rk === 'admin' || rk === 'project-admin' || rk === 'site-admin') {
+                if (p && p.projectId && currentUser.projectId) {
+                    return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
+                }
+                return true;
+            }
+            return false;
+        }
+        function generatePermitPDF(id) {
             const p = (typeof id === 'string') ? PERMITS.find(x => x.id === id) : (id && id.id ? id : null);
             if (!p) return;
+            if (!canDownloadStatutoryPdf(p)) {
+                showToast('Access Denied: Permit Report PDF download is restricted to EHS personnel, Super Admin, and site-scoped Site Admin.', 'err');
+                return;
+            }
             const JsPdfClass = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
             if (!JsPdfClass) {
                 showToast('PDF library could not be loaded. Please check your internet connection and retry.', 'error');
@@ -27568,7 +27775,7 @@ function trackerHtml(p) {
                         '<div class="review-item"><div class="rk">Requested By</div><div class="rv">' + p.extension.requestedBy + ' &middot; ' + fmtDateTime(p.extension.requestedAt) + '</div></div>' +
                         extTrackerHtml(p.extension, p) + '</div>';
                 }
-                const isEhsUser = currentUser && ['ehs-manager', 'ehs-officer'].includes(currentUser.key);
+                const isEhsUser = canDownloadStatutoryPdf(p);
                 let downloadBtnHtml = '';
                 if (isEhsUser) {
                     const isActKind = p.status.startsWith('Active') || ['Completed (Surrendered)', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance', 'Closed – Pending Surrender'].includes(p.status);
@@ -28439,79 +28646,97 @@ ptypeOf(p) === 'general' ?
 
             if (btn) {
                 btn.disabled = true;
-                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Provisioning Auth Account...';
+                btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Provisioning in Firebase...';
             }
 
             let createdUid = 'adm-' + uid();
+            const normTargetPrjId = normalizeProjectId(targetPrj.id);
             try {
-                const provAuth = getProvisioningAuth();
-                if (provAuth) {
-                    const cred = await provAuth.createUserWithEmailAndPassword(email, password);
-                    if (cred && cred.user) {
-                        createdUid = cred.user.uid;
-                        try { await cred.user.updateProfile({ displayName: name }); } catch (e) {}
+                try {
+                    const provAuth = getProvisioningAuth();
+                    if (provAuth) {
+                        const cred = await provAuth.createUserWithEmailAndPassword(email, password);
+                        if (cred && cred.user) {
+                            createdUid = cred.user.uid;
+                            try { await cred.user.updateProfile({ displayName: name }); } catch (e) {}
+                        }
+                        await provAuth.signOut();
                     }
-                    await provAuth.signOut();
-                }
-            } catch (authErr) {
-                if (authErr && authErr.code === 'auth/email-already-in-use') {
-                    showToast('Email exists in Firebase Auth; linking Project Admin profile to project.', 'info');
-                } else {
-                    if (btn) {
-                        btn.disabled = false;
-                        btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Provision Live Admin Account';
+                } catch (authErr) {
+                    if (authErr && authErr.code === 'auth/email-already-in-use') {
+                        showToast('Email exists in Firebase Auth; linking Project Admin profile to project.', 'info');
+                    } else {
+                        showToast('Firebase Auth Error: ' + (authErr.message || authErr), 'err');
+                        return;
                     }
-                    showToast('Firebase Auth Error: ' + (authErr.message || authErr), 'err');
-                    return;
                 }
-            }
 
-            const newAdm = {
-                id: createdUid,
-                uid: createdUid,
-                name: name,
-                email: email,
-                role: 'project-admin',
-                uiRole: 'admin',
-                ptwRole: 'project-admin',
-                projectId: targetPrj.id,
-                projectName: targetPrj.name,
-                empId: empId,
-                employeeId: empId,
-                phone: phone,
-                status: 'Active',
-                createdBy: (currentUser && currentUser.email) || 'aic1176@aurogroup.com',
-                createdAt: nowTime()
-            };
+                const newAdm = {
+                    id: createdUid,
+                    uid: createdUid,
+                    name: name,
+                    email: email,
+                    role: 'project-admin',
+                    uiRole: 'admin',
+                    ptwRole: 'project-admin',
+                    projectId: normTargetPrjId,
+                    projectName: targetPrj.name,
+                    empId: empId,
+                    employeeId: empId,
+                    phone: phone,
+                    status: 'Active',
+                    createdBy: (currentUser && currentUser.email) || 'aic1176@aurogroup.com',
+                    createdAt: nowTime()
+                };
 
-            targetPrj.adminName = name;
-            targetPrj.adminEmail = email;
-            targetPrj.employeeId = empId;
+                targetPrj.adminName = name;
+                targetPrj.adminEmail = email;
+                targetPrj.employeeId = empId;
 
-            PROJECT_ADMINS = PROJECT_ADMINS.filter(a => a.email.toLowerCase() !== email);
-            PROJECT_ADMINS.unshift(newAdm);
-            saveState();
-            recordAuditLog('ADMIN_PROVISIONED', 'Project Admin ' + name + ' (' + email + ') provisioned for ' + targetPrj.name + ' (' + targetPrj.id + ')', targetPrj.id);
+                PROJECT_ADMINS = PROJECT_ADMINS.filter(a => a.email.toLowerCase() !== email);
+                PROJECT_ADMINS.unshift(newAdm);
+                saveState();
+                recordAuditLog('ADMIN_PROVISIONED', 'Project Admin ' + name + ' (' + email + ') provisioned for ' + targetPrj.name + ' (' + normTargetPrjId + ')', normTargetPrjId);
 
-            try {
-                if (typeof firebase !== 'undefined' && firebase.firestore) {
-                    await firebase.firestore().collection('users').doc(createdUid).set(newAdm, { merge: true });
-                    await firebase.firestore().collection('project_admins').doc(createdUid).set(newAdm, { merge: true });
-                    await firebase.firestore().collection('projects').doc(targetPrj.id).set({
-                        adminUid: createdUid,
-                        adminName: name,
-                        adminEmail: email,
-                        employeeId: empId,
-                        updatedAt: firebase.firestore.FieldValue.serverTimestamp()
-                    }, { merge: true });
+                try {
+                    if (typeof firebase !== 'undefined' && firebase.firestore) {
+                        await firebase.firestore().collection('users').doc(createdUid).set(newAdm, { merge: true });
+                        await firebase.firestore().collection('project_admins').doc(createdUid).set(newAdm, { merge: true });
+                        await firebase.firestore().collection('projects').doc(normTargetPrjId).set({
+                            adminUid: createdUid,
+                            adminName: name,
+                            adminEmail: email,
+                            employeeId: empId,
+                            updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+                        }, { merge: true });
+                    }
+                } catch (e) {
+                    console.warn('Firestore write warning:', e);
                 }
-            } catch (e) {
-                console.warn('Firestore write warning:', e);
-            }
 
-            if (btn) {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Provision Live Admin Account';
+                if (typeof firebase !== 'undefined' && firebase.app && typeof firebase.app().functions === 'function') {
+                    try {
+                        const functions = getFunctions(firebase.app(), 'asia-south1');
+                        const createAdminFn = httpsCallable(functions, 'adminCreateProjectAdmin');
+                        await callWithTimeout(createAdminFn({
+                            email: email,
+                            password: password,
+                            displayName: name,
+                            name: name,
+                            projectId: normTargetPrjId,
+                            projectName: targetPrj.name,
+                            empId: empId,
+                            phone: phone
+                        }), 5000);
+                    } catch (cfErr) {
+                        console.warn('Callable adminCreateProjectAdmin bounded notice:', cfErr);
+                    }
+                }
+            } finally {
+                if (btn) {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="fa-solid fa-user-check"></i> Provision Live Admin Account';
+                }
             }
 
             showToast('Project Admin "' + name + '" provisioned with live Firebase Auth login!', 'ok');
@@ -29485,6 +29710,5 @@ ptypeOf(p) === 'general' ?
             };
         };
     </script>
-    <script src="patch-auth.js?v=20261103_v5"></script>
 </body>
 </html>

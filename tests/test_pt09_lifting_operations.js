@@ -402,34 +402,38 @@ updateLiftingClassification();
 `);
 assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', 'Must reset to routine');
 
-// Case D: Dynamic Promotion on Sling Stress > 80% SWL
+// Case D: Sling Stress > 80% SWL alone (<= 5 MT, non-tandem) must NOT escalate to Critical/PM
 evalInVM(`
+draft.loadWeight = 3.0;
+draft.liftingTandemLift = false;
 draft.riggingStressPercent = 85.4;
 updateLiftingClassification();
 `);
-assert.strictEqual(evalInVM('draft.liftingClassification'), 'critical', 'Sling stress > 80% SWL must promote to critical');
-assert.strictEqual(evalInVM('draft.ptype'), 'liftplan', 'Ptype must switch to liftplan on sling stress > 80%');
+assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', '<= 5 MT non-tandem lift with > 80% stress must remain routine');
+assert.strictEqual(evalInVM('draft.ptype'), 'lifting', 'Ptype must remain lifting (no PM escalation)');
 
 // Reset stress
 evalInVM(`
 draft.riggingStressPercent = 60.0;
 updateLiftingClassification();
 `);
-assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', 'Must reset to routine');
+assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', 'Must remain routine');
 
-// Case E: Dynamic Promotion on any of 14 High-Risk Criteria
+// Case E: Secondary Criteria alone (<= 5 MT, non-tandem) must NOT escalate to Critical/PM
 const criteriaList = evalInVM('LIFTING_LOAD_CHECKLIST_CRITERIA');
 criteriaList.forEach((crit) => {
     evalInVM(`
+    draft.loadWeight = 3.0;
+    draft.liftingTandemLift = false;
     draft.liftingCriteria = {};
     draft.liftingCriteria['${crit.id}'] = true;
     updateLiftingClassification();
     `);
-    assert.strictEqual(evalInVM('draft.liftingClassification'), 'critical', `Criterion ${crit.id} (${crit.label}) must promote to critical`);
-    assert.strictEqual(evalInVM('draft.ptype'), 'liftplan', `Ptype must switch to liftplan for criterion ${crit.id}`);
+    assert.strictEqual(evalInVM('draft.liftingClassification'), 'routine', `Secondary criterion ${crit.id} on <= 5 MT non-tandem must NOT escalate to critical`);
+    assert.strictEqual(evalInVM('draft.ptype'), 'lifting', `Ptype must stay lifting for criterion ${crit.id} when <= 5 MT and non-tandem`);
 });
 
-console.log('  ✓ PASS: Dynamic routing & auto-promotion rigorously tested: Weight > 5 MT, Tandem, Stress > 80%, and all 14 criteria promote to PTW-009B');
+console.log('  ✓ PASS: Strict PTW-009B escalation verified: ONLY Weight > 5 MT OR Tandem Lift promotes to PTW-009B / Project Manager');
 
 // --- 6. Sling Stress Calculation Engine ---
 console.log('\n--- 6. Sling Stress Calculation Engine ---');
