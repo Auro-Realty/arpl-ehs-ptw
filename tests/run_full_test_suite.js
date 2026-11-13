@@ -519,9 +519,13 @@ runSuite('PDF Download Access Control & Timing', () => {
         assert(!app.canDownloadStatutoryPdf(pActive, r), `Non-EHS Role ${r} is LOCKED from downloading official PDF`);
     });
 
-    // Single-use download lock
+    // Single-use download lock enforced on generatePermitPDF while preserving viewDetail role eligibility
+    const prevUser = app.currentUser;
     pActive.statutoryDownload = { isDownloaded: true, downloadedBy: 'EHS Head', downloadedAt: new Date() };
-    assert(!app.canDownloadStatutoryPdf(pActive, 'ehs-manager'), 'Second Statutory PDF download is strictly locked once statutoryDownload.isDownloaded is true');
+    app.currentUser = { key: 'ehs-manager', name: 'EHS Head', projectId: prj.id };
+    assert(app.canDownloadStatutoryPdf(pActive, 'ehs-manager'), 'canDownloadStatutoryPdf stays true for EHS UI badge state');
+    assert(app.generatePermitPDF(pActive) === false, 'Second Statutory PDF download is strictly locked once statutoryDownload.isDownloaded is true');
+    app.currentUser = prevUser;
 });
 
 // ------------------------------------------------------------------
