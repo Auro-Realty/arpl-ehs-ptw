@@ -138,7 +138,7 @@ const exportsFn = new Function(
         rejectPermitStage, resubmitReturnedPermit, activatePermit,
         acknowledgeSiteEngineer, rejectSiteEngineer, approvePermitStage,
         respondToObservation, acknowledgeObservationEng, reviewObservationSectionHead, resolveObservation,
-        raiseObservation, cancelActivePermit, canDownloadStatutoryPdf, hasPerm, actionPanelHtml,
+        raiseObservation, cancelActivePermit, canDownloadStatutoryPdf, actionPanelHtml,
         requestExtension, approveExtensionStage, rejectExtensionStage,
         closeAndSurrenderPermit,
         getPermitSignatory, makeSimSignature,
