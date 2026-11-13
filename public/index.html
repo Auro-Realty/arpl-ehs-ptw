@@ -25853,9 +25853,10 @@ function trackerHtml(p) {
 
         /* ---------- OBSERVATION MODALS (STRICT DPDP & SIGNATURE) ---------- */
         function openRaiseObservationModal(id) {
-            const rk = normalizeRoleKey(currentUser && (currentUser.key || currentUser.role));
-            if (!['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(currentUser && currentUser.key) &&
-                !['ehs-supervisor', 'ehs-head'].includes(rk)) {
+            const rawRk = currentUser && (currentUser.key || currentUser.role);
+            const normRk = normalizeRoleKey(rawRk);
+            if (!['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(rawRk) &&
+                !['ehs-supervisor', 'ehs-head'].includes(normRk)) {
                 showToast('Access Denied: Only EHS Safety personnel can raise safety observations.', 'err');
                 return;
             }
