@@ -8680,25 +8680,25 @@
                 if (isBatching) {
                     return ['electrician', 'pm', 'quality-engineer', 'ehs-manager', 'ehs-officer'];
                 }
-                return ['electrician', 'site-engineer', 'mep', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
+                return ['electrician', 'site-engineer', 'mep', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'blasting') {
-                return ['blasting-incharge', 'site-engineer', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'];
+                return ['blasting-incharge', 'site-engineer', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'lifting') {
-                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
+                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'liftplan') {
-                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'project-manager', 'ehs-manager', 'ehs-officer'];
+                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'project-manager', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'confined' || ptypeOf(p) === 'guardrail' || ptypeOf(p) === 'hotwork' || ptypeOf(p) === 'general') {
-                return ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
+                return ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'shaft') {
-                return ['site-supervisor', 'site-engineer', 'mep', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
+                return ['site-supervisor', 'site-engineer', 'mep', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'nightshift') {
-                return ['site-supervisor', 'night-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
+                return ['site-supervisor', 'night-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
             }
             return ['site-supervisor', 'site-engineer', 'mep', 'pm', 'it', 'excavation-head', 'ehs-manager', 'ehs-officer'];
         }
@@ -10156,8 +10156,9 @@
             NOTIFICATIONS.unshift(n);
             if (currentUser) {
                 const rk = currentUser.key;
+                const normRk = normalizeRoleKey(rk);
                 const matches = targets.includes(rk) || targets.includes('all') ||
-                    ((rk === 'hw-section-head' || rk === 'section-head') && (targets.includes('hw-section-head') || targets.includes('section-head'))) ||
+                    (normRk === 'tower-in-charge' && (targets.includes('hw-section-head') || targets.includes('section-head') || targets.includes('tower-in-charge'))) ||
                     ((rk === 'excavation-head' || rk === 'section-head') && (targets.includes('excavation-head') || targets.includes('section-head'))) ||
                     ((rk === 'ehs-manager' || rk === 'ehs-officer') && targets.includes('ehs'));
                 if (matches) refreshNotifBell();
@@ -10167,10 +10168,11 @@
         function notifsForCurrentUser() {
             if (!currentUser) return [];
             const rk = currentUser.key;
+            const normRk = normalizeRoleKey(rk);
             return NOTIFICATIONS.filter(n => {
                 if (!n.roleTargets) return false;
                 if (n.roleTargets.includes('all') || n.roleTargets.includes(rk)) return true;
-                if ((rk === 'hw-section-head' || rk === 'section-head') && (n.roleTargets.includes('hw-section-head') || n.roleTargets.includes('section-head'))) return true;
+                if (normRk === 'tower-in-charge' && (n.roleTargets.includes('hw-section-head') || n.roleTargets.includes('section-head') || n.roleTargets.includes('tower-in-charge'))) return true;
                 if ((rk === 'excavation-head' || rk === 'section-head') && (n.roleTargets.includes('excavation-head') || n.roleTargets.includes('section-head'))) return true;
                 if ((rk === 'ehs-manager' || rk === 'ehs-officer') && n.roleTargets.includes('ehs')) return true;
                 return false;
