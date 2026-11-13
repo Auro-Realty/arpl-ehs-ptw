@@ -7491,7 +7491,7 @@
                     { label: 'Check Notifications', icon: 'fa-bell', cls: 'btn-default', action: "goTo('notifications')" }
                 ],
                 approvers: [
-                    { cls: 'k-amber', icon: 'fa-hourglass-half', label: 'Pending My Approval', count: (rk) => pendingForRole(rk).length, foot: (rk) => (rk === 'excavation-head' ? 'Excavation permits' : (rk === 'quality-engineer' ? 'Batching Plant Quality Clearance' : (rk === 'project-manager' ? 'PTW-009B Critical Lift Plans' : ((rk === 'hw-section-head' || rk === 'section-head') ? 'Across building & tower permits' : 'Across all permit types')))), action: "goTo('register')" },
+                    { cls: 'k-amber', icon: 'fa-hourglass-half', label: 'Pending My Approval', count: (rk) => pendingForRole(rk).length, foot: (rk) => (rk === 'excavation-head' ? 'Excavation permits' : (rk === 'quality-engineer' ? 'Batching Plant Quality Clearance' : (rk === 'project-manager' ? 'PTW-009B Critical Lift Plans' : (normalizeRoleKey(rk) === 'tower-in-charge' ? 'Across building & tower permits' : 'Across all permit types')))), action: "goTo('register')" },
                     { cls: 'k-purple', icon: 'fa-stopwatch', label: 'Pending Extension Approval', count: (rk) => pendingExtensionsForRole(rk).length, foot: () => 'Extension requests', action: "goTo('register')" },
                     { cls: 'k-blue', icon: 'fa-bolt', label: 'Active Permits', count: (rk, sc) => PERMITS.filter(p => isPermitVisibleToRole(p, rk) && p.status === 'Active' && permitMatchesScope(p, sc)).length, foot: (rk, sc) => (sc ? (Array.isArray(sc) ? ((sc.length === 1 && PTYPE_META[sc[0]]) ? (PTYPE_META[sc[0]].short + ' — currently on site') : 'Hot Work & Shaft Work — currently on site') : (PTYPE_META[sc] ? PTYPE_META[sc].short + ' — currently on site' : 'Currently on site')) : 'Currently on site'), action: "goTo('register')" },
                     { cls: 'k-green', icon: 'fa-circle-check', label: 'Approved by Me', count: (rk, sc) => PERMITS.filter(p => isPermitVisibleToRole(p, rk) && permitMatchesScope(p, sc) && p.approvals && CHAIN_ROLE_FIELD[rk] && p.approvals[CHAIN_ROLE_FIELD[rk]] && p.approvals[CHAIN_ROLE_FIELD[rk]].status === 'approved').length, foot: () => 'All-time', action: "goTo('register')" }
@@ -8680,37 +8680,39 @@
                 if (isBatching) {
                     return ['electrician', 'pm', 'quality-engineer', 'ehs-manager', 'ehs-officer'];
                 }
-                return ['electrician', 'site-engineer', 'mep', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
+                return ['electrician', 'site-engineer', 'mep', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'blasting') {
-                return ['blasting-incharge', 'site-engineer', 'ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'];
+                return ['blasting-incharge', 'site-engineer', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'];
             }
             if (ptypeOf(p) === 'lifting') {
-                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
+                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'liftplan') {
-                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'project-manager', 'ehs-manager', 'ehs-officer'];
+                return ['lift-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'project-manager', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'confined' || ptypeOf(p) === 'guardrail' || ptypeOf(p) === 'hotwork' || ptypeOf(p) === 'general') {
-                return ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
+                return ['site-supervisor', 'site-engineer', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'shaft') {
-                return ['site-supervisor', 'site-engineer', 'mep', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
+                return ['site-supervisor', 'site-engineer', 'mep', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
             }
             if (ptypeOf(p) === 'nightshift') {
-                return ['site-supervisor', 'night-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'ehs-manager', 'ehs-officer'];
+                return ['site-supervisor', 'night-supervisor', 'site-engineer', 'pm', 'hw-section-head', 'section-head', 'tower-in-charge', 'ehs-manager', 'ehs-officer'];
             }
             return ['site-supervisor', 'site-engineer', 'mep', 'pm', 'it', 'excavation-head', 'ehs-manager', 'ehs-officer'];
         }
         function isPermitVisibleToRole(p, roleKey) {
-            if (roleKey === 'super-admin') return true;
-            if (!roleKey || roleKey === 'admin' || roleKey === 'project-admin') {
+            const rawRk = String(roleKey || '').trim().toLowerCase();
+            const normRk = normalizeRoleKey(roleKey) || rawRk;
+            if (normRk === 'super-admin') return true;
+            if (!normRk || normRk === 'admin' || normRk === 'project-admin') {
                 if (currentUser && currentUser.projectId && p && p.projectId) {
                     return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
                 }
                 return true;
             }
-            if (currentUser && currentUser.projectId && p && p.projectId && !['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(roleKey)) {
+            if (currentUser && currentUser.projectId && p && p.projectId && !['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(normRk)) {
                 const uPrj = normalizeProjectId(currentUser.projectId);
                 const pPrj = normalizeProjectId(p.projectId);
                 if (uPrj && pPrj && uPrj !== 'ALL' && uPrj !== pPrj) return false;
@@ -8722,23 +8724,44 @@
                     p.createdByEmail === currentUser.email ||
                     p.creatorEmail === currentUser.email ||
                     p.createdByUid === currentUser.uid ||
-                    roleKey === 'site-supervisor' ||
-                    roleKey === 'electrician' ||
-                    roleKey === 'blasting-incharge' ||
-                    roleKey === 'lift-supervisor'
+                    normRk === 'site-supervisor' ||
+                    normRk === 'electrician' ||
+                    normRk === 'blasting-incharge' ||
+                    normRk === 'lift-supervisor'
                 )) {
                     return true;
                 }
             }
             // Location Scoping: If user is assigned to a specific tower/location and is not campus-wide
-            if (currentUser && currentUser.locationName && !currentUser.campusWide && roleKey !== 'super-admin' && roleKey !== 'admin') {
+            // Never hide Manual-location permits (e.g., PTW-007 Drilling & Blasting) or when assignments/location are site-wide
+            const hasExplicitLocation = !!(currentUser && currentUser.locationName && !['Full Worksite', 'All Site Towers', 'Campus-Wide (All Towers)'].includes(String(currentUser.locationName).trim()));
+            const isManualLocPermit = !!(p && (p.locationStructure === 'Manual' || (!p.tower && p.locManual) || ptypeOf(p) === 'blasting'));
+            if (hasExplicitLocation && !currentUser.campusWide && !isManualLocPermit && normRk !== 'super-admin' && normRk !== 'admin') {
                 const pLoc = p.tower || p.locationName || p.location || '';
-                if (pLoc && currentUser.locationName && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'Campus-Wide (All Towers)') {
+                if (pLoc && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'All Site Towers' && pLoc !== 'Campus-Wide (All Towers)') {
                     return false;
                 }
             }
+            // Enforce strict Batching Plant Electrical isolation for Tower In-Charge
+            const pt = ptypeOf(p);
+            const isBatchingElec = (pt === 'electrical') && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant');
+            if (normRk === 'tower-in-charge') {
+                if (isBatchingElec) return false;
+                if (pt === 'excavation' && rawRk !== 'section-head') return false;
+            }
+            // Dynamic chain visibility check via normalizeRoleKey(step.role)
+            if (p && Array.isArray(p.chain) && p.chain.length) {
+                const inChain = p.chain.some(step => {
+                    if (!step) return false;
+                    const sRoleNorm = step.role ? normalizeRoleKey(step.role) : (step.roleKey ? normalizeRoleKey(step.roleKey) : '');
+                    const arrMatch = Array.isArray(step.roles) && step.roles.some(r => normalizeRoleKey(r) === normRk);
+                    return (sRoleNorm && sRoleNorm === normRk) || arrMatch;
+                });
+                if (inChain) return true;
+            }
             const stakeholders = stakeholdersFor(p);
-            return stakeholders.includes(roleKey) || (roleKey === 'section-head' && stakeholders.includes('hw-section-head'));
+            return stakeholders.some(s => s === roleKey || s === rawRk || normalizeRoleKey(s) === normRk) ||
+                (rawRk === 'section-head' && stakeholders.includes('hw-section-head'));
         }
         function checklistFor(type, workTypeOrDraft) {
             if (type === 'nightshift') return NIGHTSHIFT_CHECKLIST_ITEMS;
@@ -8773,15 +8796,18 @@
             return CHECKLIST_ITEMS;
         }
         function roleTypeScope(roleKey) {
-            if (roleKey === 'night-supervisor') return ['nightshift'];
-            if (roleKey === 'electrician') return ['electrical'];
-            if (roleKey === 'quality-engineer') return ['electrical'];
-            if (roleKey === 'blasting-incharge') return ['blasting'];
-            if (roleKey === 'lift-supervisor') return ['lifting', 'liftplan'];
-            if (roleKey === 'project-manager') return ['liftplan'];
-            if (roleKey === 'excavation-head') return ['excavation'];
-            if (roleKey === 'hw-section-head') return ['hotwork', 'shaft', 'guardrail', 'confined', 'electrical', 'general', 'lifting', 'liftplan', 'nightshift'];
-            if (roleKey === 'section-head') return ['hotwork', 'shaft', 'guardrail', 'confined', 'excavation', 'electrical', 'general', 'lifting', 'liftplan', 'nightshift'];
+            const raw = String(roleKey || '').trim().toLowerCase();
+            const rk = normalizeRoleKey(roleKey) || raw;
+            if (rk === 'night-supervisor') return ['nightshift'];
+            if (rk === 'electrician') return ['electrical'];
+            if (rk === 'quality-engineer') return ['electrical'];
+            if (rk === 'blasting-incharge') return ['blasting'];
+            if (rk === 'lift-supervisor') return ['lifting', 'liftplan'];
+            if (rk === 'project-manager') return ['liftplan'];
+            if (rk === 'excavation-head') return ['excavation'];
+            if (rk === 'tower-in-charge' || rk === 'hw-section-head' || rk === 'section-head') {
+                return ['hotwork', 'shaft', 'guardrail', 'confined', 'electrical', 'blasting', 'general', 'lifting', 'liftplan', 'nightshift'];
+            }
             return null;
         }
         function permitMatchesScope(p, scope) {
@@ -9299,7 +9325,7 @@
             { canonicalKey: 'it-in-charge', internalKey: 'it', fullLabel: 'IT In-Charge (Clearance Approver)', shortLabel: 'IT Engineer', aliases: ['it-in-charge', 'it', 'it in-charge (clearance approver)', 'it engineer', 'it in charge'] },
             { canonicalKey: 'quality-engineer', internalKey: 'quality-engineer', fullLabel: 'Quality Engineer (Approver)', shortLabel: 'Quality Engineer', aliases: ['quality-engineer', 'quality engineer (approver)', 'quality engineer'] },
             { canonicalKey: 'excavation-head', internalKey: 'excavation-head', fullLabel: 'Excavation Head (Approver)', shortLabel: 'Excavation Head', aliases: ['excavation-head', 'excavation head (approver)', 'excavation head'] },
-            { canonicalKey: 'tower-in-charge', internalKey: 'hw-section-head', fullLabel: 'Tower In-Charge / Section Head (Approver)', shortLabel: 'Tower Incharge', aliases: ['tower-in-charge', 'section-head', 'hw-section-head', 'tower in-charge / section head (approver)', 'tower incharge', 'tower in-charge', 'section head'] },
+            { canonicalKey: 'tower-in-charge', internalKey: 'hw-section-head', fullLabel: 'Tower In-Charge / Section Head (Approver)', shortLabel: 'Tower Incharge', aliases: ['tower-in-charge', 'tower-incharge', 'section-head', 'hw-section-head', 'tower in-charge / section head (approver)', 'tower incharge', 'tower in-charge', 'section head'] },
             { canonicalKey: 'project-manager', internalKey: 'project-manager', fullLabel: 'Project Manager (Approver)', shortLabel: 'Project Manager', aliases: ['project-manager', 'project manager (approver)', 'project manager'] },
             { canonicalKey: 'ehs-supervisor', internalKey: 'ehs-officer', fullLabel: 'EHS Supervisor (Issuer / Approver)', shortLabel: 'EHS supervisor', aliases: ['ehs-supervisor', 'ehs-officer', 'ehs supervisor (issuer / approver)', 'ehs supervisor', 'ehs officer'] },
             { canonicalKey: 'ehs-head', internalKey: 'ehs-manager', fullLabel: 'EHS Head (Issuer / Approver)', shortLabel: 'EHS Head', aliases: ['ehs-head', 'ehs-manager', 'ehs head (issuer / approver)', 'ehs head', 'ehs manager'] },
@@ -9312,10 +9338,13 @@
             const raw = (typeof roleInput === 'object' ? (roleInput.key || roleInput.role || roleInput.uiRole || '') : String(roleInput)).trim();
             if (!raw) return '';
             const lower = raw.toLowerCase();
+            if (lower === 'tower-in-charge' || lower === 'tower-incharge' || lower === 'section-head' || lower === 'hw-section-head' || lower === 'tower incharge' || lower === 'tower in-charge' || lower === 'tower in-charge / section head (approver)' || lower === 'section head') {
+                return 'tower-in-charge';
+            }
             for (let i = 0; i < ROLE_REGISTRY.length; i++) {
                 const reg = ROLE_REGISTRY[i];
                 if (reg.internalKey === lower || reg.canonicalKey === lower || reg.aliases.includes(lower) || reg.fullLabel.toLowerCase() === lower || reg.shortLabel.toLowerCase() === lower) {
-                    return reg.internalKey;
+                    return reg.canonicalKey === 'tower-in-charge' ? 'tower-in-charge' : reg.internalKey;
                 }
             }
             return lower;
@@ -9389,7 +9418,7 @@
             if (!key) return { key: '', label: 'Authorized Signatory', fullLabel: 'Authorized Signatory', sub: '', icon: 'fa-user' };
             const norm = normalizeRoleKey(key);
             const reg = ROLE_REGISTRY.find(r => r.internalKey === norm || r.canonicalKey === norm);
-            if (key === 'section-head' || key === 'tower-in-charge' || norm === 'hw-section-head') {
+            if (key === 'section-head' || key === 'tower-in-charge' || key === 'tower-incharge' || norm === 'hw-section-head' || norm === 'tower-in-charge') {
                 const base = ROLES.find(r => r.key === 'hw-section-head') || { key: 'hw-section-head', label: 'Tower Incharge', sub: 'Approving Authority', icon: 'fa-user-tie' };
                 return Object.assign({}, base, { fullLabel: 'Tower In-Charge / Section Head (Approver)' });
             }
@@ -10747,6 +10776,7 @@
             }
             const rawRk = String(roleKey || (currentUser && currentUser.key) || '').trim().toLowerCase();
             const rk = normalizeRoleKey(rawRk);
+            const isTiRole = (rk === 'tower-in-charge' || rk === 'hw-section-head' || rk === 'section-head');
             if (!rk) return false;
             if (p && (p.status === 'Night Shift Approved – Awaiting Linked Permit')) return rk === normalizeRoleKey(targetInitiatorForNightLinked(p));
             if (p && (p.status === 'Approved – Pending Night Handover')) return rk === 'night-supervisor';
@@ -10760,7 +10790,7 @@
 
             const stage = chainStage(chain);
             if (chain.kind === 'nightshift') {
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'night-handover') return rk === 'night-supervisor';
                 if (stage === 'pm-night') return rk === 'pm';
                 if (stage === 'ehs') {
@@ -10772,7 +10802,7 @@
             }
             if (chain.kind === 'lifting-routine') {
                 if (stage === 'pm') return rk === 'pm' && chain.pm && chain.pm.status === 'pending';
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10782,7 +10812,7 @@
             }
             if (chain.kind === 'lifting-critical') {
                 if (stage === 'pm') return rk === 'pm' && chain.pm && chain.pm.status === 'pending';
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'project-manager') return rk === 'project-manager' && chain.projectManager && chain.projectManager.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
@@ -10792,7 +10822,6 @@
                 return false;
             }
             if (chain.kind === 'blasting') {
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10812,7 +10841,7 @@
             }
             if (chain.kind === 'electrical-site') {
                 if (stage === 'mep-pm') return (rk === 'mep' || rk === 'pm') && ((chain.mep && chain.mep.status === 'pending') || (chain.pm && chain.pm.status === 'pending'));
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10821,7 +10850,7 @@
                 return false;
             }
             if (chain.kind === 'guardrail' || chain.kind === 'hotwork' || chain.kind === 'confined' || chain.kind === 'general') {
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10830,7 +10859,7 @@
                 return false;
             }
             if (chain.kind === 'confined-ext') {
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10840,7 +10869,7 @@
             }
             if (chain.kind === 'shaft') {
                 if (stage === 'mep') return rk === 'mep' && chain.mep && chain.mep.status === 'pending';
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10850,7 +10879,7 @@
             }
             if (chain.kind === 'exc-ext' || chain.kind === 'ext-flow' || chain.kind === 'ext-lifting') {
                 if (stage === 'site-engineer') return rk === 'site-engineer' && chain.siteEngineer && chain.siteEngineer.status === 'pending';
-                if (stage === 'section-head') return (rk === 'hw-section-head' || rk === 'section-head' || rk === 'excavation-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                if (stage === 'section-head') return (isTiRole || rk === 'excavation-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
                 if (stage === 'ehs') {
                     if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
                     if (rk === 'ehs-officer') return chain.ehsOfficer && chain.ehsOfficer.status === 'pending';
@@ -10868,7 +10897,7 @@
                 if (chain.kind === 'exc') {
                     return (rk === 'excavation-head' || rawRk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
                 }
-                return (rk === 'hw-section-head' || rawRk === 'section-head') && chain.sectionHead && chain.sectionHead.status === 'pending';
+                return isTiRole && chain.sectionHead && chain.sectionHead.status === 'pending';
             }
             if (stage === 'ehs') {
                 if (rk === 'ehs-manager') return chain.ehsManager && chain.ehsManager.status === 'pending';
@@ -10889,6 +10918,7 @@
             'section-head': 'sectionHead',
             'hw-section-head': 'sectionHead',
             'tower-in-charge': 'sectionHead',
+            'tower-incharge': 'sectionHead',
             'excavation-head': 'sectionHead',
             'project-manager': 'projectManager',
             'ehs-manager': 'ehsManager',
@@ -16193,6 +16223,12 @@
                 validTill: new Date(nowTime().getTime() +  5 * 3600 * 1000),
                 status: 'Pending Blasting In-charge Acknowledgment', stageEnteredAt: new Date(nowTime() - 35 * 60000), escalation: { stage1: false, stage2: false },
                 approvals: { kind: 'blasting', ehsManager: mkPending(), ehsOfficer: mkPending() },
+                chain: [
+                    { role: 'blasting-in-charge', label: 'Blasting In-Charge' },
+                    { role: 'site-engineer', label: 'Site Engineer' },
+                    { role: 'tower-in-charge', label: 'Tower In-Charge / Section Head', visibilityOnly: true },
+                    { role: 'ehs-head', roles: ['ehs-supervisor', 'ehs-head'], label: 'EHS Safety' }
+                ],
                 activityLog: [
                     { ts: new Date(nowTime() - 35 * 60000), actor: 'Blasting In-charge', text: 'Drilling & Blasting permit submitted by Blasting In-charge. Statutory Blasting / Drilling In-charge acknowledgment required.' }
                 ],
@@ -16218,6 +16254,12 @@
                 status: 'Active', activatedAt: new Date(nowTime() - 2.2 * 3600 * 1000), stageEnteredAt: new Date(nowTime() - 2.2 * 3600 * 1000), escalation: { stage1: false, stage2: false },
                 siteEngineerAck: { acknowledged: true, at: new Date(nowTime() - 2.6 * 3600 * 1000), by: 'Duty Site Engineer' },
                 approvals: { kind: 'blasting', ehsManager: mkApproved('EHS Safety Manager', 130), ehsOfficer: mkPending() },
+                chain: [
+                    { role: 'blasting-in-charge', label: 'Blasting In-Charge' },
+                    { role: 'site-engineer', label: 'Site Engineer' },
+                    { role: 'tower-in-charge', label: 'Tower In-Charge / Section Head', visibilityOnly: true },
+                    { role: 'ehs-head', roles: ['ehs-supervisor', 'ehs-head'], label: 'EHS Safety' }
+                ],
                 activityLog: [
                     { ts: new Date(nowTime() - 2.2 * 3600 * 1000), actor: 'EHS Safety Manager', text: 'Drilling permit ENDORSED and activated for rock anchoring work.' },
                     { ts: new Date(nowTime() - 2.6 * 3600 * 1000), actor: 'Duty Site Engineer', text: 'Site Engineer verified drilling layout & forwarded to EHS.' },
@@ -16382,6 +16424,13 @@
                 status: 'Pending MEP or P&M Approval', stageEnteredAt: new Date(nowTime() - 20 * 60000), escalation: { stage1: false, stage2: false },
                 siteEngineerAck: { acknowledged: true, at: new Date(nowTime() - 20 * 60000), by: 'Duty Site Engineer' },
                 approvals: { kind: 'electrical', siteEngineer: mkApproved('Duty Site Engineer', 20), mep: mkPending(), pm: mkPending(), sectionHead: mkPending(), ehsManager: mkPending(), ehsOfficer: mkPending() },
+                chain: [
+                    { role: 'electrician', label: 'Electrician' },
+                    { role: 'site-engineer', label: 'Site Engineer' },
+                    { role: 'mep', roles: ['mep', 'pm'], label: 'MEP / P&M' },
+                    { role: 'tower-in-charge', label: 'Tower In-Charge / Section Head' },
+                    { role: 'ehs-head', roles: ['ehs-supervisor', 'ehs-head'], label: 'EHS Safety' }
+                ],
                 activityLog: [
                     { ts: new Date(nowTime() - 20 * 60000), actor: 'Duty Site Engineer', text: 'Site Engineer acknowledged permit and forwarded for MEP / P&M domain clearance.' },
                     { ts: new Date(nowTime() - 45 * 60000), actor: 'Authorized Electrician', text: 'Electrical permit submitted by Permittee Electrician.' }
@@ -18762,7 +18811,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<p style="font-size:12.5px;color:var(--text-muted);margin:0 0 12px;">Under company SOP, permit form initiation and final closure/surrender are performed by Site Supervisors. As Site Engineer, your authority covers Step 2 Acknowledgment and observation rectification acknowledgments.</p>' +
                     actionsHtml +
                     '</div></div>';
-            } else if (['mep', 'pm', 'it', 'quality-engineer', 'section-head', 'hw-section-head', 'excavation-head', 'project-manager', 'ehs-manager', 'ehs-officer'].includes(rk)) {
+            } else if (['mep', 'pm', 'it', 'quality-engineer', 'section-head', 'hw-section-head', 'tower-in-charge', 'tower-incharge', 'excavation-head', 'project-manager', 'ehs-manager', 'ehs-officer'].includes(rk)) {
                 const pending = pendingForRole(rk);
                 const extPending = pendingExtensionsForRole(rk);
                 const scope = roleTypeScope(rk);
@@ -18771,7 +18820,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     if (!isPermitVisibleToRole(p, rk) || !permitMatchesScope(p, scope)) return false;
                     const f = CHAIN_ROLE_FIELD[rk]; return p.approvals && p.approvals[f] && p.approvals[f].status === 'approved';
                 });
-                const scopeLabel = rk === 'excavation-head' ? 'Excavation permits' : (rk === 'quality-engineer' ? 'Batching Plant Quality Clearance' : ((rk === 'hw-section-head' || rk === 'section-head') ? 'Across building & tower permits' : 'Across all permit types'));
+                const scopeLabel = rk === 'excavation-head' ? 'Excavation permits' : (rk === 'quality-engineer' ? 'Batching Plant Quality Clearance' : (normalizeRoleKey(rk) === 'tower-in-charge' ? 'Across building & tower permits' : 'Across all permit types'));
                 let activeScopeLabel = 'Currently on site';
                 if (scope) {
                     if (Array.isArray(scope)) {
@@ -19126,7 +19175,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             }
             const sSel = document.getElementById('regStatusFilter');
             const isExcUser = currentUser && currentUser.key === 'excavation-head';
-            const isTiUser = currentUser && currentUser.key === 'hw-section-head';
+            const isTiUser = currentUser && normalizeRoleKey(currentUser.key) === 'tower-in-charge';
             sSel.innerHTML = '<option value="">All Statuses</option>' + ALL_STATUSES.map(s => {
                 let lbl = s;
                 if (s === 'Pending Section Head') lbl = isExcUser ? 'Pending Excavation Head' : isTiUser ? 'Pending Tower Incharge' : 'Pending Section Head';
@@ -28791,7 +28840,7 @@ ptypeOf(p) === 'general' ?
             const roleEl = document.getElementById('empanelRoleSelect');
             if (roleEl) {
                 const normRole = normalizeRoleKey(u.role) || u.role || 'site-supervisor';
-                roleEl.value = (normRole === 'admin') ? 'project-admin' : normRole;
+                roleEl.value = (normRole === 'admin') ? 'project-admin' : (normRole === 'tower-in-charge' ? 'hw-section-head' : normRole);
             }
             const hiddenRole = document.getElementById('newStaffRole');
             if (hiddenRole) hiddenRole.value = roleEl ? roleEl.value : '';

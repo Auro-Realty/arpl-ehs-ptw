@@ -173,7 +173,7 @@ runSuite('Roles, RBAC & Signatory Isolation', () => {
     const tiScope = app.roleTypeScope('hw-section-head');
     assert(Array.isArray(tiScope) && (tiScope.length === 9 || tiScope.length === 10), 'Tower Incharge scope covers permit modules', JSON.stringify(tiScope));
     assert(!tiScope.includes('excavation'), 'Tower Incharge scope EXCLUDES excavation');
-    assert(!tiScope.includes('blasting'), 'Tower Incharge scope EXCLUDES blasting (PTW-007 routes Blasting In-Charge -> Site Engineer -> EHS)');
+    assert(tiScope.includes('blasting'), 'Tower Incharge scope INCLUDES blasting for register visibility (PTW-007 approval stays Blasting In-Charge -> Site Engineer -> EHS)');
     assert(tiScope.includes('general'), 'Tower Incharge scope INCLUDES general (Tower Incharge is Section Head for PTW-008)');
     assert(tiScope.includes('lifting'), 'Tower Incharge scope INCLUDES lifting (Tower Incharge is Section Head for PTW-009A)');
     assert(tiScope.includes('liftplan'), 'Tower Incharge scope INCLUDES liftplan (Tower Incharge is Section Head for PTW-009B)');

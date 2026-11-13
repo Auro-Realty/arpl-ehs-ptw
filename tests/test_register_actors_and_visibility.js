@@ -232,8 +232,8 @@ assert(!siteElecFlow.includes('site-supervisor') && !siteElecFlow.includes('qual
 
 sandbox.p = mockPermits.blasting;
 const blastFlow = evalInVM("stakeholdersFor(p)");
-assert(blastFlow.includes('blasting-incharge') && blastFlow.includes('site-engineer') && blastFlow.includes('ehs-manager'));
-assert(!blastFlow.includes('hw-section-head') && !blastFlow.includes('site-supervisor') && !blastFlow.includes('electrician') && !blastFlow.includes('quality-engineer') && !blastFlow.includes('excavation-head') && !blastFlow.includes('mep') && !blastFlow.includes('pm'));
+assert(blastFlow.includes('blasting-incharge') && blastFlow.includes('site-engineer') && blastFlow.includes('hw-section-head') && blastFlow.includes('ehs-manager'));
+assert(!blastFlow.includes('site-supervisor') && !blastFlow.includes('electrician') && !blastFlow.includes('quality-engineer') && !blastFlow.includes('excavation-head') && !blastFlow.includes('mep') && !blastFlow.includes('pm'));
 
 // Role visibility checks using isPermitVisibleToRole
 // Site Supervisor visibility
@@ -273,7 +273,9 @@ assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'quality-engineer')"), fal
 
 // Tower Incharge visibility
 sandbox.p = mockPermits.blasting;
-assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'hw-section-head')"), false, "Blasting permit must NOT be visible to Tower Incharge (routes Blasting In-Charge -> Site Engineer -> EHS)");
+assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'hw-section-head')"), true, "Blasting permit MUST be visible to Tower Incharge (Section Head)");
+assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'tower-in-charge')"), true, "Blasting permit MUST be visible to canonical tower-in-charge");
+assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'tower-incharge')"), true, "Blasting permit MUST be visible to tower-incharge alias");
 sandbox.p = mockPermits.electricalSite;
 assert.strictEqual(evalInVM("isPermitVisibleToRole(p, 'hw-section-head')"), true, "Site Electrical permit MUST be visible to Tower Incharge");
 sandbox.p = mockPermits.electricalBatching;
@@ -357,7 +359,10 @@ assert(qeHtml.includes('TEST-EW-BP'), "Quality Engineer must see Batching Plant 
 assert(!qeHtml.includes('TEST-EW-SITE'), "Quality Engineer must NOT see Site electrical permit");
 assert(!qeHtml.includes('TEST-EXC') && !qeHtml.includes('TEST-DB'), "Quality Engineer must NOT see excavation or blasting permits");
 
-// Build register as Tower Incharge
+// Build register as Tower Incharge (legacy hw-section-head and canonical tower-in-charge)
+['tower-in-charge', 'tower-incharge', 'section-head', 'hw-section-head', 'tower incharge', 'tower in-charge / section head (approver)'].forEach(alias => {
+    assert.strictEqual(evalInVM(`normalizeRoleKey('${alias}')`), 'tower-in-charge', `normalizeRoleKey('${alias}') must return 'tower-in-charge'`);
+});
 evalInVM("currentUser = { key: 'hw-section-head', name: 'Incharge Sharma', label: 'Tower Incharge' };");
 evalInVM("buildRegisterTable();");
 const tiHtml = domElements.get('registerTbody').innerHTML;
@@ -365,6 +370,14 @@ assert(tiHtml.includes('TEST-HW') && tiHtml.includes('TEST-EW-SITE') && tiHtml.i
     "Tower Incharge must see hot work, site electrical, and drilling & blasting");
 assert(!tiHtml.includes('TEST-EXC'), "Tower Incharge must NOT see excavation");
 assert(!tiHtml.includes('TEST-EW-BP'), "Tower Incharge must NOT see batching plant electrical");
+
+evalInVM("currentUser = { key: 'tower-in-charge', name: 'Incharge Sharma', label: 'Tower In-Charge / Section Head' };");
+evalInVM("buildRegisterTable();");
+const tiCanonHtml = domElements.get('registerTbody').innerHTML;
+assert(tiCanonHtml.includes('TEST-HW') && tiCanonHtml.includes('TEST-EW-SITE') && tiCanonHtml.includes('TEST-DB'),
+    "Canonical tower-in-charge must see hot work, site electrical, and drilling & blasting");
+assert(!tiCanonHtml.includes('TEST-EXC') && !tiCanonHtml.includes('TEST-EW-BP'),
+    "Canonical tower-in-charge must NOT see excavation or batching plant electrical");
 
 console.log('  ✓ PASS: Table rendering strictly verifies actor labels and flow-based isolation for all roles');
 
