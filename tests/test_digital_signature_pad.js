@@ -222,12 +222,12 @@ assert.strictEqual(typeof evalInVM('simulateNamedSigPad'), 'function', 'simulate
 assert.strictEqual(typeof evalInVM('sigPadInnerHtml'), 'function', 'sigPadInnerHtml defined');
 console.log('  ✓ PASS: Core signature engine functions defined');
 
-// Verify sigPadInnerHtml includes Auto Sign button
+// Verify sigPadInnerHtml includes Auto Sign button and enforces direct canvas drawing (no Upload button)
 const innerHtml = evalInVM("sigPadInnerHtml('testPad', 'Test Label')");
 assert(innerHtml.includes('simulateNamedSigPad'), 'sigPadInnerHtml includes Auto Sign button');
 assert(innerHtml.includes('clearSigPad'), 'sigPadInnerHtml includes Clear button');
-assert(innerHtml.includes('triggerSigUpload'), 'sigPadInnerHtml includes Upload button');
-console.log('  ✓ PASS: Signature pad UI provides Clear, Upload, and Auto-Sign options');
+assert(!innerHtml.includes('Upload Signature Image') && innerHtml.includes('touch-action:none'), 'sigPadInnerHtml enforces direct touch/mouse drawing without Upload Signature Image button');
+console.log('  ✓ PASS: Signature pad UI provides Clear, Auto-Sign, and direct touch/mouse drawing');
 
 // 2. Test initSigPad drawing simulation
 console.log('\n--- 2. Interactive Drawing and Inking Test ---');
