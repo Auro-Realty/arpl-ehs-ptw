@@ -102,6 +102,7 @@ const mockDoc = {
 const sandbox = {
     window: {
         __TEST_MODE__: true,
+        __TEST_DATE_OVERRIDE__: '2026-09-14T15:00:00+05:30',
         scrollTo: () => {},
         addEventListener: () => {},
         location: { reload: () => {} }
