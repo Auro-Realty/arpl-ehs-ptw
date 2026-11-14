@@ -89,6 +89,17 @@ service cloud.firestore {
       );
     }
 
+    function isTerminalPermitStatus(status) {
+      return status in [
+        'Auto-Closed',
+        'Expired',
+        'Expired Before Activation',
+        'Completed (Surrendered)',
+        'Cancelled',
+        'Rejected'
+      ];
+    }
+
     // ----------------------------------------------------------------------------
     // 1. PROJECTS MASTER (Worksite Governance, Geolocation & Zones)
     // ----------------------------------------------------------------------------
@@ -256,8 +267,15 @@ service cloud.firestore {
           'Draft',
           'Submitted',
           'Pending Site Engineer Acknowledgment',
-          'Pending P&M Acknowledgment'
+          'Pending P&M Acknowledgment',
+          'Pending Blasting In-charge Acknowledgment'
         ] || isSuperAdmin()
+      ) && (
+        (
+          request.resource.data.get(['sundayWork'], false) != true &&
+          request.resource.data.get(['isSundayPermit'], false) != true
+        ) ||
+        request.resource.data.get(['ptype'], '') != 'nightshift'
       ) && (
         !('statutoryDownload' in request.resource.data) ||
         request.resource.data.statutoryDownload.get(['isDownloaded'], false) != true
@@ -266,6 +284,19 @@ service cloud.firestore {
         resource.data.projectId != null &&
         hasProjectAccess(resource.data.projectId)
       ) && (
+        request.resource.data.projectId == resource.data.projectId ||
+        isSuperAdmin()
+      ) && (
+        request.resource.data.status is string &&
+        request.resource.data.status.size() > 0
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['sundayWork', 'isSundayPermit', 'ptype']) ||
+        (
+          request.resource.data.get(['sundayWork'], false) != true &&
+          request.resource.data.get(['isSundayPermit'], false) != true
+        ) ||
+        request.resource.data.get(['ptype'], '') != 'nightshift'
+      ) && (
         !(resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true) ||
         request.resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true
       ) && (
@@ -273,12 +304,40 @@ service cloud.firestore {
         isEhsRole(resource.data.projectId)
       ) && (
         isSuperAdmin() ||
-        request.resource.data.status == resource.data.status ||
         (
-          !(resource.data.status in ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Completed (Surrendered)', 'Cancelled', 'Rejected']) &&
+          !isTerminalPermitStatus(resource.data.status) &&
           (
+            request.resource.data.status == resource.data.status ||
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activatedAt', 'autoClosedAt', 'expiredBeforeActivationAt']) ||
             isEhsRole(resource.data.projectId)
+          )
+        ) ||
+        (
+          isTerminalPermitStatus(resource.data.status) &&
+          request.resource.data.status == resource.data.status &&
+          (
+            (
+              resource.data.status == 'Auto-Closed' &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'pendingStatutoryRestoration',
+                'restorationCertified',
+                'missingRestorationReason',
+                'restorationSignOff',
+                'lastAction',
+                'lastActionAt',
+                'lastActionBy',
+                'activity'
+              ])
+            ) ||
+            (
+              isEhsRole(resource.data.projectId) &&
+              request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+                'statutoryDownload',
+                'lastAction',
+                'lastActionAt',
+                'lastActionBy'
+              ])
+            )
           )
         )
       );

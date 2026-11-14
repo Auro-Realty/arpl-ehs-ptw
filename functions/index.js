@@ -347,6 +347,162 @@ const PERMIT_APPROVAL_MATRIX = {
 exports.AUTHORITATIVE_PROJECT_TOWERS = AUTHORITATIVE_PROJECT_TOWERS;
 exports.PERMIT_APPROVAL_MATRIX = PERMIT_APPROVAL_MATRIX;
 
+const PTW_RESTORATION_REASONS_SERVER = {
+  hotwork: "Missing Mandatory Hot Work 60-Min Fire Watch Sign-Off (Form PTW-002)",
+  guardrail: "Missing Mandatory Guard Rail, Edge Protection & Floor Opening Re-Fix Certification (Form PTW-003)",
+  confined: "Missing Mandatory Confined Space Evacuation & Opening Seal Certification (Form PTW-004)",
+  electrical: "Missing Mandatory LOTO Removal, De-Isolation & Energization Sign-Off (Form PTW-006)",
+  blasting: "Missing Mandatory Post-Blast All-Clear & Unfired Charge Accounting Declaration (Form PTW-007)"
+};
+
+function normalizePtypeServer(p) {
+  const raw = String((p && (p.ptype || p.permitType || p.formType || p.form)) || "").trim().toLowerCase();
+  if (raw === "ptw-001" || raw === "excavation") return "excavation";
+  if (raw === "ptw-002" || raw === "hotwork" || raw === "hot work") return "hotwork";
+  if (raw === "ptw-003" || raw === "guardrail" || raw === "guard rail") return "guardrail";
+  if (raw === "ptw-004" || raw === "confined" || raw === "confined space") return "confined";
+  if (raw === "ptw-005" || raw === "shaft" || raw === "shaft work") return "shaft";
+  if (raw === "ptw-006" || raw === "electrical") return "electrical";
+  if (raw === "ptw-007" || raw === "blasting" || raw === "drilling" || raw === "drilling & blasting") return "blasting";
+  if (raw === "ptw-008" || raw === "general" || raw === "general work") return "general";
+  if (raw === "ptw-009" || raw === "ptw-009a" || raw === "ptw-009b" || raw === "lifting" || raw === "liftplan") return "lifting";
+  if (raw === "ptw-010" || raw === "nightshift" || raw === "night shift") return "nightshift";
+  return raw;
+}
+
+function getPermitInitiatorRoleServer(p) {
+  const pt = normalizePtypeServer(p);
+  if (pt === "electrical") return "electrician";
+  if (pt === "lifting") return "lifting-supervisor";
+  if (pt === "blasting") return "blasting-in-charge";
+  if (pt === "nightshift") return "night-supervisor";
+  return "site-supervisor";
+}
+
+function getObservationReviewerRoleServer(p) {
+  const pt = normalizePtypeServer(p);
+  const isBatchingElec = pt === "electrical" && (p.electricalSiteType === "batching_plant" || p.facilityScope === "batching_plant");
+  if (isBatchingElec) return "pm";
+  if (pt === "nightshift" && !p.isNightShiftDaytimePhase) return null;
+  return "site-engineer";
+}
+
+function isManualLocationPermitServer(p) {
+  if (!p) return false;
+  if (typeof p.locationStructure === "string" && p.locationStructure.trim().toLowerCase() === "manual") return true;
+  if (p.locationStructure && typeof p.locationStructure === "object" && String(p.locationStructure.mode || "").trim().toLowerCase() === "manual") return true;
+  if (String(p.locationMode || "").trim().toLowerCase() === "manual") return true;
+  const tw = String(p.tower || "").trim().toLowerCase();
+  if (tw === "manual" || tw.startsWith("manual:")) return true;
+  if (!p.tower && !p.towerId && p.locManual && String(p.locManual).trim()) return true;
+  return false;
+}
+
+function getIstPartsServer(ms) {
+  const d = new Date(ms + 5.5 * 3600 * 1000);
+  return {
+    year: d.getUTCFullYear(),
+    month: d.getUTCMonth() + 1,
+    day: d.getUTCDate(),
+    dow: d.getUTCDay(),
+    hour: d.getUTCHours(),
+    minute: d.getUTCMinutes(),
+    dateStr: `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`
+  };
+}
+
+function parseIstDateTimeToMsServer(dateStr, hhmm) {
+  if (!dateStr || !hhmm) return null;
+  const dm = String(dateStr).trim().match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  const tm = String(hhmm).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!dm || !tm) return null;
+  return Date.UTC(Number(dm[1]), Number(dm[2]) - 1, Number(dm[3]), Number(tm[1]), Number(tm[2]), 0, 0) - 5.5 * 3600 * 1000;
+}
+
+function addDaysIstDateStrServer(dateStr, days) {
+  const ms = parseIstDateTimeToMsServer(dateStr, "00:00");
+  if (!ms) return dateStr;
+  return getIstPartsServer(ms + days * 24 * 3600 * 1000).dateStr;
+}
+
+function computePermitWindowMsServer(p) {
+  const rawFromMs = p.validFromMs || toEpochMsServer(p.startAt) || toEpochMsServer(p.validFrom);
+  const rawTillMs = p.validTillMs || toEpochMsServer(p.validTill);
+  const pt = normalizePtypeServer(p);
+  const isSun = Boolean(p.isSundayPermit || p.sundayPermit || String(p.permitCode || "").toUpperCase() === "SUN" || String(p.id || "").toUpperCase().includes("-SUN-"));
+  let baseDate = p.validFromDate || p.date || p.workDate || (rawFromMs ? getIstPartsServer(rawFromMs).dateStr : null);
+  if (isSun && baseDate) {
+    const baseMs = parseIstDateTimeToMsServer(baseDate, "00:00");
+    if (baseMs && getIstPartsServer(baseMs).dow === 6) {
+      baseDate = addDaysIstDateStrServer(baseDate, 1);
+    }
+  }
+  const sTime = p.startTime || (rawFromMs ? `${String(getIstPartsServer(rawFromMs).hour).padStart(2, "0")}:${String(getIstPartsServer(rawFromMs).minute).padStart(2, "0")}` : null);
+  const eTime = p.validTillTime || (rawTillMs ? `${String(getIstPartsServer(rawTillMs).hour).padStart(2, "0")}:${String(getIstPartsServer(rawTillMs).minute).padStart(2, "0")}` : null);
+
+  let validFromMs = parseIstDateTimeToMsServer(baseDate, sTime) || rawFromMs;
+  let endDate = baseDate;
+  if (pt === "nightshift" && baseDate && sTime && eTime) {
+    const sm = sTime.split(":").map(Number);
+    const em = eTime.split(":").map(Number);
+    if ((em[0] * 60 + em[1]) <= (sm[0] * 60 + sm[1])) {
+      endDate = addDaysIstDateStrServer(baseDate, 1);
+    }
+  }
+  let validTillMs = parseIstDateTimeToMsServer(endDate, eTime) || rawTillMs;
+  if (isSun && rawFromMs && (!p.validFromDate && !p.date) && getIstPartsServer(rawFromMs).dow === 6) {
+    validFromMs = rawFromMs + 24 * 3600 * 1000;
+  }
+  if (isSun && rawTillMs && (!p.validFromDate && !p.date) && getIstPartsServer(rawTillMs).dow === 6) {
+    validTillMs = rawTillMs + 24 * 3600 * 1000;
+  }
+  if (pt === "nightshift" && validFromMs && validTillMs && validTillMs <= validFromMs) {
+    validTillMs += 24 * 3600 * 1000;
+  }
+  return { validFromMs, validTillMs };
+}
+
+function getMissingRestorationReasonServer(p) {
+  const pt = normalizePtypeServer(p);
+  if (!PTW_RESTORATION_REASONS_SERVER[pt]) return null;
+  if (pt === "blasting" && !(p.dbOperationType === "Blasting" || p.drillingBlastingType === "blasting")) {
+    return PTW_RESTORATION_REASONS_SERVER.blasting;
+  }
+  return PTW_RESTORATION_REASONS_SERVER[pt];
+}
+
+function applyAutoCloseRestorationUpdateServer(p) {
+  const reason = getMissingRestorationReasonServer(p);
+  if (!reason || p.restorationCertified || p.closure || p.surrender) return {};
+  return {
+    pendingStatutoryRestoration: true,
+    missingRestorationReason: reason
+  };
+}
+
+function isNightShiftDaytimePhaseLockedServer(p, linkedParent = null) {
+  if (!p) return false;
+  const pt = normalizePtypeServer(p);
+  const preNightEhsStatuses = [
+    "Draft",
+    "Submitted",
+    "Pending Site Engineer Acknowledgment",
+    "Pending Section Head",
+    "Night Shift Approved – Awaiting Linked Permit",
+    "Approved – Pending Night Handover",
+    "Pending P&M Night Acknowledgment",
+    "Pending EHS Approval"
+  ];
+  if (pt === "nightshift") {
+    return preNightEhsStatuses.includes(p.status) && !p.activatedAt;
+  }
+  if (p.linkedNightShiftId || p.nightShiftPermitId) {
+    if (linkedParent && isNightShiftDaytimePhaseLockedServer(linkedParent, null)) return true;
+    if (preNightEhsStatuses.includes(p.status) && !p.activatedAt) return true;
+  }
+  return false;
+}
+
 /**
  * Generate cryptographically secure random password (16 chars, meets all complexity rules)
  */
@@ -500,12 +656,22 @@ exports.downloadStatutoryPdf = onRequest(
           throw new Error("PERMISSION_DENIED: Statutory PDF download is strictly restricted to EHS personnel.");
         }
 
-        // Verify Post-Activation Gate (pre-activation & scheduled permits cannot generate PDF)
+        // Verify Post-Activation Gate (pre-activation, scheduled, and Daytime Phase 1 Night Shift permits cannot generate PDF)
+        let linkedParent = null;
+        const parentNightId = data.linkedNightShiftId || data.nightShiftPermitId;
+        if (parentNightId) {
+          const parentSnap = await transaction.get(db.collection("permits").doc(String(parentNightId)));
+          if (parentSnap.exists) linkedParent = parentSnap.data();
+        }
+        if (isNightShiftDaytimePhaseLockedServer(data, linkedParent)) {
+          throw new Error(`FAILED_PRECONDITION: Night Shift (PTW-010) and linked Stage 2 permits cannot download Statutory PDF during Daytime Phase 1 prior to Night EHS Activation (current status: ${data.status || "Unknown"}).`);
+        }
         const postActivationStatuses = [
           "Active",
           "Active – Observation Open",
           "Active - Observation Open",
           "Observation Pending Site Engineer Acknowledgment",
+          "Observation Pending P&M Acknowledgment",
           "Observation Pending Section Head Review",
           "Observation Pending Tower Incharge Review",
           "Observation Pending Excavation Head Review",
@@ -687,9 +853,19 @@ exports.compileStatutoryPdf = onCall(
     if (!allowedPdfRoles.includes(callerRole) && !allowedPdfRoles.includes(callerNormRole)) {
       throw new HttpsError("permission-denied", "Statutory PDF compilation is strictly restricted to EHS personnel.");
     }
+    let linkedParent = null;
+    const parentNightId = p.linkedNightShiftId || p.nightShiftPermitId;
+    if (parentNightId) {
+      const parentSnap = await db.collection("permits").doc(String(parentNightId)).get();
+      if (parentSnap.exists) linkedParent = parentSnap.data();
+    }
+    if (isNightShiftDaytimePhaseLockedServer(p, linkedParent)) {
+      throw new HttpsError("failed-precondition", "Night Shift (PTW-010) and linked Stage 2 permits cannot compile Statutory PDF during Daytime Phase 1 prior to Night EHS activation.");
+    }
     const postActivationStatuses = [
       "Active", "Active – Observation Open", "Active - Observation Open",
-      "Observation Pending Site Engineer Acknowledgment", "Observation Pending Section Head Review",
+      "Observation Pending Site Engineer Acknowledgment", "Observation Pending P&M Acknowledgment",
+      "Observation Pending Section Head Review",
       "Observation Pending Tower Incharge Review", "Observation Pending Excavation Head Review",
       "Observation Pending EHS Clearance", "Extension Pending", "Extended",
       "Closed", "Closed – Pending Surrender", "Completed (Surrendered)", "Auto-Closed", "Expired"
@@ -2729,7 +2905,8 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
 
     // Tower / Location scope enforcement for non-EHS, non-campus-wide operational roles
     const permitTower = String(p.tower || p.locationName || p.location || "").trim();
-    const isCampusWidePermit = !permitTower || CAMPUS_WIDE_TOWER_ALIASES.some((a) => a.toLowerCase() === permitTower.toLowerCase());
+    const isManualPermit = isManualLocationPermitServer(p);
+    const isCampusWidePermit = isManualPermit || !permitTower || CAMPUS_WIDE_TOWER_ALIASES.some((a) => a.toLowerCase() === permitTower.toLowerCase());
     if (!isSuperAdmin && !isEhsCaller && !userDoc.campusWide && !isCampusWidePermit) {
       const assignedLocs = [];
       if (userDoc.locationName) assignedLocs.push(String(userDoc.locationName).trim());
@@ -2771,8 +2948,51 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
     const cleanComments = sanitizeString(comments || "", 500);
     const requestedTargetStatus = sanitizeString(targetStatus, 100);
     const currentStatus = String(p.status || "Draft");
-    const ptype = String(p.ptype || "").toLowerCase();
-    const isBatchingElec = ptype === "electrical" && (p.electricalSiteType === "batching_plant" || p.facilityScope === "batching_plant");
+    const ptype = normalizePtypeServer(p);
+    const isBatchingElec = ptype === "electrical" && (p.electricalSiteType === "batching_plant" || p.facilityScope === "batching_plant" || p.electricalFacilityScope === "batching_plant");
+    const initiatorRoleNorm = normalizeRoleKey(getPermitInitiatorRoleServer(p));
+    const isRestorationSignOff = cleanAction === "STATUTORY_RESTORATION_SIGNOFF" && currentStatus === "Auto-Closed" && requestedTargetStatus === "Auto-Closed";
+
+    if (isRestorationSignOff) {
+      if (!isSuperAdmin && !isEhsCaller && normRole !== initiatorRoleNorm) {
+        throw new HttpsError("permission-denied", `Role '${userRole}' is not authorized to record post-auto-close statutory restoration sign-off.`);
+      }
+      if (!cleanComments) {
+        throw new HttpsError("invalid-argument", "Mandatory restoration notes are required for post-auto-close sign-off.");
+      }
+      const restorationUpdate = {
+        pendingStatutoryRestoration: false,
+        restorationCertified: true,
+        missingRestorationReason: null,
+        restorationSignOff: {
+          by: sanitizeString(request.auth.token.name || request.auth.token.email || normRole, 100),
+          role: userRole || normRole,
+          uid: request.auth.uid,
+          at: Date.now(),
+          comments: cleanComments,
+          gps: (userLat != null && userLng != null) ? { lat: Number(userLat), lng: Number(userLng) } : null
+        },
+        lastAction: cleanAction,
+        lastActionAt: admin.firestore.FieldValue.serverTimestamp(),
+        lastActionBy: request.auth.uid
+      };
+      transaction.update(permitRef, restorationUpdate);
+      const logRef = permitRef.collection("activity_log").doc();
+      transaction.set(logRef, {
+        id: logRef.id,
+        permitId,
+        action: cleanAction,
+        actorRole: userRole || "unknown",
+        actorNormRole: normRole || "unknown",
+        actorUid: request.auth.uid,
+        actorName: sanitizeString(request.auth.token.name || request.auth.token.email || "Signatory", 100),
+        priorStatus: currentStatus,
+        targetStatus: "Auto-Closed",
+        timestamp: admin.firestore.FieldValue.serverTimestamp(),
+        comments: cleanComments
+      });
+      return { success: true, permitId, priorStatus: currentStatus, newStatus: "Auto-Closed", serverTimeMs: Date.now() };
+    }
 
     const TERMINAL_STATUSES = [
       "Completed (Surrendered)",
@@ -2791,11 +3011,93 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       );
     }
 
+    // Permit-specific statutory invariant enforcement (PTW-001 through PTW-010 & SUN)
+    const nowMs = Date.now();
+    const isBlastingOp = ptype === "blasting" && (p.dbOperationType === "Blasting" || p.drillingBlastingType === "blasting");
+    const isSundayPermit = Boolean(p.sundayWork || p.isSundayPermit || p.sundayPermit || p.originTile === "SUN" || String(p.id || "").toUpperCase().includes("-SUN-"));
+    const computedWin = computePermitWindowMsServer(p);
+    const validFromMs = toEpochMsServer(reqValidFromMs) || computedWin.validFromMs;
+    const validTillMs = toEpochMsServer(reqValidTillMs) || computedWin.validTillMs;
+
+    if (isSundayPermit && ptype === "nightshift") {
+      throw new HttpsError("failed-precondition", "PTW-010 Night Shift Work cannot be issued on the Saturday Sunday-Work (SUN) tile.");
+    }
+    if (!isSuperAdmin && !isSundayPermit && validFromMs && getIstPartsServer(validFromMs).dow === 0) {
+      throw new HttpsError("failed-precondition", "Regular PTW creation or execution on Sunday is prohibited unless scheduled on Saturday via the Sunday Work (SUN) tile.");
+    }
+
+    if (ptype === "hotwork" && ["Submitted", "Pending Site Engineer Acknowledgment", "Pending Section Head", "Pending EHS Approval", "Active"].includes(requestedTargetStatus)) {
+      const hasHwTypes = Array.isArray(p.hotworkTypes) ? p.hotworkTypes.length > 0 : Boolean(p.hotworkTypes || p.hotworkType);
+      const hasWelder = Boolean(String(p.welderName || p.welder || "").trim());
+      if (p.hotworkTypes !== undefined && !hasHwTypes) {
+        throw new HttpsError("failed-precondition", "PTW-002 Hot Work requires at least one hotworkTypes selection.");
+      }
+      if (p.welderName !== undefined && !hasWelder) {
+        throw new HttpsError("failed-precondition", "PTW-002 Hot Work requires welderName.");
+      }
+    }
+
+    if ((ptype === "guardrail" || ptype === "shaft") && p.locationStructure && typeof p.locationStructure === "string") {
+      const allowedLocModes = ["tower", "basement/podium", "basement", "podium", "manual"];
+      if (!allowedLocModes.includes(p.locationStructure.trim().toLowerCase())) {
+        throw new HttpsError("failed-precondition", `Unsupported locationStructure '${p.locationStructure}' for ${ptype}.`);
+      }
+    }
+
+    if (ptype === "confined" && p.gasReadings && typeof p.gasReadings === "object") {
+      const gr = p.gasReadings;
+      const o2 = Number(gr.o2);
+      const lel = Number(gr.combustible);
+      const h2s = Number(gr.h2s);
+      const co = Number(gr.co);
+      if (!Number.isFinite(o2) || o2 < 19.5 || o2 > 21.0 ||
+          !Number.isFinite(lel) || lel < 0 || lel >= 10 ||
+          !Number.isFinite(h2s) || h2s < 0 || h2s > 5 ||
+          !Number.isFinite(co) || co < 0 || co >= 25) {
+        throw new HttpsError("failed-precondition", "PTW-004 Confined Space gas test readings violate safe IDLH/LEL/O2 thresholds.");
+      }
+      if (p.confinedChecklistAttached === false) {
+        throw new HttpsError("failed-precondition", "PTW-004 Item 15 requires Confined Space Checklist attachment.");
+      }
+    }
+
+    if (ptype === "electrical" && ["Submitted", "Pending Site Engineer Acknowledgment", "Pending P&M Acknowledgment"].includes(requestedTargetStatus)) {
+      if (!["electrician", "project-admin", "super-admin"].includes(normRole) && !isSuperAdmin) {
+        throw new HttpsError("permission-denied", "PTW-006 Electrical permits can only be initiated by a certified Electrician.");
+      }
+    }
+
+    if (ptype === "blasting" && ["Submitted", "Pending Blasting In-charge Acknowledgment", "Pending Site Engineer Acknowledgment"].includes(requestedTargetStatus)) {
+      if ((p.locationStructure || p.locationMode) && !isManualPermit) {
+        throw new HttpsError("failed-precondition", "PTW-007 Drilling & Blasting strictly requires Manual location mode.");
+      }
+    }
+
+    if (ptype === "general" && Array.isArray(p.checklist) && p.checklist.length > 0 && ![11, 15, 20, 21].includes(p.checklist.length)) {
+      throw new HttpsError("failed-precondition", `PTW-008 General Work checklist count (${p.checklist.length}) must match statutory module counts [11, 15, 20, 21].`);
+    }
+
+    const liftWeight = Number(p.loadWeight || p.loadWeightMT || p.weight || 0);
+    const isForcedCriticalLift = (ptype === "lifting") && (p.liftingClassification === "critical" || p.ptwCode === "PTW-009B" || liftWeight > 5.0 || Boolean(p.tandemLift || p.isTandem));
+    if (isForcedCriticalLift && requestedTargetStatus === "Pending EHS Approval" && currentStatus === "Pending Section Head" && !isSuperAdmin) {
+      throw new HttpsError("failed-precondition", "PTW-009B Critical Lift (> 5.0 MT or Tandem) cannot bypass Pending Project Manager Acknowledgment.");
+    }
+
+    if (ptype === "nightshift" && p.linkedPermitType) {
+      const linkedPt = normalizePtypeServer({ ptype: p.linkedPermitType });
+      if (["blasting", "confined"].includes(linkedPt) || p.linkedPermitIsCriticalLift || Number(p.linkedLoadWeightMT || 0) > 5.0) {
+        throw new HttpsError("failed-precondition", "PTW-010 Night Shift excludes PTW-007 Blasting, PTW-004 Confined Space, and PTW-009B Critical Lifting.");
+      }
+    }
+
     // Block extension requests / approvals after expiry or closure or open observation
     const isExtensionTransition = cleanAction.includes("EXT") ||
       requestedTargetStatus === "Extension Pending" ||
       requestedTargetStatus === "Extended";
     if (isExtensionTransition) {
+      if (isBlastingOp) {
+        throw new HttpsError("failed-precondition", "PTW-007 Blasting permits allow ZERO extensions beyond their scheduled daylight blast window.");
+      }
       const validExtPermitStates = ["Active", "Extended", "Extension Pending"];
       if (!validExtPermitStates.includes(currentStatus)) {
         throw new HttpsError("failed-precondition", `Extensions are blocked while permit status is '${currentStatus}'.`);
@@ -2804,6 +3106,19 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
         (p.observation && p.observation.status && p.observation.status !== "Resolved");
       if (openObs) {
         throw new HttpsError("failed-precondition", "Extensions are strictly blocked while a safety observation remains unresolved.");
+      }
+      const istNow = getIstPartsServer(nowMs);
+      const nowIstMins = istNow.hour * 60 + istNow.minute;
+      if (nowIstMins >= 18 * 60 + 30 && !isSuperAdmin) {
+        throw new HttpsError("failed-precondition", "Extension requests and approvals are closed after 18:30 IST.");
+      }
+      if (requestedTargetStatus === "Extended" && extensionMinutes && validTillMs) {
+        const nextTillMs = validTillMs + Number(extensionMinutes) * 60 * 1000;
+        const istTill = getIstPartsServer(nextTillMs);
+        const sameIstDay = istTill.dateStr === getIstPartsServer(validTillMs).dateStr;
+        if (!sameIstDay || (istTill.hour * 60 + istTill.minute) > 20 * 60 + 30) {
+          throw new HttpsError("failed-precondition", "Extended permit validity cannot exceed 20:30 IST on the work date.");
+        }
       }
     }
 
@@ -2831,8 +3146,9 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       "Active": ["ehs-head", "ehs-supervisor"],
       "Active – Observation Open": ["ehs-head", "ehs-supervisor"],
       "Observation Pending Site Engineer Acknowledgment": ["site-supervisor", "electrician", "blasting-in-charge", "lifting-supervisor", "site-engineer"],
-      "Observation Pending Section Head Review": ["site-engineer", "tower-in-charge", "excavation-head"],
-      "Observation Pending EHS Clearance": ["site-engineer", "tower-in-charge", "excavation-head", "ehs-head", "ehs-supervisor"],
+      "Observation Pending P&M Acknowledgment": ["electrician", "pm", "site-supervisor", "lifting-supervisor", "blasting-in-charge"],
+      "Observation Pending Section Head Review": ["site-engineer", "pm", "quality-engineer", "tower-in-charge", "excavation-head"],
+      "Observation Pending EHS Clearance": ["site-engineer", "pm", "quality-engineer", "tower-in-charge", "excavation-head", "night-supervisor", "ehs-head", "ehs-supervisor"],
       "Pending Site Engineer": ["site-supervisor", "lifting-supervisor", "blasting-in-charge", "site-engineer"],
       "Extension Pending": ["site-supervisor", "lifting-supervisor", "blasting-in-charge", "electrician", "site-engineer", "pm", "quality-engineer", "tower-in-charge", "excavation-head", "ehs-head", "ehs-supervisor"],
       "Extended": ["ehs-head", "ehs-supervisor"],
@@ -2859,6 +3175,14 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       }
     }
 
+    // Observation route parity enforcement
+    if (requestedTargetStatus === "Observation Pending Site Engineer Acknowledgment" && getObservationReviewerRoleServer(p) !== "site-engineer") {
+      throw new HttpsError("failed-precondition", "Batching Plant PTW-006 routes observations via P&M Engineer and active PTW-010 routes directly to EHS Clearance.");
+    }
+    if (requestedTargetStatus === "Observation Pending P&M Acknowledgment" && getObservationReviewerRoleServer(p) !== "pm") {
+      throw new HttpsError("failed-precondition", "Only Batching Plant PTW-006 routes observation rectification through P&M Engineer.");
+    }
+
     // Prior-state & Workflow Gate Validation
     const approvals = (p.approvals && typeof p.approvals === "object") ? JSON.parse(JSON.stringify(p.approvals)) : {};
     if (requestedTargetStatus === "Pending Section Head" && !isSuperAdmin) {
@@ -2879,13 +3203,16 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
         if (!["mep", "pm"].includes(normRole)) {
           throw new HttpsError("permission-denied", "PTW-006 Site Electrical parallel gate requires MEP or P&M role.");
         }
-      } else if (["Pending Site Engineer Acknowledgment", "Pending Parallel Approval", "Pending MEP Clearance", "Pending MEP or P&M Approval", "Pending Quality Engineer Approval", "Pending Section Head"].indexOf(currentStatus) === -1) {
+      } else if (ptype === "shaft" && currentStatus === "Pending MEP Clearance") {
+        if (normRole !== "mep") {
+          throw new HttpsError("permission-denied", "PTW-005 Shaft Work requires MEP Engineer clearance before advancing to Tower In-Charge / Section Head.");
+        }
+      } else if (["Pending Site Engineer Acknowledgment", "Pending Site Engineer Re-Acknowledgment", "Pending Parallel Approval", "Pending MEP Clearance", "Pending MEP or P&M Approval", "Pending Quality Engineer Approval", "Pending Section Head"].indexOf(currentStatus) === -1) {
         throw new HttpsError("failed-precondition", `Cannot advance to Section Head from status '${currentStatus}'.`);
       }
     }
 
     // Concurrent EHS Race Protection (first-wins atomic check)
-    const nowMs = Date.now();
     const isInitialEhsDecision = currentStatus === "Pending EHS Approval" &&
       ["Active", "Approved – Scheduled", "Expired Before Activation", "Returned for Correction", "Cancelled", "Rejected"].includes(requestedTargetStatus);
     if (isInitialEhsDecision) {
@@ -2905,7 +3232,7 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
     }
 
     // Direct EHS Stop-Work Cancel on Active / Approved – Scheduled / Extended / Observation permits
-    if (requestedTargetStatus === "Cancelled" && ["Active", "Approved – Scheduled", "Extended", "Extension Pending", "Active – Observation Open", "Observation Pending Site Engineer Acknowledgment", "Observation Pending Section Head Review", "Observation Pending EHS Clearance"].includes(currentStatus)) {
+    if (requestedTargetStatus === "Cancelled" && ["Active", "Approved – Scheduled", "Extended", "Extension Pending", "Active – Observation Open", "Observation Pending Site Engineer Acknowledgment", "Observation Pending P&M Acknowledgment", "Observation Pending Section Head Review", "Observation Pending EHS Clearance"].includes(currentStatus)) {
       if (!isEhsCaller && !isSuperAdmin) {
         throw new HttpsError("permission-denied", "Only EHS personnel can execute Stop-Work Cancellation on active permits.");
       }
@@ -2916,13 +3243,15 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
 
     // Compute Effective Target Status (Scheduled vs Active vs Expired Before Activation)
     let effectiveTargetStatus = requestedTargetStatus;
-    const validFromMs = toEpochMsServer(reqValidFromMs) || p.validFromMs || toEpochMsServer(p.startAt) || toEpochMsServer(p.validFrom);
-    const validTillMs = toEpochMsServer(reqValidTillMs) || p.validTillMs || toEpochMsServer(p.validTill);
     const updatePayload = {
       lastAction: cleanAction,
       lastActionAt: admin.firestore.FieldValue.serverTimestamp(),
       lastActionBy: request.auth.uid
     };
+    if (isForcedCriticalLift) {
+      updatePayload.liftingClassification = "critical";
+      updatePayload.ptwCode = "PTW-009B";
+    }
     if (validFromMs) updatePayload.validFromMs = validFromMs;
     if (validTillMs) updatePayload.validTillMs = validTillMs;
     if (!p.originalValidTill && (p.validTill || validTillMs)) {
@@ -3027,6 +3356,7 @@ exports.escalationSweep = onSchedule(
       "Active – Observation Open",
       "Active - Observation Open",
       "Observation Pending Site Engineer Acknowledgment",
+      "Observation Pending P&M Acknowledgment",
       "Observation Pending Section Head Review",
       "Observation Pending EHS Clearance",
       "Extension Pending"
@@ -3045,26 +3375,30 @@ exports.escalationSweep = onSchedule(
 
     (activeSnap.docs || []).forEach((doc) => {
       const d = doc.data() || {};
-      const validTillMs = d.validTillMs || toEpochMsServer(d.validTill);
-      const validFromMs = d.validFromMs || toEpochMsServer(d.startAt) || toEpochMsServer(d.validFrom);
+      const win = computePermitWindowMsServer(d);
+      const validTillMs = win.validTillMs;
+      const validFromMs = win.validFromMs;
       if (!validTillMs) return;
 
       const remMs = validTillMs - nowMs;
+      const initiatorRole = getPermitInitiatorRoleServer(d);
+      const obsReviewerRole = getObservationReviewerRoleServer(d);
 
-      // Rich T-30 min Expiry Notification (to Site Engineer & Site Supervisor)
+      // Dynamic T-30 min Expiry Notification (to initiatorRole, obsReviewerRole, & EHS)
       if (["Active", "Extended", "Active – Observation Open", "Active - Observation Open"].includes(d.status) &&
           remMs > 0 && remMs <= 30 * 60 * 1000 && !d.warned30) {
         warned30Count++;
         batch.update(doc.ref, { warned30: true, warned30At: now });
         const fromStr = formatIstWindowServer(validFromMs);
         const tillStr = formatIstWindowServer(validTillMs);
-        const msg = `EXPIRY ALERT (T-30 min): Permit ${doc.id} (${String(d.ptype || "PTW").toUpperCase()}) at ${d.project || d.projectId || "Site"} / ${d.tower || d.location || "Worksite"} (${fromStr} – ${tillStr} IST) for Supervisor ${d.createdBy || "Site Supervisor"} expires within 30 minutes. Request an extension or close the permit.`;
+        const msg = `EXPIRY ALERT (T-30 min): Permit ${doc.id} (${String(d.ptype || "PTW").toUpperCase()}) at ${d.project || d.projectId || "Site"} / ${d.tower || d.location || "Worksite"} (${fromStr} – ${tillStr} IST) for ${d.createdBy || initiatorRole} expires within 30 minutes. Request an extension or close the permit.`;
+        const tRoles = Array.from(new Set([initiatorRole, obsReviewerRole, "ehs-supervisor", "ehs-head"].filter(Boolean)));
         const notifRef = db.collection("notifications").doc();
         batch.set(notifRef, {
           id: notifRef.id,
           permitId: doc.id,
           projectId: d.projectId || "",
-          targetRoles: ["site-engineer", "site-supervisor"],
+          targetRoles: tRoles,
           severity: "warn",
           type: "T_MINUS_30_EXPIRY_ALERT",
           message: msg,
@@ -3073,15 +3407,16 @@ exports.escalationSweep = onSchedule(
         });
       }
 
-      // Overdue Active / Extended / Observation-Open -> Auto-Closed
+      // Overdue Active / Extended / Observation-Open -> Auto-Closed (+ statutory restoration alert)
       if (nowMs >= validTillMs) {
         autoClosedCount++;
-        batch.update(doc.ref, {
+        const restFields = applyAutoCloseRestorationUpdateServer(d);
+        batch.update(doc.ref, Object.assign({
           status: "Auto-Closed",
           autoClosedAt: now,
           closedAt: now,
           expiredAt: now
-        });
+        }, restFields));
         const logRef = doc.ref.collection("activity_log").doc();
         batch.set(logRef, {
           id: logRef.id,
@@ -3091,8 +3426,25 @@ exports.escalationSweep = onSchedule(
           actorUid: "system-cron",
           actorName: "SLA Escalation Engine",
           timestamp: now,
-          details: "Approved validity end time reached without manual closure; permit transitioned to Auto-Closed."
+          details: restFields.pendingStatutoryRestoration
+            ? `Approved validity end time reached without closure/restoration; Auto-Closed (${restFields.missingRestorationReason}).`
+            : "Approved validity end time reached without manual closure; permit transitioned to Auto-Closed."
         });
+        if (restFields.pendingStatutoryRestoration) {
+          const critRoles = Array.from(new Set([initiatorRole, obsReviewerRole || "site-engineer", "ehs-supervisor", "ehs-head"].filter(Boolean)));
+          const critNotifRef = db.collection("notifications").doc();
+          batch.set(critNotifRef, {
+            id: critNotifRef.id,
+            permitId: doc.id,
+            projectId: d.projectId || "",
+            targetRoles: critRoles,
+            severity: "error",
+            type: "CRITICAL_UNSURRENDERED_AUTO_CLOSE",
+            message: `CRITICAL: Permit ${doc.id} (${String(d.ptype || "PTW").toUpperCase()}) Auto-Closed WITHOUT mandatory closure/restoration (${restFields.missingRestorationReason}). Complete Statutory Restoration Sign-Off immediately.`,
+            createdAt: now,
+            read: false
+          });
+        }
       }
     });
 
@@ -3101,8 +3453,9 @@ exports.escalationSweep = onSchedule(
       const scheduledSnap = await db.collection("permits").where("status", "==", "Approved – Scheduled").limit(100).get();
       scheduledSnap.forEach((doc) => {
         const d = doc.data() || {};
-        const validFromMs = d.validFromMs || toEpochMsServer(d.startAt) || toEpochMsServer(d.validFrom);
-        const validTillMs = d.validTillMs || toEpochMsServer(d.validTill);
+        const win = computePermitWindowMsServer(d);
+        const validFromMs = win.validFromMs;
+        const validTillMs = win.validTillMs;
         if (validTillMs && nowMs >= validTillMs) {
           expiredBeforeActivationCount++;
           batch.update(doc.ref, {
@@ -3131,6 +3484,48 @@ exports.escalationSweep = onSchedule(
       });
     } catch (schedErr) {
       console.warn("Scheduled promotion sweep note:", schedErr);
+    }
+
+    // 2b. PTW-010 Night Shift >= 21:00 IST No-Show Auto-Cancel sweep
+    try {
+      const istNow = getIstPartsServer(nowMs);
+      if (istNow.hour >= 21) {
+        const nightCutoffSnap = await db.collection("permits")
+          .where("status", "in", ["Approved – Pending Night Handover", "Pending P&M Night Acknowledgment"])
+          .limit(50)
+          .get();
+        nightCutoffSnap.forEach((doc) => {
+          const d = doc.data() || {};
+          if (normalizePtypeServer(d) !== "nightshift") return;
+          batch.update(doc.ref, {
+            status: "Cancelled",
+            isCancelled: true,
+            cancelledAt: now,
+            cancelReason: "No-Show Auto-Cancel: Night handover / Night EHS activation missed 21:00 IST statutory cutoff."
+          });
+          if (d.linkedPermitId) {
+            batch.update(db.collection("permits").doc(String(d.linkedPermitId)), {
+              status: "Cancelled",
+              isCancelled: true,
+              cancelledAt: now,
+              cancelReason: `Parent Night Shift ${doc.id} auto-cancelled after missing 21:00 IST handover cutoff.`
+            });
+          }
+          const logRef = doc.ref.collection("activity_log").doc();
+          batch.set(logRef, {
+            id: logRef.id,
+            permitId: doc.id,
+            action: "NIGHT_HANDOVER_NOSHOW_AUTOCANCEL",
+            actorRole: "system",
+            actorUid: "system-cron",
+            actorName: "SLA Escalation Engine",
+            timestamp: now,
+            details: "Night Shift permit missed 21:00 IST handover cutoff; auto-cancelled by server."
+          });
+        });
+      }
+    } catch (nightErr) {
+      console.warn("Night handover cutoff sweep note:", nightErr);
     }
 
     // 3. Sweep pending pre-activation permits whose validTillMs elapsed -> Expired Before Activation & track stage SLA breaches

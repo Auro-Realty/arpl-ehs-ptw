@@ -1463,7 +1463,8 @@
             <span class="node-detail">
               • Inspects welder leather spats, auto-darkening shade-11 shield<br/>
               • Confirms cylinder trolleys, valve keys, and fire blankets in place<br/>
-              • First-wins endorsement activates hot work operations
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; EHS Stop-Work Cancel active<br/>
+              • First-wins endorsement activates hot work operations (dynamic T-30 alert)
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
@@ -1488,12 +1489,13 @@
         </div>
         <div class="lane-track-col">
           <div class="step-node node-end">
-            <span class="node-seq">Step 5 · 60-Min Fire Watch &amp; Close</span>
+            <span class="node-seq">Step 5 · 60-Min Fire Watch &amp; Auto-Closed Flag</span>
             <span class="node-action">Mandatory Cold-Zone Verification</span>
             <span class="node-detail">
               • Torch turned off, cylinders isolated, regulators depressurized<br/>
               • Mandatory 60-minute continuous post-work cold watch completed<br/>
               • Zero smouldering embers confirmed within 10m radius<br/>
+              • Unclosed permits entering <b>Auto-Closed</b> flag <code>pendingStatutoryRestoration</code> (Fire Watch sign-off required)<br/>
               • Post-work cold zone photograph + Cold watch certification &amp; DPDP sig
             </span>
           </div>
@@ -1773,6 +1775,7 @@
         <b>Operational Scope:</b> Governs the temporary removal of slab perimeter edge barriers, core hole covers, shaft gates, and ramp handrails for material hoisting or concrete casting. Enforces 100% tie-off with twin lanyards, dedicated edge safety watchers, temporary warning cordons, and a strict photographic re-installation surrender gate.
       </div>
       <div class="safeguards-bar">
+        <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Location Modes: <b>Tower, Basement/Podium &amp; Manual</b></span>
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Fall Arrest: <b>100% Dual-Lanyard Tie-Off</b></span>
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Warning Setback: <b>Rigid Barriers &ge; 2.0m from Edge</b></span>
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Spotter Deployment: <b>Dedicated Edge Watcher Posted</b></span>
@@ -1792,6 +1795,7 @@
             <span class="node-seq">Step 1 · Form Initiation</span>
             <span class="node-action">Edge Removal Assessment</span>
             <span class="node-detail">
+              • Supports <b>Tower</b>, <b>Basement/Podium</b>, and <b>Manual</b> location modes (Tower dropdown optional in Manual mode; exempt from approver tower filtering)<br/>
               • Selects specific activities from 8 statutory removal types<br/>
               • Completes 9-item statutory safety checklist<br/>
               • Attaches initial edge perimeter photograph<br/>
@@ -1874,6 +1878,7 @@
             <span class="node-detail">
               • Verifies twin-lanyard full body harnesses with energy absorbers<br/>
               • Confirms tool wrist tethers to prevent dropped objects<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; EHS Stop-Work Cancel &amp; dynamic T-30 active<br/>
               • First-wins endorsement unlocks temporary edge barrier removal
             </span>
           </div>
@@ -1899,12 +1904,13 @@
         </div>
         <div class="lane-track-col">
           <div class="step-node node-end">
-            <span class="node-seq">Step 5 · Re-Fixing &amp; Closeout</span>
+            <span class="node-seq">Step 5 · Re-Fixing &amp; Auto-Closed Gate</span>
             <span class="node-action">Mandatory Barrier Re-Fixing Gate</span>
             <span class="node-detail">
               • All guard rails, toe-boards &amp; covers 100% re-erected and bolted<br/>
               • 100 kg point load physical pull-test completed successfully<br/>
               • Submission strictly blocked without photographic proof of re-fixed barrier<br/>
+              • Unclosed <b>Auto-Closed</b> permits trigger <code>pendingStatutoryRestoration</code> mandatory Re-Fix sign-off<br/>
               • Mandatory re-fixed barrier photograph + DPDP digital signature
             </span>
           </div>
@@ -2212,6 +2218,7 @@
               • Conducts independent gas verification at top, middle, bottom<br/>
               • Verifies Self-Contained Breathing Apparatus (SCBA) ready<br/>
               • Validates 24V extra-low voltage safety explosion-proof lamps<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; EHS Stop-Work Cancel &amp; dynamic T-30 active<br/>
               • First-wins endorsement activates entry permit
             </span>
           </div>
@@ -2237,12 +2244,13 @@
         </div>
         <div class="lane-track-col">
           <div class="step-node node-end">
-            <span class="node-seq">Step 5 · All-Clear Headcount Surrender</span>
+            <span class="node-seq">Step 5 · All-Clear Headcount &amp; Auto-Closed Gate</span>
             <span class="node-action">Manhole Sealing &amp; Handback</span>
             <span class="node-detail">
               • 100% headcount reconciliation: all entrants accounted for outside<br/>
               • Blowers, lamps, and extraction winches demobilized<br/>
               • Access hatch / cover replaced, bolted, and tagged<br/>
+              • Unclosed <b>Auto-Closed</b> permits trigger <code>pendingStatutoryRestoration</code> Evacuation &amp; Opening Seal sign-off<br/>
               • Sealed manhole photo + Standby Attendant clearance + DPDP sig
             </span>
           </div>
@@ -2479,9 +2487,10 @@
     </div>
     <div class="flow-overview">
       <div class="flow-desc">
-        <b>Operational Scope:</b> Covers work inside vertical building shafts (passenger/service elevator shafts, electrical busduct risers, plumbing shafts, and HVAC ducts). Enforces floor dropdown indexing across 43 levels, scaffolding green-tag verification, fall containment nets, a dedicated MEP domain clearance step prior to Tower In-Charge / Section Head, and mandatory shaft mouth sealing upon surrender.
+        <b>Operational Scope:</b> Covers work inside vertical building shafts (passenger/service elevator shafts, electrical busduct risers, plumbing shafts, and HVAC ducts). Supports <b>Tower</b> (43-level floor dropdown), <b>Basement/Podium</b>, and <b>Manual</b> location modes (manual entries remain visible to Site Engineer, MEP, and Section Head without tower filtering). Enforces scaffolding green-tag verification, fall containment nets, a dedicated MEP domain clearance step prior to Tower In-Charge / Section Head, and mandatory shaft mouth sealing upon surrender.
       </div>
       <div class="safeguards-bar">
+        <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Location Modes: <b>Tower, Basement/Podium &amp; Manual</b></span>
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Scaffolding Fitness: <b>Valid Green Tag Mandatory</b></span>
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Vertical Containment: <b>Catch Nets Every 3 Floors</b></span>
         <span class="safeguard-pill"><i class="fa-solid fa-shield-check"></i> Domain Routing: <b>Dedicated MEP Clearance Step</b></span>
@@ -2499,9 +2508,9 @@
         <div class="lane-track-col">
           <div class="step-node node-start">
             <span class="node-seq">Step 1 · Form Initiation</span>
-            <span class="node-action">Shaft Plan &amp; Floor Dropdown</span>
+            <span class="node-action">Shaft Plan &amp; Location Mode</span>
             <span class="node-detail">
-              • Selects Shaft Location &amp; specific Floor Level (Basement 3 to Terrace)<br/>
+              • Supports <b>Tower</b> (43-level Floor Dropdown), <b>Basement/Podium</b>, or <b>Manual</b> location mode (Tower dropdown bypassed in Manual mode)<br/>
               • Completes 10-item statutory shaft safety checklist<br/>
               • Verifies scaffolding green inspection tag &amp; full-body harness<br/>
               • Attaches shaft mouth perimeter photograph &amp; digital signature
@@ -2998,6 +3007,7 @@
             <span class="node-detail">
               • Inspects calibrated voltage detectors, insulated rescue hooks, arc-flash gear<br/>
               • Validates IS 4770 rubber gloves, dielectric floor mats, and LOTO log<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; Batching Plant observations route via <b>P&amp;M Engineer</b>; EHS Stop-Work Cancel &amp; dynamic T-30 active<br/>
               • First-wins endorsement unlocks active electrical maintenance
             </span>
           </div>
@@ -3023,12 +3033,13 @@
         </div>
         <div class="lane-track-col">
           <div class="step-node node-end">
-            <span class="node-seq">Terminal Phase · De-Isolation Gate</span>
+            <span class="node-seq">Terminal Phase · De-Isolation &amp; Auto-Closed Gate</span>
             <span class="node-action">Mandatory Electrical Restoration</span>
             <span class="node-detail">
               • Personnel withdrawn; temporary portable earth clamps removed<br/>
               • Personal padlocks and tagout tags removed and logged in register<br/>
               • Panel doors and terminal covers bolted shut<br/>
+              • Unclosed <b>Auto-Closed</b> permits flag <code>pendingStatutoryRestoration</code> mandatory LOTO Removal &amp; De-Isolation sign-off<br/>
               • Mandatory De-Isolation Declaration + photo + GPS + DPDP sig
             </span>
           </div>
@@ -3342,12 +3353,13 @@
         </div>
         <div class="lane-track-col">
           <div class="step-node node-highlight">
-            <span class="node-seq">Step 3 · Statutory EHS Endorsement</span>
+            <span class="node-seq">Step 3 · Statutory EHS Endorsement (3-Stage Spine)</span>
             <span class="node-action">PESO Compliance Audit &amp; Blast Activation</span>
             <span class="node-detail">
-              • Verifies blast scheduled strictly before 18:30 IST (Sunset Hard Stop)<br/>
+              • Verifies blast scheduled strictly before 18:30 IST (Sunset Hard Stop; Blasting allows 0 extensions)<br/>
               • Confirms live weather telemetry: zero lightning or thunderstorm warning<br/>
               • Validates licensed PESO explosive transit van and magazine logs<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; EHS Stop-Work Cancel &amp; dynamic T-30 active; unclosed <b>Auto-Closed</b> permits trigger mandatory Post-Blast All-Clear restoration sign-off<br/>
               • First-wins endorsement authorizes drilling/blasting operations
             </span>
           </div>
@@ -3724,6 +3736,7 @@
             <span class="node-detail">
               • Verifies double-rope fall arrest blocks for suspended cradles<br/>
               • Validates perimeter safety catch nets placed below panel erection<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; EHS Stop-Work Cancel &amp; dynamic T-30 active<br/>
               • First-wins endorsement unlocks active construction operations
             </span>
           </div>
@@ -4163,6 +4176,8 @@
             <span class="node-detail">
               • Checks anemometer wind readings (&le;38 km/h mobile, &le;45 km/h tower)<br/>
               • Validates tagline deployment and drop zone perimeter sentries<br/>
+              • Loads &gt; 5.0 MT or tandem lifts auto-escalate to <b>PTW-009B Critical Lift</b> requiring PM endorsement<br/>
+              • Pre-start approvals hold in <b>Approved – Scheduled</b>; EHS Stop-Work Cancel &amp; dynamic T-30 active<br/>
               • First-wins endorsement authorizes lifting operations
             </span>
           </div>
@@ -4552,9 +4567,10 @@
             <span class="node-seq">Step 6 · EHS Final Endorsement</span>
             <span class="node-action">Dual Verification &amp; Activation</span>
             <span class="node-detail">
-              • Audits dual photos, welfare facilities, and night emergency standby<br/>
+              • Audits dual photos, welfare facilities, and night emergency standby (21:00 IST No-Show Auto-Cancel cutoff)<br/>
+              • Daytime Phase 1 PDF download locked on both PTW-010 &amp; linked permit until Night EHS activation; active Night observations route directly to <b>EHS Clearance</b><br/>
               • Strict Rejection Routing: Rejection isolates Night Supervisor without day re-engagement<br/>
-              • Endorsement activates BOTH Night Shift and Linked Activity permits
+              • Endorsement activates BOTH Night Shift and Linked Activity permits (overnight rollover 20:30–06:00 +1 day)
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
@@ -4922,8 +4938,8 @@
             <span class="node-action">Advance Pre-Authorization</span>
             <span class="node-detail">
               • Endorses Sunday high-risk operations in advance on Saturday<br/>
-              • Stamped: sundayWork=true, originTile='SUN'<br/>
-              • Displayed in Register with amber SUN badge &rarr; Ready for Sunday execution
+              • Stamped: sundayWork=true, originTile='SUN', +1 day Sunday window via <b>Approved – Scheduled</b> until Sunday start time<br/>
+              • Displayed in Register with amber SUN badge &rarr; Promotes to Active &amp; allows Sunday execution/closure
             </span>
           </div>
           <span class="flow-arrow">&rarr;</span>
@@ -5167,11 +5183,11 @@
           <span class="flow-arrow">&rarr;</span>
           <div class="step-node">
             <span class="node-seq">3-Stage Remediation Loop</span>
-            <span class="node-action">Supervisor &rarr; Site Engineer &rarr; EHS</span>
+            <span class="node-action">Dynamic Observation Remediation Loop</span>
             <span class="node-detail">
-              • Site Supervisor rectifies site condition + attaches evidence photo<br/>
-              • Site Engineer acknowledges &rarr; routes directly to EHS Safety Authority<br/>
-              • EHS clears (restoring Active) OR rejects back to Site Supervisor for rework
+              • Initiator (<code>getPermitInitiatorRole</code>) rectifies site condition + attaches evidence photo<br/>
+              • Dynamic Reviewer (<code>getObservationReviewerRole</code>): <b>P&amp;M Engineer</b> (Batching Plant PTW-006), direct to <b>EHS Clearance</b> (Active PTW-010), or <b>Site Engineer</b> otherwise<br/>
+              • EHS clears (restoring Active) OR rejects back to permit initiator; Stop-Work Cancel available on Active, Approved – Scheduled &amp; Extended permits
             </span>
           </div>
         </div>
@@ -5189,8 +5205,8 @@
             <span class="node-seq">Extension Request (Before Expiry)</span>
             <span class="node-action">Permittee Requests Up to 120 Min</span>
             <span class="node-detail">
-              • Strictly BLOCKED once <b>Auto-Closed</b> / <b>Expired</b>; preserves <code>originalValidTill</code><br/>
-              • Dynamic <b>T-30 min</b> expiry alert dispatched (Site Eng, Supervisor, EHS)<br/>
+              • Strictly BLOCKED once <b>Auto-Closed</b> / <b>Expired</b> (and 0 extensions on PTW-007 Blasting); preserves <code>originalValidTill</code><br/>
+              • Dynamic <b>T-30 min</b> expiry alert dispatched (initiatorRole, obsReviewerRole, EHS)<br/>
               • Requires justification reason + additional safety briefing (cutoff 18:30 / 20:30 max)
             </span>
           </div>
@@ -5220,9 +5236,9 @@
             <span class="node-action">Discipline Declarations &amp; Server Lock</span>
             <span class="node-detail">
               • Manual Surrender: Exclusive Permittee authority (blocks if observations remain open)<br/>
-              • Automatic Expiry: Server &amp; client sweep sets status to <b>Auto-Closed</b> at <code>validTill</code><br/>
+              • Automatic Expiry: Server &amp; client sweep sets status to <b>Auto-Closed</b> at <code>validTill</code> (supporting SUN +1 day &amp; PTW-010 overnight rollover); <b>PTW-002/003/004/006/007</b> flag <code>pendingStatutoryRestoration</code> + <code>CRITICAL_UNSURRENDERED_AUTO_CLOSE</code> alert<br/>
               • <b>Approved – Scheduled</b> promotes to Active at <code>validFromMs</code> (pre-start overdue &rarr; <b>Expired Before Activation</b>)<br/>
-              • Statutory PDF strictly restricted to EHS roles post-activation with 1-use download lock
+              • Statutory PDF strictly restricted to EHS roles post-activation with 1-use lock &amp; Daytime Phase 1 block on PTW-010 + linked Stage 2 permits
             </span>
           </div>
         </div>

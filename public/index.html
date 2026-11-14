@@ -6881,6 +6881,99 @@
             return n.getFullYear() + '-' + pad(n.getMonth() + 1) + '-' + pad(n.getDate());
         }
 
+        function addDaysIstDateStr(dateStr, days) {
+            const parts = String(dateStr || '').split('-').map(Number);
+            if (parts.length !== 3 || parts.some(isNaN)) return dateStr;
+            const d = new Date(Date.UTC(parts[0], parts[1] - 1, parts[2] + (days || 0)));
+            return d.getUTCFullYear() + '-' + pad(d.getUTCMonth() + 1) + '-' + pad(d.getUTCDate());
+        }
+
+        function computePermitWindowMs(p) {
+            if (!p) return null;
+            const pt = String((typeof ptypeOf === 'function' ? ptypeOf(p) : p.ptype) || '').toLowerCase();
+            const isNight = pt === 'nightshift' || !!p.isNightShiftLinked || !!p.parentNightShiftId;
+            const sStr = String(p.startTime || '').trim();
+            const eStr = String(p.validTillTime || '').trim();
+            const hasExplicitStart = !!(p.validFromMs || p.startAt || p.validFrom);
+            const hasExplicitEnd = !!(p.validTillMs || p.validTill);
+
+            if (!sStr || !eStr) {
+                const vfMs = getEpochMs(p.validFromMs || p.startAt || p.validFrom);
+                const vtMs = getEpochMs(p.validTillMs || p.validTill);
+                return (vfMs || vtMs) ? { validFromMs: vfMs || null, validTillMs: vtMs || null } : null;
+            }
+
+            const sp = sStr.split(':').map(Number);
+            const ep = eStr.split(':').map(Number);
+            if (sp.length < 2 || ep.length < 2 || isNaN(sp[0]) || isNaN(ep[0])) return null;
+            const sMin = sp[0] * 60 + sp[1];
+            const eMin = ep[0] * 60 + ep[1];
+
+            let startDateStr = String(p.scheduledDate || p.validTillDate || '').slice(0, 10);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
+                const ref = p.startAt || p.validFrom || p.createdAt || nowTime();
+                startDateStr = istDateStr(ref);
+                if (p.sundayWork) {
+                    const refSun = getNextSundayFromSaturday(new Date(startDateStr + 'T12:00:00+05:30'));
+                    startDateStr = istDateStr(refSun);
+                }
+            }
+
+            const isOvernight = isNight && (eMin < sMin);
+            const endDateStr = isOvernight ? addDaysIstDateStr(startDateStr, 1) : startDateStr;
+            const computedStartMs = new Date(startDateStr + 'T' + pad(sp[0]) + ':' + pad(sp[1]) + ':00+05:30').getTime();
+            const computedEndMs = new Date(endDateStr + 'T' + pad(ep[0]) + ':' + pad(ep[1]) + ':00+05:30').getTime();
+
+            const finalFromMs = (hasExplicitStart && !p.sundayWork && !isOvernight)
+                ? getEpochMs(p.validFromMs || p.startAt || p.validFrom)
+                : computedStartMs;
+            const finalTillMs = (hasExplicitEnd && !p.sundayWork && !isOvernight)
+                ? getEpochMs(p.validTillMs || p.validTill)
+                : (hasExplicitEnd && isOvernight && getEpochMs(p.validTillMs || p.validTill) > finalFromMs
+                    ? getEpochMs(p.validTillMs || p.validTill)
+                    : computedEndMs);
+
+            return {
+                validFromMs: finalFromMs,
+                validTillMs: finalTillMs,
+                startDateStr: startDateStr,
+                endDateStr: endDateStr,
+                isOvernight: isOvernight
+            };
+        }
+
+        const PTW_RESTORATION_REQUIRED_TYPES = {
+            hotwork: 'Missing Mandatory 1-Hour Post-Work Fire Watch Certification (Form PTW-002)',
+            guardrail: 'Missing Mandatory Guard Rail, Edge Protection & Floor Opening Re-Fix Certification (Form PTW-003)',
+            confined: 'Missing Mandatory Confined Space Evacuation & Opening Seal Certification (Form PTW-004)',
+            electrical: 'Missing Mandatory Electrical LOTO Removal & Safe De-Isolation Certification (Form PTW-006)',
+            blasting: 'Missing Mandatory Post-Blast All-Clear & Zero-Misfire Certification (Form PTW-007)'
+        };
+
+        function getMissingRestorationReason(p) {
+            if (!p) return '';
+            const pt = String((typeof ptypeOf === 'function' ? ptypeOf(p) : p.ptype) || '').toLowerCase();
+            if (pt === 'blasting' && p.dbOperationType && p.dbOperationType !== 'Blasting' && p.drillingBlastingType !== 'blasting') {
+                return 'Missing Mandatory Post-Work Drilling Area Clearance & Restoration Sign-Off (Form PTW-007)';
+            }
+            return PTW_RESTORATION_REQUIRED_TYPES[pt] || '';
+        }
+
+        function applyAutoCloseRestorationFlags(p) {
+            if (!p) return false;
+            const pt = String((typeof ptypeOf === 'function' ? ptypeOf(p) : p.ptype) || '').toLowerCase();
+            if (!PTW_RESTORATION_REQUIRED_TYPES[pt]) return false;
+            if (p.restorationCertified || (p.surrender && p.surrender.surrenderedAt) || (p.closure && p.closure.closedAt && !p.autoClosedAt)) {
+                p.pendingStatutoryRestoration = false;
+                return false;
+            }
+            const reason = getMissingRestorationReason(p);
+            p.pendingStatutoryRestoration = true;
+            p.missingRestorationReason = reason;
+            p.unsurrenderedAutoCloseType = 'CRITICAL_UNSURRENDERED_AUTO_CLOSE';
+            return true;
+        }
+
         function getNextSundayFromSaturday(refDate) {
             const base = new Date((refDate || nowTime()).getTime());
             const currentDay = base.getDay();
@@ -7408,12 +7501,15 @@
                     color: '#7B1FA2',
                     badgeStyle: 'background:rgba(123,31,162,0.12);color:#7B1FA2;border:1px solid rgba(123,31,162,0.25);',
                     allowedInitiatorRoles: ['site-supervisor'],
-                    allowedLocationModes: ['Tower', 'Basement/Podium'],
+                    allowedLocationModes: ['Tower', 'Basement/Podium', 'Manual'],
                     workflow: 'sequential_tower',
                     detailsSummary: function(p) {
-                        return p.locationStructure === 'Tower'
+                        if (p.locationStructure === 'Manual' || (p.locationStructure && p.locationStructure.mode === 'manual')) {
+                            return 'Manual: ' + (p.locManual || (p.locationStructure && p.locationStructure.manualLocation) || p.location || 'Custom Area');
+                        }
+                        return p.locationStructure === 'Tower' || (p.locationStructure && p.locationStructure.mode === 'tower')
                             ? (p.tower + (p.grFloor ? ' · ' + p.grFloor : ''))
-                            : (p.grBasementPodium || 'Podium/Basement');
+                            : (p.grBasementPodium || p.locBasementPodium || (p.locationStructure && p.locationStructure.basementPodium) || 'Podium/Basement');
                     }
                 },
                 confined: {
@@ -7450,9 +7546,17 @@
                     color: '#1565C0',
                     badgeStyle: 'background:rgba(21,101,192,0.12);color:#1565C0;border:1px solid rgba(21,101,192,0.25);',
                     allowedInitiatorRoles: ['site-supervisor'],
-                    allowedLocationModes: ['Tower', 'Basement/Podium'],
+                    allowedLocationModes: ['Tower', 'Basement/Podium', 'Manual'],
                     workflow: 'shaft_mep_tower',
-                    detailsSummary: function(p) { return (p.shaftLocationType || 'Tower') + ' · ' + (p.shaftFloor || ''); }
+                    detailsSummary: function(p) {
+                        if (p.locationStructure === 'Manual' || (p.locationStructure && p.locationStructure.mode === 'manual') || p.shaftLocationType === 'Manual') {
+                            return 'Manual · ' + (p.locManual || (p.locationStructure && p.locationStructure.manualLocation) || p.location || 'Custom Area');
+                        }
+                        if (p.locationStructure === 'Basement/Podium' || (p.locationStructure && p.locationStructure.mode === 'basement_podium')) {
+                            return 'Podium/Basement · ' + (p.locBasementPodium || (p.locationStructure && p.locationStructure.basementPodium) || p.shaftFloor || '');
+                        }
+                        return (p.shaftLocationType || 'Tower') + ' · ' + (p.shaftFloor || p.locFloor || '');
+                    }
                 },
                 electrical: {
                     key: 'electrical',
@@ -8843,9 +8947,10 @@
                 }
             }
             // Location Scoping: If user is assigned to a specific tower/location and is not campus-wide
-            // Never hide Manual-location permits (e.g., PTW-007 Drilling & Blasting) or when assignments/location are site-wide
+            // Never hide Manual-location permits (e.g., PTW-003/PTW-005 Manual mode, PTW-007 Drilling & Blasting) or when assignments/location are site-wide
             const hasExplicitLocation = !!(currentUser && currentUser.locationName && !['Full Worksite', 'All Site Towers', 'Campus-Wide (All Towers)'].includes(String(currentUser.locationName).trim()));
-            const isManualLocPermit = !!(p && (p.locationStructure === 'Manual' || (!p.tower && p.locManual) || ptypeOf(p) === 'blasting'));
+            const lsMode = (p && p.locationStructure && typeof p.locationStructure === 'object') ? String(p.locationStructure.mode || '').toLowerCase() : String((p && p.locationStructure) || '').toLowerCase();
+            const isManualLocPermit = !!(p && (lsMode === 'manual' || String(p.locationMode || '').toLowerCase() === 'manual' || String(p.tower || '').trim() === 'Manual' || String(p.tower || '').indexOf('Manual:') === 0 || ((!p.tower || !p.towerId) && p.locManual) || ptypeOf(p) === 'blasting'));
             if (hasExplicitLocation && !currentUser.campusWide && !isManualLocPermit && normRk !== 'super-admin' && normRk !== 'admin') {
                 const pLoc = p.tower || p.locationName || p.location || '';
                 if (pLoc && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'All Site Towers' && pLoc !== 'Campus-Wide (All Towers)') {
@@ -9466,6 +9571,39 @@
             if (reg) return reg.fullLabel;
             const info = roleInfo(norm);
             return (info && (info.fullLabel || info.label)) || String(roleInput || 'Authorized Signatory');
+        }
+
+        function isManualLocationPermit(p) {
+            if (!p) return false;
+            const ls = p.locationStructure;
+            const lsMode = (ls && typeof ls === 'object') ? String(ls.mode || '').toLowerCase() : String(ls || '').toLowerCase();
+            const tw = String(p.tower || '').trim();
+            return lsMode === 'manual' ||
+                String(p.locationMode || '').toLowerCase() === 'manual' ||
+                tw === 'Manual' ||
+                tw.indexOf('Manual:') === 0 ||
+                ((!tw || !p.towerId) && !!p.locManual) ||
+                ptypeOf(p) === 'blasting';
+        }
+
+        function getPermitInitiatorRole(p) {
+            const pt = p ? ptypeOf(p) : '';
+            if (pt === 'electrical') return 'electrician';
+            if (pt === 'blasting') return 'blasting-incharge';
+            if (pt === 'lifting' || pt === 'liftplan') return 'lift-supervisor';
+            if (pt === 'nightshift') return 'night-supervisor';
+            return 'site-supervisor';
+        }
+
+        function getObservationReviewerRole(p) {
+            const pt = p ? ptypeOf(p) : '';
+            if (pt === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant')) {
+                return 'pm';
+            }
+            if (pt === 'nightshift') {
+                return null; // Day Site Engineer is off-shift during Active Night Shift -> routes straight to EHS Clearance
+            }
+            return 'site-engineer';
         }
 
         /* Centralized Initiator Permit Authorizations Matrix */
@@ -11108,11 +11246,15 @@
         /* ---------------- MAIN PERMIT WORKFLOW ---------------- */
         function stampPermitValidityEpochs(p) {
             if (!p) return;
-            const vfMs = getEpochMs(p.validFromMs || p.startAt || p.validFrom);
-            const vtMs = getEpochMs(p.validTillMs || p.validTill);
+            const win = computePermitWindowMs(p);
+            const vfMs = (win && win.validFromMs) || getEpochMs(p.validFromMs || p.startAt || p.validFrom);
+            const vtMs = (win && win.validTillMs) || getEpochMs(p.validTillMs || p.validTill);
             if (vfMs) p.validFromMs = vfMs;
             if (vtMs) p.validTillMs = vtMs;
-            if (!p.originalValidTill && p.validTill) p.originalValidTill = p.validTill;
+            if (win && win.isOvernight && vtMs && (!p.validTill || getEpochMs(p.validTill) !== vtMs)) {
+                p.validTill = new Date(vtMs);
+            }
+            if (!p.originalValidTill && (p.validTill || vtMs)) p.originalValidTill = p.validTill || new Date(vtMs);
             if (!p.originalValidTillMs && vtMs) p.originalValidTillMs = vtMs;
         }
 
@@ -12459,33 +12601,57 @@
         }
 
         function respondToObservation(p, { comment, photo, gps, sig, signerName }) {
-            const effectiveSigner = signerName || (currentUser && currentUser.name) || 'Site Supervisor';
+            const initiatorRole = getPermitInitiatorRole(p);
+            const initiatorLabel = (roleInfo(initiatorRole) && roleInfo(initiatorRole).label) || 'Site Supervisor';
+            const reviewerRole = getObservationReviewerRole(p);
+            const reviewerLabel = reviewerRole ? ((roleInfo(reviewerRole) && roleInfo(reviewerRole).label) || reviewerRole) : null;
+            const effectiveSigner = signerName || (currentUser && currentUser.name) || initiatorLabel;
             const obs = getActiveObservation(p);
             if (!obs) return;
             obs.response = {
                 respondedAt: nowTime(),
                 respondedBy: effectiveSigner,
+                respondedByRole: initiatorRole,
                 comment: comment,
                 photo: photo,
                 gps: gps,
                 sig: sig
             };
-            obs.status = 'Rectified – Awaiting Engineer Ack';
             p.observation = obs;
-            p.status = 'Observation Pending Site Engineer Acknowledgment';
-            logActivity(p, 'Site Supervisor (' + effectiveSigner + ') submitted on-site GPS' + (gps ? ' (' + gps.lat.toFixed(4) + ', ' + gps.lng.toFixed(4) + ')' : '') + ', photo evidence and remarks to clear Observation (' + (obs.id || p.id) + '): "' + comment + '". Awaiting Site Engineer rectification verification.');
-            notify(['site-engineer'], pLabel(p) + ' — Site Supervisor submitted Observation rectification with on-site GPS verification. Site Engineer acknowledgment required.', 'info', p.id);
-            showToast('Observation rectification submitted. Awaiting Site Engineer acknowledgment.', 'ok');
+            if (!reviewerRole) {
+                // e.g. PTW-010 Active Night Shift: Day Site Engineer off-shift -> route directly to EHS Clearance
+                obs.status = 'Pending EHS Clearance';
+                p.status = 'Observation Pending EHS Clearance';
+                logActivity(p, initiatorLabel + ' (' + effectiveSigner + ') submitted on-site GPS' + (gps ? ' (' + gps.lat.toFixed(4) + ', ' + gps.lng.toFixed(4) + ')' : '') + ', photo evidence and remarks to clear Observation (' + (obs.id || p.id) + '): "' + comment + '". Routed directly to EHS Safety for clearance.');
+                notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' — ' + initiatorLabel + ' submitted Observation rectification. Direct EHS clearance required.', 'info', p.id);
+                showToast('Observation rectification submitted. Forwarded directly to EHS for clearance.', 'ok');
+            } else if (reviewerRole === 'pm') {
+                obs.status = 'Rectified – Awaiting P&M Ack';
+                p.status = 'Observation Pending P&M Acknowledgment';
+                logActivity(p, initiatorLabel + ' (' + effectiveSigner + ') submitted on-site GPS' + (gps ? ' (' + gps.lat.toFixed(4) + ', ' + gps.lng.toFixed(4) + ')' : '') + ', photo evidence and remarks to clear Observation (' + (obs.id || p.id) + '): "' + comment + '". Awaiting ' + reviewerLabel + ' rectification verification.');
+                notify(['pm'], pLabel(p) + ' — ' + initiatorLabel + ' submitted Observation rectification with on-site GPS verification. ' + reviewerLabel + ' acknowledgment required.', 'info', p.id);
+                showToast('Observation rectification submitted. Awaiting ' + reviewerLabel + ' acknowledgment.', 'ok');
+            } else {
+                obs.status = 'Rectified – Awaiting Engineer Ack';
+                p.status = 'Observation Pending Site Engineer Acknowledgment';
+                logActivity(p, initiatorLabel + ' (' + effectiveSigner + ') submitted on-site GPS' + (gps ? ' (' + gps.lat.toFixed(4) + ', ' + gps.lng.toFixed(4) + ')' : '') + ', photo evidence and remarks to clear Observation (' + (obs.id || p.id) + '): "' + comment + '". Awaiting Site Engineer rectification verification.');
+                notify(['site-engineer'], pLabel(p) + ' — ' + initiatorLabel + ' submitted Observation rectification with on-site GPS verification. Site Engineer acknowledgment required.', 'info', p.id);
+                showToast('Observation rectification submitted. Awaiting Site Engineer acknowledgment.', 'ok');
+            }
             executeServerTransition(p, { action: 'OBS_SUPERVISOR_RESPONSE', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             saveState();
         }
 
         function acknowledgeObservationEng(p, { comment, gps, sig, signerName }) {
-            const effectiveSigner = signerName || (currentUser && currentUser.name) || roleInfo('site-engineer').label;
+            const reviewerRole = getObservationReviewerRole(p) || 'site-engineer';
+            const reviewerLabel = (roleInfo(reviewerRole) && roleInfo(reviewerRole).label) || 'Site Engineer';
+            const effectiveSigner = signerName || (currentUser && currentUser.name) || reviewerLabel;
             const obs = getActiveObservation(p);
             if (!obs) return;
             obs.engAck = {
                 acknowledged: true,
+                roleKey: reviewerRole,
+                roleLabel: reviewerLabel,
                 at: nowTime(),
                 by: effectiveSigner,
                 gps: gps,
@@ -12496,10 +12662,10 @@
             obs.rejectionOrigin = null;
             p.observation = obs;
             p.status = 'Observation Pending EHS Clearance';
-            logActivity(p, 'Site Engineer (' + effectiveSigner + ') verified on-site rectification for ' + (obs.id || p.id) + ' and forwarded directly to EHS Safety for final clearance.');
-            notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' — Observation rectification verified by Site Engineer. EHS clearance required.', 'info', p.id);
-            notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification verified by Site Engineer. Forwarded to EHS.', 'info', p.id);
-            showToast('Rectification verified by Site Engineer & forwarded to EHS.', 'ok');
+            logActivity(p, reviewerLabel + ' (' + effectiveSigner + ') verified on-site rectification for ' + (obs.id || p.id) + ' and forwarded directly to EHS Safety for final clearance.');
+            notify(['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'], pLabel(p) + ' — Observation rectification verified by ' + reviewerLabel + '. EHS clearance required.', 'info', p.id);
+            notify(stakeholdersFor(p), pLabel(p) + ' Observation rectification verified by ' + reviewerLabel + '. Forwarded to EHS.', 'info', p.id);
+            showToast('Rectification verified by ' + reviewerLabel + ' & forwarded to EHS.', 'ok');
             executeServerTransition(p, { action: 'OBS_ENG_ACK', targetStatus: p.status, gps, comments: comment, observationId: obs.id });
             saveState();
         }
@@ -12543,7 +12709,7 @@
                     by: effectiveSigner,
                     comment: comment
                 };
-                const targetPermittee = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (ptypeOf(p) === 'blasting' ? 'blasting-incharge' : (ptypeOf(p) === 'nightshift' ? 'night-supervisor' : 'site-supervisor')));
+                const targetPermittee = getPermitInitiatorRole(p);
                 const targetPermitteeLabel = (roleInfo(targetPermittee) && roleInfo(targetPermittee).label) || 'Permittee';
                 obs.status = 'Open';
                 p.observation = obs;
@@ -12574,7 +12740,7 @@
                 by: effectiveSigner,
                 comment: comment
             };
-            const targetPermittee = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (ptypeOf(p) === 'blasting' ? 'blasting-incharge' : (ptypeOf(p) === 'nightshift' ? 'night-supervisor' : 'site-supervisor')));
+            const targetPermittee = getPermitInitiatorRole(p);
             const targetPermitteeLabel = (roleInfo(targetPermittee) && roleInfo(targetPermittee).label) || 'Permittee';
             obs.status = 'Open';
             p.observation = obs;
@@ -12596,7 +12762,7 @@
                 showToast('Access Denied: Direct Stop-Work Cancellation is strictly restricted to EHS personnel.', 'err');
                 return false;
             }
-            if (!['Active', 'Approved – Scheduled', 'Extended', 'Extension Pending', 'Active – Observation Open', 'Active - Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance'].includes(p.status)) {
+            if (!['Active', 'Approved – Scheduled', 'Extended', 'Extension Pending', 'Active – Observation Open', 'Active - Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending P&M Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending EHS Clearance'].includes(p.status)) {
                 showToast('Only active, scheduled, or observation-open permits can be stop-work cancelled by EHS.', 'warn');
                 return false;
             }
@@ -12620,6 +12786,113 @@
             executeServerTransition(p, { action: 'EHS_ACTIVE_CANCEL', targetStatus: 'Cancelled', gps, comments: reason });
             saveState();
             return true;
+        }
+
+        function completeStatutoryRestoration(pOrId, { remarks, declaration, gps, photo, sig, signerName } = {}) {
+            const p = (typeof pOrId === 'string') ? PERMITS.find(x => x.id === pOrId) : pOrId;
+            if (!p) return false;
+            if (p.status !== 'Auto-Closed' && !p.pendingStatutoryRestoration) {
+                showToast('Statutory restoration sign-off applies to Auto-Closed permits with pending restoration.', 'warn');
+                return false;
+            }
+            const rawRk = currentUser ? String(currentUser.key || currentUser.role || '').toLowerCase() : '';
+            const normRk = normalizeRoleKey(rawRk);
+            const expectedInitiator = getPermitInitiatorRole(p);
+            const isEhs = ['ehs-supervisor', 'ehs-head', 'ehs-officer', 'ehs-manager'].includes(rawRk) || ['ehs-supervisor', 'ehs-head'].includes(normRk);
+            if (currentUser && !isEhs && normRk !== normalizeRoleKey(expectedInitiator) && rawRk !== expectedInitiator) {
+                const initLbl = (roleInfo(expectedInitiator) && roleInfo(expectedInitiator).label) || expectedInitiator;
+                showToast('Access Denied: Mandatory safety restoration sign-off is restricted to ' + initLbl + ' or EHS personnel.', 'err');
+                return false;
+            }
+            const cleanRemarks = String(remarks || '').trim();
+            if (!cleanRemarks) {
+                showToast('Restoration verification remarks are mandatory.', 'warn');
+                return false;
+            }
+            if (!declaration) {
+                showToast('Mandatory safety restoration declaration must be confirmed.', 'warn');
+                return false;
+            }
+            const effectiveSigner = signerName || (currentUser && currentUser.name) || (currentUser && currentUser.label) || 'Authorized Signatory';
+            const signOffAt = nowTime();
+            p.pendingStatutoryRestoration = false;
+            p.restorationCertified = true;
+            p.missingRestorationReason = null;
+            p.restorationSignOff = {
+                certifiedBy: effectiveSigner,
+                certifiedRole: rawRk || expectedInitiator,
+                at: signOffAt,
+                remarks: cleanRemarks,
+                declaration: true,
+                gps: gps || null,
+                photo: photo || null,
+                sig: sig || makeSimSignature(effectiveSigner)
+            };
+            logActivity(p, 'MANDATORY SAFETY RESTORATION SIGN-OFF completed by ' + effectiveSigner + ' on Auto-Closed permit: ' + cleanRemarks);
+            notify(stakeholdersFor(p), 'RESTORATION COMPLETE: ' + pLabel(p) + ' statutory safety restoration certified by ' + effectiveSigner + '.', 'success', p.id);
+            showToast('Mandatory safety restoration sign-off recorded for ' + p.id + '.', 'ok');
+            executeServerTransition(p, { action: 'STATUTORY_RESTORATION_SIGNOFF', targetStatus: 'Auto-Closed', gps, comments: cleanRemarks });
+            saveState();
+            return true;
+        }
+
+        function openRestorationSignOffModal(id) {
+            const p = PERMITS.find(x => x.id === id);
+            if (!p) return;
+            const rk = currentUser ? currentUser.key : getPermitInitiatorRole(p);
+            const existingSigner = getPermitSignatory(p, rk);
+            const hasStoredSigner = !!(existingSigner && existingSigner.name && existingSigner.sig);
+            actionModalCtx = {
+                type: 'restoration-signoff',
+                p,
+                remarks: '',
+                declaration: false,
+                gps: null,
+                photo: null,
+                sig: hasStoredSigner ? existingSigner.sig : null,
+                signerName: hasStoredSigner ? existingSigner.name : ((currentUser && currentUser.name) || ''),
+                consent: hasStoredSigner,
+                reusedSignatory: hasStoredSigner,
+                rk
+            };
+            const reasonTxt = p.missingRestorationReason || getMissingRestorationReason(p) || 'Mandatory Post-Closure Safety Restoration Certification';
+            const titleEl = document.getElementById('actionModalTitle');
+            const bodyEl = document.getElementById('actionModalBody');
+            const footEl = document.getElementById('actionModalFoot');
+            if (titleEl) titleEl.innerHTML = '<i class="fa-solid fa-shield-check" style="color:#C62828;"></i> Complete Mandatory Safety Restoration Sign-Off &mdash; ' + p.id;
+            if (bodyEl) {
+                bodyEl.innerHTML =
+                    '<div style="padding:10px 12px;border-radius:8px;background:#FEF2F2;border:1px solid #FECACA;color:#991B1B;font-size:12px;margin-bottom:12px;">' +
+                    '<strong><i class="fa-solid fa-triangle-exclamation"></i> Auto-Closed Without Surrender:</strong> ' + escapeHtml(reasonTxt) +
+                    '</div>' +
+                    '<div class="form-field" style="margin-bottom:12px;"><label>Restoration Verification Remarks <span class="req">*</span></label>' +
+                    '<textarea id="restorationRemarks" placeholder="Confirm physical site restoration, LOTO removal / re-fixing / fire watch / zero misfires completed..." oninput="actionModalCtx.remarks=this.value"></textarea></div>' +
+                    '<div class="form-field" style="margin-bottom:12px;">' +
+                    '<label class="dpdp-consent-pill" style="border-color:#C62828;background:#FFF5F5;">' +
+                    '<input type="checkbox" id="restorationDeclChk" onchange="actionModalCtx.declaration=this.checked;this.closest(\'.dpdp-consent-pill\').classList.toggle(\'checked\', this.checked);" style="margin-top:2px;width:22px;height:22px;accent-color:#C62828;cursor:pointer;">' +
+                    '<span style="font-size:12px;line-height:1.5;color:var(--text);"><strong>Mandatory Statutory Restoration Declaration <span class="req">*</span>:</strong> I certify that all hazardous conditions for this Auto-Closed permit have been physically restored and declared safe for normal operations.</span>' +
+                    '</label></div>' +
+                    buildSignatorySectionHtml(p, rk);
+            }
+            if (footEl) {
+                footEl.innerHTML = '<button class="btn btn-ghost" onclick="closeModal(\'actionModal\')">Cancel</button>' +
+                    '<button class="btn btn-danger" onclick="submitRestorationSignOff()"><i class="fa-solid fa-check-double"></i> Confirm Safety Restoration</button>';
+            }
+            openModal('actionModal');
+        }
+
+        function submitRestorationSignOff() {
+            const ctx = actionModalCtx;
+            if (!ctx || !ctx.p) return;
+            const remEl = document.getElementById('restorationRemarks');
+            const chkEl = document.getElementById('restorationDeclChk');
+            const nameEl = document.getElementById('modalSignerName');
+            const remarks = (remEl ? remEl.value : ctx.remarks) || '';
+            const declaration = (chkEl ? chkEl.checked : ctx.declaration) || false;
+            const signerName = ((nameEl && nameEl.value) || ctx.signerName || (currentUser && currentUser.name) || '').trim();
+            if (!completeStatutoryRestoration(ctx.p, { remarks, declaration, gps: ctx.gps, photo: ctx.photo, sig: ctx.sig, signerName })) return;
+            closeModal('actionModal');
+            viewDetail(ctx.p.id);
         }
 
         function resolveObservation(p, ok, { comment, sig, signerName, gps } = {}) {
@@ -15727,6 +16000,15 @@
                 const validFromMs = getEpochMs(p.validFromMs || p.startAt || p.validFrom);
                 const validTillMs = getEpochMs(p.validTillMs || p.validTill);
 
+                // PTW-010 Night Shift 21:00 IST No-Show Auto-Cancel sweep (live mode or simulated IST clock)
+                if (ptypeOf(p) === 'nightshift' && p.status && p.status.includes('Pending Night Handover')) {
+                    const hasExplicitClock = !((typeof window !== 'undefined' && window.__TEST_MODE__) && typeof window.__SIMULATED_TIME_MS__ !== 'number' && !window.__TEST_DATE_OVERRIDE__);
+                    if (hasExplicitClock) {
+                        const cutoffRes = checkNightHandoverCutoff(p, new Date(nowEpoch));
+                        if (cutoffRes && cutoffRes.cancelled) return;
+                    }
+                }
+
                 // Promote Approved – Scheduled permits once validFromMs arrives (or Expire Before Activation if past validTillMs)
                 if (p.status === 'Approved – Scheduled') {
                     if (validTillMs && nowEpoch >= validTillMs) {
@@ -15779,7 +16061,7 @@
                     }
                 }
 
-                // 30-minute expiry warning / close reminder (fires 30 min before expiry to Site Engineer & Site Supervisor)
+                // 30-minute expiry warning / close reminder (dynamic initiator & observation reviewer roles + EHS)
                 if (['Active', 'Extended', 'Active – Observation Open', 'Active - Observation Open'].includes(p.status) && validTillMs) {
                     const remMs = validTillMs - nowEpoch;
                     if (remMs > 0 && remMs <= 30 * 60000 && !p.warned30) {
@@ -15787,9 +16069,13 @@
                         const fromTxt = fmtIstClock(validFromMs || p.submittedAt || p.createdAt) || (p.startTime || 'Start');
                         const tillTxt = fmtIstClock(validTillMs) || fmtDateTime(p.validTill);
                         const locText = p.tower ? (p.tower + (p.location ? ' — ' + p.location : '')) : (p.location || 'Worksite');
+                        const initRole = getPermitInitiatorRole(p);
+                        const revRole = getObservationReviewerRole(p);
+                        const t30Roles = Array.from(new Set([initRole, revRole, 'ehs-manager', 'ehs-officer'].filter(Boolean)));
+                        const initLabel = (roleInfo(initRole) && roleInfo(initRole).label) || 'Permittee';
                         notify(
-                            ['site-supervisor', 'site-engineer'],
-                            'EXPIRY ALERT (T-30 min): ' + pLabel(p) + ' (' + String(ptypeOf(p) || 'PTW').toUpperCase() + ') at ' + (p.project || p.projectId || 'Site') + ' / ' + locText + ' (' + fromTxt + ' – ' + tillTxt + ' IST) for Supervisor ' + (p.createdBy || 'Site Supervisor') + ' expires in 30 minutes. Request an extension or complete work and close & surrender the permit.',
+                            t30Roles,
+                            'EXPIRY ALERT (T-30 min): ' + pLabel(p) + ' (' + String(ptypeOf(p) || 'PTW').toUpperCase() + ') at ' + (p.project || p.projectId || 'Site') + ' / ' + locText + ' (' + fromTxt + ' – ' + tillTxt + ' IST) for ' + initLabel + ' (' + (p.createdBy || initLabel) + ') expires in 30 minutes. Request an extension or complete work and close & surrender the permit.',
                             'warn',
                             p.id
                         );
@@ -15801,6 +16087,7 @@
                     'Active', 'Extended', 'Extension Pending',
                     'Active – Observation Open', 'Active - Observation Open',
                     'Observation Pending Site Engineer Acknowledgment',
+                    'Observation Pending P&M Acknowledgment',
                     'Observation Pending Section Head Review',
                     'Observation Pending EHS Clearance'
                 ];
@@ -15810,8 +16097,12 @@
                     p.closedAt = new Date(nowEpoch);
                     p.expiredAt = new Date(nowEpoch);
                     p.surrenderEscalations = 0;
-                    logActivity(p, 'Permit AUTO-CLOSED at end of approved validity period (' + fmtDateTime(p.validTill) + ') without manual closure.');
+                    const needsRest = applyAutoCloseRestorationFlags(p);
+                    logActivity(p, 'Permit AUTO-CLOSED at end of approved validity period (' + fmtDateTime(p.validTill) + ') without manual closure.' + (needsRest ? (' Statutory restoration flag set: ' + p.missingRestorationReason) : ''));
                     notify(stakeholdersFor(p), 'AUTO-CLOSED: ' + pLabel(p) + ' reached validity end time (' + fmtDateTime(p.validTill) + ') and was automatically closed. Extension is no longer allowed.', 'error', p.id);
+                    if (needsRest) {
+                        notify(['ehs-manager', 'ehs-officer', getPermitInitiatorRole(p)], 'CRITICAL_UNSURRENDERED_AUTO_CLOSE: ' + pLabel(p) + ' auto-closed without statutory safety restoration sign-off — ' + p.missingRestorationReason, 'error', p.id);
+                    }
                 }
 
                 // Recurring surrender-pending escalation
@@ -18834,19 +19125,19 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
 
                 function pendingForRole(roleKey) {
             return PERMITS.filter(p => {
-                // Location Scoping for operational pending queues
+                // Location Scoping for operational pending queues (never hide Manual-location permits)
                 if (currentUser && currentUser.locationName && !currentUser.campusWide && roleKey !== 'super-admin' && roleKey !== 'admin') {
                     const pLoc = p.tower || p.locationName || p.location || '';
-                    if (pLoc && currentUser.locationName && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'Campus-Wide (All Towers)') {
+                    if (!isManualLocationPermit(p) && pLoc && currentUser.locationName && pLoc !== currentUser.locationName && pLoc !== 'Full Worksite' && pLoc !== 'Campus-Wide (All Towers)') {
                         return false;
                     }
                 }
                 if (roleKey === 'lift-supervisor') return ['lifting', 'liftplan'].includes(ptypeOf(p)) && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Tower Incharge Review', 'Observation Pending EHS Clearance'].includes(p.status);
-                if (roleKey === 'electrician') return ptypeOf(p) === 'electrical' && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Tower Incharge Review', 'Observation Pending EHS Clearance'].includes(p.status);
+                if (roleKey === 'electrician') return ptypeOf(p) === 'electrical' && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending P&M Acknowledgment', 'Observation Pending Tower Incharge Review', 'Observation Pending EHS Clearance'].includes(p.status);
                 if (roleKey === 'night-supervisor') return ['Approved – Pending Night Handover', 'Returned to Night Supervisor'].includes(p.status) || (ptypeOf(p) === 'nightshift' && ['Draft', 'Returned for Correction', 'Active', 'Active – Observation Open'].includes(p.status));
                 if (roleKey === 'quality-engineer') return p.status === 'Pending Quality Engineer Approval';
                 if (roleKey === 'project-manager') return p.status === 'Pending Project Manager Acknowledgment' || p.status === 'Pending Project Manager Re-Acknowledgment';
-                if (roleKey === 'pm') return p.status === 'Pending P&M Approval' || p.status === 'Pending P&M Acknowledgment' || p.status === 'Pending P&M Re-Acknowledgment' || (p.status === 'Pending MEP or P&M Approval' && roleCanActOnChain(p.chain, 'pm')) || (p.status === 'Pending Parallel Approval' && p.approvals && p.approvals.pm && p.approvals.pm.status === 'pending');
+                if (roleKey === 'pm') return p.status === 'Pending P&M Approval' || p.status === 'Pending P&M Acknowledgment' || p.status === 'Pending P&M Re-Acknowledgment' || p.status === 'Observation Pending P&M Acknowledgment' || (p.status === 'Pending MEP or P&M Approval' && roleCanActOnChain(p.chain, 'pm')) || (p.status === 'Pending Parallel Approval' && p.approvals && p.approvals.pm && p.approvals.pm.status === 'pending');
                 if (roleKey === 'blasting-incharge') return p.status === 'Pending Blasting In-charge Acknowledgment' || p.status === 'Pending Blasting In-charge Re-Acknowledgment';
                 if (roleKey === 'site-engineer') return p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment' || p.status === 'Observation Pending Site Engineer Acknowledgment';
                 if (roleKey === 'mep') return (p.status === 'Pending MEP Clearance') || (p.status === 'Pending MEP or P&M Approval' && roleCanActOnChain(p.chain, 'mep')) || (p.status === 'Pending Parallel Approval' && p.approvals && p.approvals.mep && p.approvals.mep.status === 'pending');
@@ -19548,7 +19839,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const pBadgeStyle = (cfg && cfg.badgeStyle) ? cfg.badgeStyle : (pt === 'confined' ? 'background:rgba(94,53,177,0.12);color:#5E35B1;border:1px solid rgba(94,53,177,0.25);' : pt === 'guardrail' ? 'background:rgba(123,31,162,0.12);color:#7B1FA2;border:1px solid rgba(123,31,162,0.25);' : pt === 'shaft' ? 'background:rgba(21,101,192,0.12);color:#1565C0;border:1px solid rgba(21,101,192,0.25);' : pt === 'hotwork' ? 'background:rgba(239,108,0,0.15);color:#E65100;border:1px solid rgba(239,108,0,0.3);' : (pt === 'electrical' ? 'background:rgba(255,179,0,0.15);color:#B78103;border:1px solid rgba(255,179,0,0.35);' : (pt === 'blasting' ? 'background:rgba(230,81,0,0.15);color:#E65100;border:1px solid rgba(230,81,0,0.3);' : 'background:rgba(46,125,50,0.12);color:#2E7D32;border:1px solid rgba(46,125,50,0.25);')));
                 const pSubText = (cfg && typeof cfg.detailsSummary === 'function')
                     ? cfg.detailsSummary(p)
-                    : (pt === 'confined' ? (p.confinedActivity || p.activity || 'Confined Space Entry') : pt === 'guardrail' ? (p.locationStructure === 'Tower' ? (p.tower + (p.grFloor ? ' &middot; ' + p.grFloor : '')) : (p.grBasementPodium || 'Podium/Basement')) : pt === 'shaft' ? ((p.shaftLocationType || 'Tower') + ' &middot; ' + (p.shaftFloor || '')) : pt === 'hotwork' ? ((p.hotworkTypes || []).join(', ')) : (pt === 'electrical' ? ((p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' ? 'Batching Plant' : 'Site') + ' &middot; ' + (Array.isArray(p.electricalApparatus) ? p.electricalApparatus.join(', ') : (p.apparatus || 'HT/LT Work'))) : (pt === 'blasting' ? ((p.dbOperationType || 'Drilling') + (p.dbOperationType === 'Blasting' ? (' &middot; ' + (p.dbChargeAmount || '—') + ' kg') : (' &middot; ' + (p.dbMachineType || 'Machine')))) : (p.depth + ' m'))));
+                    : (pt === 'confined' ? (p.confinedActivity || p.activity || 'Confined Space Entry') : pt === 'guardrail' ? ((p.locationStructure === 'Manual' || (p.locationStructure && p.locationStructure.mode === 'manual')) ? ('Manual: ' + (p.locManual || p.location || 'Custom Area')) : (p.locationStructure === 'Tower' || (p.locationStructure && p.locationStructure.mode === 'tower') ? (p.tower + (p.grFloor ? ' &middot; ' + p.grFloor : '')) : (p.grBasementPodium || p.locBasementPodium || 'Podium/Basement'))) : pt === 'shaft' ? ((p.locationStructure === 'Manual' || (p.locationStructure && p.locationStructure.mode === 'manual') || p.shaftLocationType === 'Manual') ? ('Manual &middot; ' + (p.locManual || p.location || 'Custom Area')) : ((p.shaftLocationType || 'Tower') + ' &middot; ' + (p.shaftFloor || p.locBasementPodium || ''))) : pt === 'hotwork' ? ((p.hotworkTypes || []).join(', ')) : (pt === 'electrical' ? ((p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' ? 'Batching Plant' : 'Site') + ' &middot; ' + (Array.isArray(p.electricalApparatus) ? p.electricalApparatus.join(', ') : (p.apparatus || 'HT/LT Work'))) : (pt === 'blasting' ? ((p.dbOperationType || 'Drilling') + (p.dbOperationType === 'Blasting' ? (' &middot; ' + (p.dbChargeAmount || '—') + ' kg') : (' &middot; ' + (p.dbMachineType || 'Machine')))) : (p.depth + ' m'))));
                 const sunBadge = p.sundayWork ? ' <span class="badge" style="background:#FEF3C7;color:#B45309;border:1px solid #FCD34D;font-size:9.5px;margin-left:3px;" title="Pre-authorized for Sunday Work"><i class="fa-solid fa-sun"></i> SUN</span>' : '';
                 const awaitingLbl = getNextApproverLabel(p);
                 const awaitingBadge = awaitingLbl ? ('<div style="margin-top:4px;"><span style="display:inline-flex;align-items:center;gap:4px;padding:2px 7px;border-radius:999px;font-size:10px;font-weight:700;background:#EFF6FF;color:#1D4ED8;border:1px solid #BFDBFE;"><i class="fa-solid fa-hourglass-half" style="font-size:9px;"></i> Awaiting: ' + escapeHtml(awaitingLbl) + '</span></div>') : '';
@@ -21627,9 +21918,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
         const LOCATION_MODES_BY_PERMIT = {
             excavation: ['Basement/Podium', 'Manual'],
             hotwork: ['Tower', 'Basement/Podium', 'Manual'],
-            guardrail: ['Tower', 'Basement/Podium'],
+            guardrail: ['Tower', 'Basement/Podium', 'Manual'],
             confined: ['Tower', 'Basement/Podium', 'Manual'],
-            shaft: ['Tower', 'Basement/Podium'],
+            shaft: ['Tower', 'Basement/Podium', 'Manual'],
             electrical: ['Tower', 'Basement/Podium', 'Manual'],
             blasting: ['Manual'],
             general: ['Tower', 'Basement/Podium', 'Manual'],
@@ -21721,9 +22012,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 (pt === 'excavation'
                     ? '<div class="form-hint" style="margin-top:6px;font-size:11.5px;color:var(--text-muted);"><i class="fa-solid fa-circle-info" style="color:var(--orange);"></i> <b>Safety Rule (Excavation):</b> Tower &amp; Floor is restricted because excavation cannot occur on suspended slabs. Excavation is restricted to <b>Basement/Podium</b> foundations or <b>Manual</b> external trenches/boundary areas.</div>'
                     : (pt === 'guardrail'
-                        ? '<div class="form-hint" style="margin-top:6px;font-size:11.5px;color:var(--text-muted);"><i class="fa-solid fa-circle-info" style="color:var(--blue);"></i> <b>Safety Rule (Guardrail Removal):</b> Manual location is restricted. Removing edge protection creates critical fall hazards requiring exact structural grid mapping (Tower or Basement).</div>'
+                        ? '<div class="form-hint" style="margin-top:6px;font-size:11.5px;color:var(--text-muted);"><i class="fa-solid fa-circle-info" style="color:var(--blue);"></i> <b>Location Modes (Guardrail Removal):</b> Supports <b>Tower</b>, <b>Basement / Podium</b>, and <b>Manual</b> perimeter/external edge protection areas.</div>'
                         : (pt === 'shaft'
-                            ? '<div class="form-hint" style="margin-top:6px;font-size:11.5px;color:var(--text-muted);"><i class="fa-solid fa-circle-info" style="color:var(--blue);"></i> <b>Safety Rule (Shaft Work):</b> Manual location is restricted. Working in shaft voids requires exact structural level mapping (Tower or Basement).</div>'
+                            ? '<div class="form-hint" style="margin-top:6px;font-size:11.5px;color:var(--text-muted);"><i class="fa-solid fa-circle-info" style="color:var(--blue);"></i> <b>Location Modes (Shaft Work):</b> Supports <b>Tower</b>, <b>Basement / Podium</b>, and <b>Manual</b> external utility/service shaft locations.</div>'
                             : (pt === 'blasting'
                                 ? '<div class="form-hint" style="margin-top:6px;font-size:11.5px;color:var(--text-muted);"><i class="fa-solid fa-circle-info" style="color:var(--orange);"></i> <b>Safety Rule (Drilling and Blasting):</b> Tower and Basement/Podium modes are restricted. Drilling &amp; Blasting activities require open-ground / quarry / external manual location and grid reference entry.</div>'
                                 : (pt === 'electrical' && draft.electricalSiteType === 'batching_plant'
@@ -22664,16 +22955,27 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     : isGuardrail
                     ? ('<div class="review-item"><div class="rk">Location Mode</div><div class="rv">' + (draft.locationStructure || 'Tower') + '</div></div>' +
                        (draft.locationStructure === 'Basement/Podium'
-                        ? ('<div class="review-item"><div class="rk">Basement / Podium</div><div class="rv">' + (draft.grBasementPodium || '&mdash;') + '</div></div>' +
-                           '<div class="review-item"><div class="rk">Area</div><div class="rv">' + (draft.grArea || '&mdash;') + '</div></div>')
-                        : ('<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (draft.grFloor || '&mdash;') + '</div></div>' +
-                           '<div class="review-item"><div class="rk">Unit</div><div class="rv">' + (draft.grUnit || '&mdash;') + '</div></div>')
+                        ? ('<div class="review-item"><div class="rk">Basement / Podium</div><div class="rv">' + (draft.locBasementPodium || draft.grBasementPodium || '&mdash;') + '</div></div>' +
+                           '<div class="review-item"><div class="rk">Area</div><div class="rv">' + (draft.locArea || draft.grArea || '&mdash;') + '</div></div>')
+                        : draft.locationStructure === 'Manual'
+                        ? ('<div class="review-item"><div class="rk">Specific Location</div><div class="rv">' + (draft.locManual || '&mdash;') + '</div></div>' +
+                           '<div class="review-item"><div class="rk">Area / Grid Ref</div><div class="rv">' + (draft.locManualArea || '&mdash;') + '</div></div>')
+                        : ('<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (draft.locFloor || draft.grFloor || '&mdash;') + '</div></div>' +
+                           '<div class="review-item"><div class="rk">Unit</div><div class="rv">' + (draft.locUnit || draft.grUnit || '&mdash;') + '</div></div>')
                        ) +
                        '<div class="review-item"><div class="rk">Activities Requested</div><div class="rv">' + ((draft.guardrailActivities || []).join(', ') || '&mdash;') + (draft.guardrailActivityOther ? ' (' + draft.guardrailActivityOther + ')' : '') + '</div></div>' +
                        '<div class="review-item"><div class="rk">Organization</div><div class="rv">' + (draft.organization || 'ARPL') + (draft.contractor ? ' &mdash; ' + draft.contractor : '') + '</div></div>')
                     : isShaft
-                    ? ('<div class="review-item"><div class="rk">Location Structure</div><div class="rv">' + (draft.shaftLocationType || 'Tower') + '</div></div>' +
-                       '<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (draft.shaftFloor || '&mdash;') + '</div></div>' +
+                    ? ('<div class="review-item"><div class="rk">Location Structure</div><div class="rv">' + (draft.locationStructure || draft.shaftLocationType || 'Tower') + '</div></div>' +
+                       (draft.locationStructure === 'Basement/Podium'
+                        ? ('<div class="review-item"><div class="rk">Basement / Podium</div><div class="rv">' + (draft.locBasementPodium || '&mdash;') + '</div></div>' +
+                           '<div class="review-item"><div class="rk">Area</div><div class="rv">' + (draft.locArea || '&mdash;') + '</div></div>')
+                        : draft.locationStructure === 'Manual'
+                        ? ('<div class="review-item"><div class="rk">Specific Location</div><div class="rv">' + (draft.locManual || '&mdash;') + '</div></div>' +
+                           '<div class="review-item"><div class="rk">Area / Grid Ref</div><div class="rv">' + (draft.locManualArea || '&mdash;') + '</div></div>')
+                        : ('<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (draft.locFloor || draft.shaftFloor || '&mdash;') + '</div></div>' +
+                           '<div class="review-item"><div class="rk">Unit</div><div class="rv">' + (draft.locUnit || '&mdash;') + '</div></div>')
+                       ) +
                        '<div class="review-item"><div class="rk">Personnel in Shaft</div><div class="rv">' + (draft.numPersonnel || '&mdash;') + ' workers</div></div>' +
                        '<div class="review-item"><div class="rk">Organization</div><div class="rv">' + draft.organization + (draft.contractor ? ' &mdash; ' + draft.contractor : '') + '</div></div>' +
                        '<div class="review-item"><div class="rk">Scaffold Tag Verification</div><div class="rv" style="color:var(--green);font-weight:600;"><i class="fa-solid fa-tag"></i> ' + (draft.scaffTagVerified ? 'Verified &amp; Green Tagged' : 'Pending') + '</div></div>' +
@@ -23480,6 +23782,14 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                         const ep = draft.validTillTime.split(':').map(Number);
                         let diffM = (ep[0] * 60 + ep[1]) - (sp[0] * 60 + sp[1]);
                         if (diffM < 0) diffM += 24 * 60;
+                        const nightWin = computePermitWindowMs(draft);
+                        if (nightWin && nightWin.validFromMs && nightWin.validTillMs) {
+                            draft.startAt = new Date(nightWin.validFromMs);
+                            draft.validTill = new Date(nightWin.validTillMs);
+                            draft.validFromMs = nightWin.validFromMs;
+                            draft.validTillMs = nightWin.validTillMs;
+                            draft.validTillDate = nightWin.endDateStr;
+                        }
                         if (hintEl) hintEl.innerHTML = '<div class="countdown-strip" style="background:#EDE7F6;border-color:#7E57C2;color:#4A148C;"><i class="fa-solid fa-moon"></i><div><b>Night Shift Operating Window: ' + fmtDur(diffM) + '</b> &mdash; from <b>' + draft.startTime + '</b> to <b>' + draft.validTillTime + '</b> (Overnight IST). Dual site photo verification conducted at 8:30 PM handover.</div></div>';
                     }
                     ok = startOk && endOk;
@@ -23628,14 +23938,23 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     const defaultTower = authProjTowers[0] || '';
                     if (typeof p.locationStructure === 'string') {
                         const isBp = p.locationStructure === 'Basement/Podium';
-                        p.locationStructure = {
-                            mode: isBp ? 'basement_podium' : 'tower',
-                            tower: p.tower || (isBp ? '' : defaultTower),
-                            floor: p.locFloor || p.grFloor || p.shaftFloor || p.floor || '',
-                            unit: p.locUnit || p.grUnit || p.unit || '',
-                            basementPodium: p.locBasementPodium || p.grBasementPodium || '',
-                            area: p.locArea || p.grArea || p.area || ''
-                        };
+                        const isMan = p.locationStructure === 'Manual';
+                        p.locationStructure = isMan
+                            ? {
+                                mode: 'manual',
+                                tower: '',
+                                manualLocation: p.locManual || '',
+                                manualArea: p.locManualArea || '',
+                                area: p.locManualArea || ''
+                            }
+                            : {
+                                mode: isBp ? 'basement_podium' : 'tower',
+                                tower: p.tower || (isBp ? '' : defaultTower),
+                                floor: p.locFloor || p.grFloor || p.shaftFloor || p.floor || '',
+                                unit: p.locUnit || p.grUnit || p.unit || '',
+                                basementPodium: p.locBasementPodium || p.grBasementPodium || '',
+                                area: p.locArea || p.grArea || p.area || ''
+                            };
                     } else if (p.locationStructure && typeof p.locationStructure === 'object') {
                         if (!p.locationStructure.tower && p.locationStructure.mode === 'tower') {
                             p.locationStructure.tower = p.tower || defaultTower;
@@ -24816,15 +25135,17 @@ function trackerHtml(p) {
                     '</div>';
             }
 
-            // 2b. Observation Pending Site Engineer Acknowledgment
-            if (p.status === 'Observation Pending Site Engineer Acknowledgment') {
+            // 2b. Observation Pending Reviewer Acknowledgment (Site Engineer, or P&M for Batching Plant)
+            if (p.status === 'Observation Pending Site Engineer Acknowledgment' || p.status === 'Observation Pending P&M Acknowledgment') {
                 const curObs = getActiveObservation(p);
+                const obsRevRole = getObservationReviewerRole(p) || 'site-engineer';
+                const obsRevLabel = (roleInfo(obsRevRole) && roleInfo(obsRevRole).label) || (obsRevRole === 'pm' ? 'P&M Engineer' : 'Site Engineer');
                 html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(30,136,229,0.06);">' +
-                    '<div class="aa-title"><i class="fa-solid fa-clipboard-check" style="color:var(--blue);"></i> Observation Rectification: Site Engineer Verification</div>' +
-                    '<div class="aa-desc"><b>Supervisor rectification:</b> "' + escapeHtml(curObs && curObs.response ? curObs.response.comment : '') + '"<br>Inspect the on-site physical rectification before forwarding directly to EHS Safety for final clearance. (Your signature on file will be reused without re-entry).</div>' +
-                    ((rk === 'site-engineer')
+                    '<div class="aa-title"><i class="fa-solid fa-clipboard-check" style="color:var(--blue);"></i> Observation Rectification: ' + escapeHtml(obsRevLabel) + ' Verification</div>' +
+                    '<div class="aa-desc"><b>Permittee rectification:</b> "' + escapeHtml(curObs && curObs.response ? curObs.response.comment : '') + '"<br>Inspect the on-site physical rectification before forwarding directly to EHS Safety for final clearance. (Your signature on file will be reused without re-entry).</div>' +
+                    ((rk === obsRevRole || normalizeRoleKey(rk) === normalizeRoleKey(obsRevRole))
                         ? renderActionButton('obs-eng-ack', p.id, 'Acknowledge Rectification &amp; Forward to EHS')
-                        : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-clock"></i> Awaiting Site Engineer verification and acknowledgment of rectification.</div>') +
+                        : '<div style="font-size:12px;color:var(--text-muted);"><i class="fa-solid fa-clock"></i> Awaiting ' + escapeHtml(obsRevLabel) + ' verification and acknowledgment of rectification.</div>') +
                     '</div>';
             }
 
@@ -25035,6 +25356,25 @@ function trackerHtml(p) {
                 }
             }
 
+            // ---- AUTO-CLOSED MANDATORY SAFETY RESTORATION SIGN-OFF ----
+            if (p.status === 'Auto-Closed' && p.pendingStatutoryRestoration) {
+                const expectedInit = getPermitInitiatorRole(p);
+                const canSignOffRest = isEhsActor || rk === expectedInit || normalizeRoleKey(rk) === normalizeRoleKey(expectedInit);
+                const restReason = p.missingRestorationReason || getMissingRestorationReason(p) || 'Mandatory safety restoration verification pending after Auto-Close.';
+                html += '<div class="approval-action-card" style="border-color:#C62828;background:#FEF2F2;">' +
+                    '<div class="aa-title" style="color:#991B1B;"><i class="fa-solid fa-shield-exclamation"></i> Unsurrendered Auto-Closed Permit &mdash; Safety Restoration Required</div>' +
+                    '<div class="aa-desc" style="color:#7F1D1D;"><b>Flag:</b> ' + escapeHtml(restReason) + '<br>Although the permit validity window expired and triggered <b>Auto-Closed</b> status, statutory physical safety restoration sign-off must be completed immediately.</div>' +
+                    (canSignOffRest
+                        ? '<button class="btn btn-danger" onclick="openRestorationSignOffModal(\'' + p.id + '\')"><i class="fa-solid fa-file-signature"></i> Complete Mandatory Safety Restoration Sign-Off</button>'
+                        : '<div style="font-size:12px;color:#991B1B;"><i class="fa-solid fa-lock"></i> Restricted to Permittee or EHS Safety personnel.</div>') +
+                    '</div>';
+            } else if (p.status === 'Auto-Closed' && p.restorationCertified && p.restorationSignOff) {
+                html += '<div class="approval-action-card" style="border-color:var(--green);background:#ECFDF5;">' +
+                    '<div class="aa-title" style="color:#065F46;"><i class="fa-solid fa-shield-check"></i> Mandatory Safety Restoration Sign-Off Completed</div>' +
+                    '<div class="aa-desc" style="color:#047857;">Certified by <b>' + escapeHtml(p.restorationSignOff.certifiedBy || 'Signatory') + '</b>: "' + escapeHtml(p.restorationSignOff.remarks || '') + '"</div>' +
+                    '</div>';
+            }
+
             // ---- CLOSURE & SURRENDER ----
             const canClose = isPermitteeForP;
             if (canClose && ['Active', 'Extended', 'Active – Observation Open', 'Active - Observation Open'].includes(p.status)) {
@@ -25123,7 +25463,14 @@ function trackerHtml(p) {
                 showToast('Access Denied: Only P&M Engineer can act on batching plant statutory acknowledgment.', 'err');
                 return;
             }
-            if ((action === 'obs-eng-ack' || action === 'ack-eng-return') && rk !== 'site-engineer') {
+            if (action === 'obs-eng-ack') {
+                const expectedObsRev = getObservationReviewerRole(p) || 'site-engineer';
+                if (rk !== expectedObsRev && normalizeRoleKey(rk) !== normalizeRoleKey(expectedObsRev)) {
+                    const lbl = (roleInfo(expectedObsRev) && roleInfo(expectedObsRev).label) || expectedObsRev;
+                    showToast('Access Denied: Only ' + lbl + ' can act at this stage.', 'err');
+                    return;
+                }
+            } else if (action === 'ack-eng-return' && rk !== 'site-engineer') {
                 showToast('Access Denied: Only Site Engineer can act at this stage.', 'err');
                 return;
             }
@@ -26678,6 +27025,7 @@ function trackerHtml(p) {
             'Active – Observation Open',
             'Active - Observation Open',
             'Observation Pending Site Engineer Acknowledgment',
+            'Observation Pending P&M Acknowledgment',
             'Observation Pending Section Head Review',
             'Observation Pending Tower Incharge Review',
             'Observation Pending Excavation Head Review',
@@ -26690,9 +27038,35 @@ function trackerHtml(p) {
             'Auto-Closed',
             'Expired'
         ];
+        function isNightShiftDaytimePhaseLocked(p) {
+            if (!p) return false;
+            const pt = ptypeOf(p);
+            const preNightEhsStatuses = [
+                'Draft', 'Submitted', 'Returned for Correction',
+                'Pending Site Engineer Acknowledgment', 'Pending Site Engineer Re-Acknowledgment',
+                'Pending Section Head', 'Pending Tower Incharge',
+                'Night Shift Approved – Awaiting Linked Permit',
+                'Approved – Pending Night Handover',
+                'Pending P&M Night Acknowledgment',
+                'Returned to Night Supervisor',
+                'Pending EHS Approval', 'Expired Before Activation', 'Rejected'
+            ];
+            if (pt === 'nightshift') {
+                return preNightEhsStatuses.includes(p.status) && !p.activatedAt;
+            }
+            if (p.parentNightShiftId) {
+                const parent = (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS))
+                    ? PERMITS.find(x => x.id === p.parentNightShiftId)
+                    : null;
+                if (parent && isNightShiftDaytimePhaseLocked(parent)) return true;
+                if (preNightEhsStatuses.includes(p.status) && !p.activatedAt) return true;
+            }
+            return false;
+        }
         function isPostActivationPermit(p) {
             if (!p) return false;
             if (['Draft', 'Submitted', 'Approved – Scheduled', 'Expired Before Activation', 'Returned for Correction', 'Rejected'].includes(p.status)) return false;
+            if (isNightShiftDaytimePhaseLocked(p)) return false;
             return Boolean(p.activatedAt) || POST_ACTIVATION_PDF_STATUSES.includes(p.status);
         }
         function canDownloadStatutoryPdf(p, overrideRoleKey) {
@@ -28257,7 +28631,9 @@ function trackerHtml(p) {
                     '<div class="review-item"><div class="rk">Permit Type</div><div class="rv">' + pMeta(p).code + ' — ' + pMeta(p).name + '</div></div>' +
                     (ptypeOf(p) === 'guardrail' ?
                         (() => {
-                            const isBp = p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.mode === 'basement_podium';
+                            const lsMode = p.locationStructure && typeof p.locationStructure === 'object' ? p.locationStructure.mode : p.locationStructure;
+                            const isBp = lsMode === 'basement_podium' || lsMode === 'Basement/Podium';
+                            const isMan = lsMode === 'manual' || lsMode === 'Manual' || (p.tower === 'Manual');
                             const grActs = (p.activities && p.activities.length) ? p.activities : (p.guardrailActivities || []);
                             const grOther = p.activityOther || p.guardrailActivityOther || '';
                             const actChipsHtml = (grActs.length || grOther)
@@ -28267,22 +28643,36 @@ function trackerHtml(p) {
                                    '</div>')
                                 : '—';
                             return '<div class="review-item"><div class="rk">Organization</div><div class="rv">' + p.organization + (p.contractor ? ' — ' + p.contractor : '') + '</div></div>' +
-                                '<div class="review-item"><div class="rk">Location Mode</div><div class="rv">' + (isBp ? 'Basement / Podium' : 'Tower') + '</div></div>' +
-                                (isBp ?
-                                    ('<div class="review-item"><div class="rk">Basement / Podium</div><div class="rv">' + (p.locationStructure.basementPodium || '—') + '</div></div>' +
-                                     '<div class="review-item"><div class="rk">Area</div><div class="rv">' + (p.locationStructure.area || '—') + '</div></div>') :
+                                '<div class="review-item"><div class="rk">Location Mode</div><div class="rv">' + (isMan ? 'Manual' : (isBp ? 'Basement / Podium' : 'Tower')) + '</div></div>' +
+                                (isMan ?
+                                    ('<div class="review-item"><div class="rk">Specific Location</div><div class="rv">' + escapeHtml((p.locationStructure && p.locationStructure.manualLocation) || p.locManual || p.location || '—') + '</div></div>' +
+                                     '<div class="review-item"><div class="rk">Area / Grid Ref</div><div class="rv">' + escapeHtml((p.locationStructure && (p.locationStructure.manualArea || p.locationStructure.area)) || p.locManualArea || '—') + '</div></div>') :
+                                isBp ?
+                                    ('<div class="review-item"><div class="rk">Basement / Podium</div><div class="rv">' + (p.locationStructure.basementPodium || p.locBasementPodium || '—') + '</div></div>' +
+                                     '<div class="review-item"><div class="rk">Area</div><div class="rv">' + (p.locationStructure.area || p.locArea || '—') + '</div></div>') :
                                     ('<div class="review-item"><div class="rk">Tower</div><div class="rv">' + (p.tower || '—') + '</div></div>' +
-                                     '<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.floor ? p.locationStructure.floor : '—') + '</div></div>' +
-                                     '<div class="review-item"><div class="rk">Unit</div><div class="rv">' + (p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.unit ? p.locationStructure.unit : '—') + '</div></div>')) +
+                                     '<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.floor ? p.locationStructure.floor : (p.grFloor || p.locFloor || '—')) + '</div></div>' +
+                                     '<div class="review-item"><div class="rk">Unit</div><div class="rv">' + (p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.unit ? p.locationStructure.unit : (p.grUnit || p.locUnit || '—')) + '</div></div>')) +
                                 '<div class="review-item"><div class="rk">Activities Requested</div><div class="rv">' + actChipsHtml + '</div></div>';
                         })() :
                      ptypeOf(p) === 'shaft' ?
-                        ('<div class="review-item"><div class="rk">Location Structure</div><div class="rv">' + (p.shaftLocationType || 'Tower') + '</div></div>' +
-                         '<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (p.shaftFloor || '—') + '</div></div>' +
-                         '<div class="review-item"><div class="rk">Personnel in Shaft</div><div class="rv">' + (p.numPersonnel || '—') + ' workers</div></div>' +
-                         '<div class="review-item"><div class="rk">Organization</div><div class="rv">' + p.organization + (p.contractor ? ' — ' + p.contractor : '') + '</div></div>' +
-                         '<div class="review-item"><div class="rk">Scaffold Tag Verification</div><div class="rv" style="color:var(--green);font-weight:600;"><i class="fa-solid fa-tag"></i> ' + (p.scaffTagVerified ? 'Verified &amp; Green Tagged' : 'Pending') + '</div></div>' +
-                         '<div class="review-item"><div class="rk">Inspection Declaration</div><div class="rv" style="color:var(--blue);font-weight:600;"><i class="fa-solid fa-clipboard-check"></i> ' + (p.shaftDeclaration ? 'Certified Physically Safe' : 'Pending') + '</div></div>') :
+                        (() => {
+                            const lsMode = p.locationStructure && typeof p.locationStructure === 'object' ? p.locationStructure.mode : p.locationStructure;
+                            const isBp = lsMode === 'basement_podium' || lsMode === 'Basement/Podium' || p.shaftLocationType === 'Podium';
+                            const isMan = lsMode === 'manual' || lsMode === 'Manual' || p.shaftLocationType === 'Manual' || p.tower === 'Manual';
+                            return '<div class="review-item"><div class="rk">Location Structure</div><div class="rv">' + (isMan ? 'Manual' : (isBp ? 'Basement / Podium' : (p.shaftLocationType || 'Tower'))) + '</div></div>' +
+                                (isMan ?
+                                    ('<div class="review-item"><div class="rk">Specific Location</div><div class="rv">' + escapeHtml((p.locationStructure && p.locationStructure.manualLocation) || p.locManual || p.location || '—') + '</div></div>' +
+                                     '<div class="review-item"><div class="rk">Area / Grid Ref</div><div class="rv">' + escapeHtml((p.locationStructure && (p.locationStructure.manualArea || p.locationStructure.area)) || p.locManualArea || '—') + '</div></div>') :
+                                isBp ?
+                                    ('<div class="review-item"><div class="rk">Basement / Podium</div><div class="rv">' + escapeHtml((p.locationStructure && p.locationStructure.basementPodium) || p.locBasementPodium || '—') + '</div></div>' +
+                                     '<div class="review-item"><div class="rk">Area</div><div class="rv">' + escapeHtml((p.locationStructure && p.locationStructure.area) || p.locArea || '—') + '</div></div>') :
+                                    ('<div class="review-item"><div class="rk">Floor Level</div><div class="rv">' + (p.shaftFloor || p.locFloor || '—') + '</div></div>')) +
+                                '<div class="review-item"><div class="rk">Personnel in Shaft</div><div class="rv">' + (p.numPersonnel || '—') + ' workers</div></div>' +
+                                '<div class="review-item"><div class="rk">Organization</div><div class="rv">' + p.organization + (p.contractor ? ' — ' + p.contractor : '') + '</div></div>' +
+                                '<div class="review-item"><div class="rk">Scaffold Tag Verification</div><div class="rv" style="color:var(--green);font-weight:600;"><i class="fa-solid fa-tag"></i> ' + (p.scaffTagVerified ? 'Verified &amp; Green Tagged' : 'Pending') + '</div></div>' +
+                                '<div class="review-item"><div class="rk">Inspection Declaration</div><div class="rv" style="color:var(--blue);font-weight:600;"><i class="fa-solid fa-clipboard-check"></i> ' + (p.shaftDeclaration ? 'Certified Physically Safe' : 'Pending') + '</div></div>';
+                        })() :
                      ptypeOf(p) === 'confined' ?
                         (() => {
                             const isBp = p.locationStructure && typeof p.locationStructure === 'object' && p.locationStructure.mode === 'basement_podium';

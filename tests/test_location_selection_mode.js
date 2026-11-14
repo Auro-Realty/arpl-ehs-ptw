@@ -26,16 +26,16 @@ console.log('  ✓ PASS: All three mode tiles (Tower, Basement/Podium, Manual) p
 assert(src.includes('LOCATION_MODES_BY_PERMIT'), "Must define LOCATION_MODES_BY_PERMIT");
 assert(src.includes("excavation: ['Basement/Podium', 'Manual']"), "Excavation matrix must be Basement/Podium and Manual only");
 assert(src.includes("hotwork: ['Tower', 'Basement/Podium', 'Manual']"), "Hot Work matrix must allow all 3");
-assert(src.includes("guardrail: ['Tower', 'Basement/Podium']"), "Guardrail matrix must allow Tower and Basement/Podium only");
+assert(src.includes("guardrail: ['Tower', 'Basement/Podium', 'Manual']"), "Guardrail matrix must allow all 3 location modes");
 assert(src.includes("confined: ['Tower', 'Basement/Podium', 'Manual']"), "Confined space matrix must allow all 3");
-assert(src.includes("shaft: ['Tower', 'Basement/Podium']"), "Shaft work matrix must allow Tower and Basement/Podium only");
-console.log('  ✓ PASS: LOCATION_MODES_BY_PERMIT strictly mirrors construction safety best practices');
+assert(src.includes("shaft: ['Tower', 'Basement/Podium', 'Manual']"), "Shaft work matrix must allow all 3 location modes");
+console.log('  ✓ PASS: LOCATION_MODES_BY_PERMIT allows Manual mode on PTW-003 & PTW-005 while keeping Excavation restricted');
 
 // Safety explanations present
 assert(src.includes('cannot excavate on suspended slab'), "Safety explanation for excavation restriction must be present");
-assert(src.includes('Removing edge protection creates critical fall hazards'), "Safety explanation for guardrail manual restriction must be present");
-assert(src.includes('Working in shaft voids requires exact structural level mapping'), "Safety explanation for shaft manual restriction must be present");
-console.log('  ✓ PASS: Explicit safety and operational rationales embedded in UI warnings');
+assert(src.includes('Location Modes (Guardrail Removal):'), "Location mode guidance for guardrail must be present");
+assert(src.includes('Location Modes (Shaft Work):'), "Location mode guidance for shaft must be present");
+console.log('  ✓ PASS: Explicit safety and location mode rationales embedded in UI hints');
 
 // --- 2. Runtime VM Evaluation ---
 console.log('\n--- 2. Runtime State, Logic & Validation Tests ---');
@@ -147,9 +147,9 @@ function evalInVM(code) {
 console.log('Testing getAllowedLocationModes helper:');
 assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('excavation')")), JSON.stringify(['Basement/Podium', 'Manual']));
 assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('hotwork')")), JSON.stringify(['Tower', 'Basement/Podium', 'Manual']));
-assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('guardrail')")), JSON.stringify(['Tower', 'Basement/Podium']));
+assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('guardrail')")), JSON.stringify(['Tower', 'Basement/Podium', 'Manual']));
 assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('confined')")), JSON.stringify(['Tower', 'Basement/Podium', 'Manual']));
-assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('shaft')")), JSON.stringify(['Tower', 'Basement/Podium']));
+assert.strictEqual(JSON.stringify(evalInVM("getAllowedLocationModes('shaft')")), JSON.stringify(['Tower', 'Basement/Podium', 'Manual']));
 console.log('  ✓ PASS: getAllowedLocationModes returns correct permitted modes for all 5 permit types');
 
 // 2.2 Test Excavation Initial Defaults
@@ -208,31 +208,34 @@ assert(evalInVM("draft.location").includes('Grid P12 to P18 near Gate 3'),
     "draft.location formatted string must include manual area");
 console.log('  ✓ PASS: Manual mode fields validated and formatted cleanly into draft.location');
 
-// 2.7 Test Guardrail Restrictions
+// 2.7 Test Guardrail Location Modes (All 3 Enabled Including Manual)
 evalInVM("startNewPermit('guardrail');");
 assert.strictEqual(evalInVM("draft.locationStructure"), 'Tower', "Guardrail defaults to Tower");
 const grHtml = evalInVM("renderUniversalOrgAndLocationHtml('')");
 assert(grHtml.includes('value="Tower" checked'), "Guardrail has Tower checked");
-assert(grHtml.includes('value="Basement/Podium"'), "Guardrail has Basement/Podium enabled");
-assert(grHtml.includes('input type="radio" name="univLocMode" value="Manual" disabled'),
-    "Guardrail must have Manual mode disabled/restricted");
-assert(grHtml.includes('Safety Rule (Guardrail Removal):</b> Manual location is restricted'),
-    "Guardrail safety banner explains high-risk fall hazard rationale");
+assert(!grHtml.includes('value="Basement/Podium" disabled'), "Guardrail has Basement/Podium enabled");
+assert(!grHtml.includes('value="Manual" disabled'), "Guardrail must enable Manual location mode");
+assert(grHtml.includes('Location Modes (Guardrail Removal):'), "Guardrail banner documents all 3 modes");
 
-toastMessages = [];
-evalInVM("onUniversalLocationStructureChange('Manual')");
-assert.strictEqual(evalInVM("draft.locationStructure"), 'Tower', "Selecting Manual on Guardrail must be rejected");
-console.log('  ✓ PASS: Guardrail restricts Manual entry and enforces Tower / Basement structure');
+evalInVM("onUniversalLocationStructureChange('Manual');");
+assert.strictEqual(evalInVM("draft.locationStructure"), 'Manual', "Selecting Manual on Guardrail must succeed");
+evalInVM("draft.project = PROJECTS[0].name; draft.guardrailActivities = ['Edge Protection Removal']; draft.locManual = 'North Perimeter Podium Ramp Edge'; draft.locManualArea = 'Grid B4-B8'; syncUniversalLocation();");
+assert.strictEqual(evalInVM("validateWizStep(1)"), true, "Guardrail Step 1 validation must pass in Manual mode without Tower/Floor selection");
+console.log('  ✓ PASS: Guardrail supports Tower, Basement/Podium, and Manual entry cleanly');
 
-// 2.8 Test Shaft Work Restrictions
+// 2.8 Test Shaft Work Location Modes (All 3 Enabled Including Manual)
 evalInVM("startNewPermit('shaft');");
 assert.strictEqual(evalInVM("draft.locationStructure"), 'Tower', "Shaft defaults to Tower");
 const shaftHtml = evalInVM("renderUniversalOrgAndLocationHtml('')");
-assert(shaftHtml.includes('input type="radio" name="univLocMode" value="Manual" disabled'),
-    "Shaft work must have Manual mode disabled/restricted");
-assert(shaftHtml.includes('Safety Rule (Shaft Work):</b> Manual location is restricted'),
-    "Shaft safety banner explains high-risk void rationale");
-console.log('  ✓ PASS: Shaft Work restricts Manual entry and enforces Tower / Basement structure');
+assert(!shaftHtml.includes('value="Tower" disabled') && !shaftHtml.includes('value="Basement/Podium" disabled') && !shaftHtml.includes('value="Manual" disabled'),
+    "Shaft work must enable all 3 location modes (Tower, Basement/Podium, Manual)");
+assert(shaftHtml.includes('Location Modes (Shaft Work):'), "Shaft banner documents all 3 modes");
+
+evalInVM("onUniversalLocationStructureChange('Manual');");
+assert.strictEqual(evalInVM("draft.locationStructure"), 'Manual', "Selecting Manual on Shaft Work must succeed");
+evalInVM("draft.project = PROJECTS[0].name; draft.numPersonnel = '3'; draft.scaffTagVerified = true; draft.shaftDeclaration = true; draft.locManual = 'Utility Vent Risers near Substation'; draft.locManualArea = 'External Service Yard'; syncUniversalLocation();");
+assert.strictEqual(evalInVM("validateWizStep(1)"), true, "Shaft Work Step 1 validation must pass in Manual mode without Tower/Floor selection");
+console.log('  ✓ PASS: Shaft Work supports Tower, Basement/Podium, and Manual entry cleanly');
 
 // 2.9 Test Hot Work & Confined Space (All 3 modes enabled)
 evalInVM("startNewPermit('hotwork');");

@@ -192,15 +192,30 @@ evalInVM("window.__TEST_MODE__ = true;");
 evalInVM("currentUser = { key: 'site-supervisor', name: 'Supervisor Farhan', role: 'Site Supervisor' };");
 console.log('  ✓ PASS: VM Sandbox initialized successfully');
 
-// --- 3. Location Mode Restrictions ---
-console.log('\n--- 3. Location Mode Restrictions ---');
+// --- 3. Location Mode Support (Tower, Basement/Podium, Manual) ---
+console.log('\n--- 3. Location Mode Support & Manual Visibility ---');
 
 const swModes = evalInVM("getAllowedLocationModes('shaft')");
 assert(swModes.includes('Tower'), "Shaft Work must support Tower location mode (e.g. lift shafts, MEP risers)");
 assert(swModes.includes('Basement/Podium'), "Shaft Work must support Basement/Podium mode (e.g. sump shafts, ventilation shafts)");
-assert(!swModes.includes('Manual'), "Shaft Work strictly prohibits Manual location mode (shafts require structured tower/basement containment)");
-assert.strictEqual(swModes.length, 2, "Shaft Work allows exactly Tower and Basement/Podium");
-console.log('  ✓ PASS: Shaft Work location modes strictly restricted to Tower and Basement/Podium (Manual disabled)');
+assert(swModes.includes('Manual'), "Shaft Work must support Manual location mode");
+assert.strictEqual(swModes.length, 3, "Shaft Work allows Tower, Basement/Podium, and Manual");
+
+// Verify Manual-mode PTW-005 passes Step 1 without Tower/Floor and stays visible to Site Eng, MEP & Section Head
+evalInVM(`
+startNewPermit('shaft');
+draft.project = PROJECTS[0].name;
+draft.organization = 'Main Contractor';
+draft.locationStructure = 'Manual';
+draft.locManual = 'External STP Pump Pit Shaft';
+draft.locManualArea = 'Utility Yard Grid E4';
+draft.numPersonnel = '3';
+draft.scaffTagVerified = true;
+draft.shaftDeclaration = true;
+`);
+assert.strictEqual(evalInVM("validateWizStep(1)"), true, "Shaft Work Step 1 passes in Manual mode without Tower/Floor dropdowns");
+assert.strictEqual(evalInVM("(() => { const prev = currentUser; currentUser = { key: 'mep', role: 'mep', projectId: PROJECTS[0].id, locationName: 'Tower A' }; const res = isPermitVisibleToRole({ id: 'SH-MAN-1', ptype: 'shaft', project: PROJECTS[0].name, projectId: PROJECTS[0].id, locationStructure: { mode: 'manual', manualLocation: 'External STP Pump Pit Shaft' }, location: 'External STP Pump Pit Shaft', tower: '', status: 'Pending MEP Clearance' }, 'mep'); currentUser = prev; return res; })()"), true, "Manual PTW-005 remains visible to tower-scoped MEP Engineer");
+console.log('  ✓ PASS: Shaft Work supports Tower, Basement/Podium, and Manual with approver visibility parity');
 
 // --- 4. Step 1 Validation ---
 console.log('\n--- 4. Step 1 Validation: Mandatory Parameters ---');

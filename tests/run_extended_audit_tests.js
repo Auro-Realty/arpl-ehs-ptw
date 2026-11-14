@@ -151,6 +151,8 @@ const exportsFn = new Function(
         generatePermitPDF,
         buildRegisterTable, buildDashboard,
         CONFINED_GAS_THRESHOLDS, isGasReadingSafe,
+        getAllowedLocationModes, isPermitVisibleToRole, getPermitInitiatorRole, getObservationReviewerRole,
+        computePermitWindowMs, completeStatutoryRestoration, stampPermitValidityEpochs,
         switchRole
     };`
 );
@@ -716,6 +718,151 @@ runSuite('FRS Critical Remediation Verification (Fixes 1-6)', () => {
     assert(pObsArr.observations.length === 2 && pObsArr.observations[1].id === 'OBS-FRS-OBS-001-2', 'Fix 6: Second sequential observation appends cleanly with unique ID -2');
     const cancelledOk = app.cancelActivePermit(pObsArr, { comment: 'Immediate slope tension crack hazard', signerName: 'Safety Manager' });
     assert(cancelledOk === true && pObsArr.status === 'Cancelled' && pObsArr.isCancelled === true, 'Fix 6: Direct EHS Stop-Work Cancel immediately cancels Active permit');
+});
+
+// ------------------------------------------------------------------
+// SUITE 19: PTW-002..PTW-010, SUN, Manual Location & Auto-Close Restoration
+// ------------------------------------------------------------------
+runSuite('PTW-002..PTW-010, SUN, Manual Visibility & Restoration Governance', () => {
+    const tNow = Date.now();
+
+    // 1. PTW-003 & PTW-005 Manual Location Modes + Tower Filter Exemption
+    const grModes = app.getAllowedLocationModes('guardrail');
+    const shModes = app.getAllowedLocationModes('shaft');
+    assert(grModes.includes('Manual') && shModes.includes('Manual'), 'PTW-003 & PTW-005 include Manual location mode');
+    setRole('mep');
+    app.currentUser.locationName = 'P1';
+    app.currentUser.projectId = 'PRJ-PEARL';
+    const shManual = {
+        id: 'SH-VIS-001',
+        ptype: 'shaft',
+        projectId: 'PRJ-PEARL',
+        locationStructure: { mode: 'manual', manualLocation: 'External Utility Riser Pit' },
+        location: 'External Utility Riser Pit',
+        tower: '',
+        status: 'Pending MEP Clearance'
+    };
+    assert(app.isPermitVisibleToRole(shManual, 'mep') === true, 'Manual PTW-005 visible to tower-scoped MEP Engineer');
+    assert(app.isPermitVisibleToRole(shManual, 'hw-section-head') === true, 'Manual PTW-005 visible to tower-scoped Section Head');
+
+    // 2. Canonical Role & Dynamic Observation Resolvers
+    assert(app.getPermitInitiatorRole({ ptype: 'electrical' }) === 'electrician', 'PTW-006 initiator resolves to electrician');
+    assert(app.getPermitInitiatorRole({ ptype: 'lifting' }) === 'lift-supervisor', 'PTW-009 initiator resolves to lift-supervisor');
+    assert(app.getPermitInitiatorRole({ ptype: 'blasting' }) === 'blasting-incharge', 'PTW-007 initiator resolves to blasting-incharge');
+    assert(app.getPermitInitiatorRole({ ptype: 'nightshift' }) === 'night-supervisor', 'PTW-010 initiator resolves to night-supervisor');
+
+    const pBatchObs = {
+        id: 'EL-BATCH-OBS-1',
+        ptype: 'electrical',
+        electricalSiteType: 'batching_plant',
+        status: 'Active – Observation Open',
+        validTill: new Date(tNow + 3 * 3600000),
+        observation: { id: 'OBS-EL-1', status: 'Open' },
+        observations: [{ id: 'OBS-EL-1', status: 'Open' }],
+        activityLog: []
+    };
+    assert(app.getObservationReviewerRole(pBatchObs) === 'pm', 'Batching Plant PTW-006 observation reviewer resolves to pm');
+    setRole('electrician');
+    app.respondToObservation(pBatchObs, { comment: 'Panel LOTO padlock re-secured', photo: 'photo1', sig: 'sig1' });
+    assert(pBatchObs.status === 'Observation Pending P&M Acknowledgment', 'Batching Plant observation rectification routes to P&M Acknowledgment');
+    setRole('pm');
+    app.acknowledgeObservationEng(pBatchObs, { comment: 'Verified batching plant LOTO' });
+    assert(pBatchObs.status === 'Observation Pending EHS Clearance', 'Batching Plant P&M ack forwards observation to EHS Clearance');
+
+    const pNightObs = {
+        id: 'NS-OBS-1',
+        ptype: 'nightshift',
+        status: 'Active – Observation Open',
+        validTill: new Date(tNow + 3 * 3600000),
+        observation: { id: 'OBS-NS-1', status: 'Open' },
+        observations: [{ id: 'OBS-NS-1', status: 'Open' }],
+        activityLog: []
+    };
+    assert(app.getObservationReviewerRole(pNightObs) === null, 'Active PTW-010 Night Shift skips Site Engineer on observations');
+    setRole('night-supervisor');
+    app.respondToObservation(pNightObs, { comment: 'Portable floodlight tripod anchored', photo: 'photo2', sig: 'sig2' });
+    assert(pNightObs.status === 'Observation Pending EHS Clearance', 'Active PTW-010 observation rectification routes directly to EHS Clearance');
+
+    // 3. computePermitWindowMs: SUN (+1 day) & PTW-010 Overnight Rollover + Phase 1 PDF Lock
+    const satWindow = app.computePermitWindowMs({
+        id: 'PTW-002-SUN-2026-001',
+        ptype: 'hotwork',
+        sundayWork: true,
+        validFromDate: '2026-11-14',
+        startTime: '09:00',
+        validTillTime: '17:00'
+    });
+    const sunStartIstDate = new Date(satWindow.validFromMs + 5.5 * 3600000).toISOString().slice(0, 10);
+    assert(sunStartIstDate === '2026-11-15', `SUN permit on Saturday 2026-11-14 resolves validFromMs to Sunday 2026-11-15 (got ${sunStartIstDate})`);
+
+    const nsWindow = app.computePermitWindowMs({
+        id: 'PTW-010-2026-001',
+        ptype: 'nightshift',
+        validFromDate: '2026-11-14',
+        startTime: '20:30',
+        validTillTime: '06:00'
+    });
+    assert(nsWindow.validTillMs > nsWindow.validFromMs && (nsWindow.validTillMs - nsWindow.validFromMs) === 9.5 * 3600000,
+        'PTW-010 20:30-06:00 overnight rollover computes exact 9.5-hour window into next day');
+
+    const nsDayParent = { id: 'NS-PHASE1-01', ptype: 'nightshift', status: 'Approved – Pending Night Handover', activatedAt: null };
+    const nsLinkedDay = { id: 'HW-LINKED-01', ptype: 'hotwork', linkedNightShiftId: 'NS-PHASE1-01', status: 'Approved – Pending Night Handover', activatedAt: null };
+    app.PERMITS.push(nsDayParent, nsLinkedDay);
+    setRole('ehs-manager');
+    assert(!app.canDownloadStatutoryPdf(nsDayParent, 'ehs-manager'), 'PTW-010 PDF locked during Daytime Phase 1 prior to Night EHS activation');
+    assert(!app.canDownloadStatutoryPdf(nsLinkedDay, 'ehs-manager'), 'Linked Stage 2 PDF locked during Daytime Phase 1 prior to Night EHS activation');
+
+    // 4. Auto-Closed Statutory Restoration Sign-Off & CRITICAL Notification (PTW-002/003/004/006/007)
+    app.NOTIFICATIONS.length = 0;
+    const pRestHw = {
+        id: 'HW-AUTOCLOSE-01',
+        ptype: 'hotwork',
+        status: 'Active',
+        validTillMs: tNow - 60000,
+        validTill: new Date(tNow - 60000),
+        activityLog: []
+    };
+    app.PERMITS.push(pRestHw);
+    app.runEscalationTick();
+    assert(pRestHw.status === 'Auto-Closed', 'Overdue PTW-002 Hot Work transitions to Auto-Closed');
+    assert(pRestHw.pendingStatutoryRestoration === true && /Fire Watch/i.test(pRestHw.missingRestorationReason || ''),
+        'Auto-Closed PTW-002 flags pendingStatutoryRestoration with Fire Watch reason');
+    assert(app.NOTIFICATIONS.some(n => n.permitId === 'HW-AUTOCLOSE-01' && n.message.includes('CRITICAL')),
+        'Auto-Closed restoration permit dispatches CRITICAL notification');
+    const restPanelHtml = app.actionPanelHtml(pRestHw);
+    assert(restPanelHtml.includes('Complete Mandatory Safety Restoration Sign-Off'),
+        'Auto-Closed restoration permit renders Complete Mandatory Safety Restoration Sign-Off button');
+    setRole('site-supervisor');
+    const signOffOk = app.completeStatutoryRestoration(pRestHw, { remarks: '60-min fire watch verified cleanly', declaration: true, signerName: 'Supervisor Ram' });
+    assert(signOffOk === true && pRestHw.pendingStatutoryRestoration === false && pRestHw.restorationCertified === true,
+        'completeStatutoryRestoration clears pendingStatutoryRestoration and certifies restoration');
+
+    // 5. Dynamic T-30 Alert Role Targeting & Cloud Functions / Rules Parity
+    app.NOTIFICATIONS.length = 0;
+    const pWarnBatch = {
+        id: 'EL-WARN-BATCH-1',
+        ptype: 'electrical',
+        electricalSiteType: 'batching_plant',
+        status: 'Active',
+        validTillMs: tNow + 15 * 60 * 1000,
+        validTill: new Date(tNow + 15 * 60 * 1000),
+        warned30: false,
+        activityLog: []
+    };
+    app.PERMITS.push(pWarnBatch);
+    app.runEscalationTick();
+    const warnNotif = app.NOTIFICATIONS.find(n => n.permitId === 'EL-WARN-BATCH-1' && n.message.includes('EXPIRY ALERT (T-30 min)'));
+    assert(!!warnNotif && warnNotif.roleTargets.includes('electrician') && warnNotif.roleTargets.includes('pm'),
+        'Dynamic T-30 alert for Batching Plant PTW-006 targets electrician and pm');
+
+    const fnSrc = fs.readFileSync(path.resolve(__dirname, '..', 'functions', 'index.js'), 'utf8');
+    assert(fnSrc.includes('isManualLocationPermitServer') && fnSrc.includes('getObservationReviewerRoleServer'),
+        'functions/index.js implements manual visibility exemption and dynamic observation reviewer helper');
+    assert(fnSrc.includes('STATUTORY_RESTORATION_SIGNOFF') && fnSrc.includes('NIGHT_HANDOVER_NOSHOW_AUTOCANCEL'),
+        'functions/index.js implements post-auto-close statutory restoration transition and 21:00 IST night no-show sweep');
+    const rulesSrc = fs.readFileSync(path.resolve(__dirname, '..', 'firestore.rules'), 'utf8');
+    assert(rulesSrc.includes('Pending Blasting In-charge Acknowledgment') && rulesSrc.includes('restorationSignOff'),
+        'firestore.rules enforces Blasting initial state and Auto-Closed restoration keys');
 });
 
 // ==================================================================

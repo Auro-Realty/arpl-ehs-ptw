@@ -192,15 +192,28 @@ evalInVM("window.__TEST_MODE__ = true;");
 evalInVM("currentUser = { key: 'site-supervisor', name: 'Supervisor Rao', role: 'Site Supervisor' };");
 console.log('  ✓ PASS: VM Sandbox initialized successfully');
 
-// --- 3. Location Mode Restrictions ---
-console.log('\n--- 3. Location Mode Restrictions ---');
+// --- 3. Location Mode Support (Tower, Basement/Podium, Manual) ---
+console.log('\n--- 3. Location Mode Support & Manual Visibility ---');
 
 const grModes = evalInVM("getAllowedLocationModes('guardrail')");
 assert(grModes.includes('Tower'), "Guard Rail must support Tower location mode");
 assert(grModes.includes('Basement/Podium'), "Guard Rail must support Basement/Podium location mode");
-assert(!grModes.includes('Manual'), "Guard Rail strictly prohibits Manual location mode (edge protection requires structured floor)");
-assert.strictEqual(grModes.length, 2, "Guard Rail allows exactly Tower and Basement/Podium");
-console.log('  ✓ PASS: Guard Rail location modes strictly restricted to Tower and Basement/Podium (Manual disabled)');
+assert(grModes.includes('Manual'), "Guard Rail must support Manual location mode");
+assert.strictEqual(grModes.length, 3, "Guard Rail allows Tower, Basement/Podium, and Manual");
+
+// Verify Manual-mode PTW-003 passes Step 1 without Tower/Floor and stays visible to approvers
+evalInVM(`
+startNewPermit('guardrail');
+draft.project = PROJECTS[0].name;
+draft.organization = 'Main Contractor';
+draft.locationStructure = 'Manual';
+draft.locManual = 'Perimeter Podium Cutout';
+draft.locManualArea = 'North Wing Ramp';
+draft.guardrailActivities = ['Edge Protection Removal'];
+`);
+assert.strictEqual(evalInVM("validateWizStep(1)"), true, "Guard Rail Step 1 passes in Manual mode without Tower/Floor dropdowns");
+assert.strictEqual(evalInVM("(() => { const prev = currentUser; currentUser = { key: 'hw-section-head', role: 'hw-section-head', projectId: PROJECTS[0].id, locationName: 'Tower A' }; const res = isPermitVisibleToRole({ id: 'GR-MAN-1', ptype: 'guardrail', project: PROJECTS[0].name, projectId: PROJECTS[0].id, locationStructure: { mode: 'manual', manualLocation: 'Perimeter Podium Cutout' }, location: 'Perimeter Podium Cutout', tower: '', status: 'Pending Section Head' }, 'hw-section-head'); currentUser = prev; return res; })()"), true, "Manual PTW-003 remains visible to tower-scoped Section Head");
+console.log('  ✓ PASS: Guard Rail supports Tower, Basement/Podium, and Manual with approver visibility parity');
 
 // --- 4. Form Initiation & Step 1 Validation ---
 console.log('\n--- 4. Form Initiation & Step 1 Validation ---');
