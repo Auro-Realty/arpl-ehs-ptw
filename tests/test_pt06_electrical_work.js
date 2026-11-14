@@ -333,7 +333,7 @@ assert.strictEqual(evalInVM("validateWizStep(2)"), true, "Step 2 passes with all
 // Step 3 does NOT require excavation drawing
 evalInVM(`
 nowTime = () => new Date(2026, 8, 9, 11, 0, 0);
-draft.startTime = '11:30';
+draft.startTime = '11:00';
 draft.validTillTime = '16:00';
 draft.drawing = null;
 `);
@@ -409,7 +409,7 @@ evalInVM("draft.electricalApparatus = ['Cables / Busbars', 'Switchgear / Breaker
 evalInVM("draft.shutdownTimeFrom = '10:00'; draft.shutdownTimeTo = '15:00'; draft.approxShutdownFrom = '10:00'; draft.approxShutdownTo = '15:00';");
 evalInVM("draft.electricalSafeToWork = true; draft.elecSafeToWork = true; draft.lotoDone = true; draft.elecLotoDone = true; draft.lotoRegisterNo = 'REG-SITE-101'; draft.elecLotoRegisterNo = 'REG-SITE-101'; draft.lotoDateTime = '2026-09-10T10:00'; draft.elecLotoTime = '10:00'; draft.elecLotoDate = '2026-09-10'; draft.electricalStatutoryDecl = true; draft.elecStatutoryDecl = true;");
 evalInVM("draft.checklist = ELECTRICAL_CHECKLIST_ITEMS.map(q => ({ q, ans: 'yes', comment: null, photo: null, gps: null, autoPicked: false }));");
-evalInVM("draft.drawing = null; draft.sitePhoto = 'demo'; draft.startTime = '11:30'; draft.validTillTime = '16:00';");
+evalInVM("draft.drawing = null; draft.sitePhoto = 'demo'; draft.startTime = '11:00'; draft.validTillTime = '16:00';");
 evalInVM("draft.signature = { dataUrl: makeSimSignature('Duty Electrician K. Sharma'), at: nowTime(), by: 'Duty Electrician K. Sharma' };");
 evalInVM("draft.gps = { lat: 12.971, lng: 77.594, within: true, distance: 10 };");
 evalInVM("executeFinalSubmit();");
@@ -477,7 +477,7 @@ evalInVM("draft.facilityScope = 'batching_plant'; draft.electricalSiteType = 'ba
 evalInVM("draft.shutdownWhy = 'Testing'; draft.electricalApparatus = ['Transformers']; draft.shutdownTimeFrom = '08:00'; draft.shutdownTimeTo = '12:00'; draft.approxShutdownFrom = '08:00'; draft.approxShutdownTo = '12:00';");
 evalInVM("draft.electricalSafeToWork = true; draft.elecSafeToWork = true; draft.lotoDone = true; draft.elecLotoDone = true; draft.lotoRegisterNo = 'REG-BP-REJ'; draft.elecLotoRegisterNo = 'REG-BP-REJ'; draft.lotoDateTime = '2026-09-10T08:00'; draft.elecLotoTime = '08:00'; draft.elecLotoDate = '2026-09-10'; draft.electricalStatutoryDecl = true; draft.elecStatutoryDecl = true;");
 evalInVM("draft.checklist = ELECTRICAL_CHECKLIST_ITEMS.map(q => ({ q, ans: 'yes', comment: null, photo: null, gps: null, autoPicked: false }));");
-evalInVM("draft.drawing = null; draft.sitePhoto = 'demo'; draft.startTime = '11:30'; draft.validTillTime = '16:00';");
+evalInVM("draft.drawing = null; draft.sitePhoto = 'demo'; draft.startTime = '11:00'; draft.validTillTime = '16:00';");
 evalInVM("draft.signature = { dataUrl: makeSimSignature('Duty Electrician K. Sharma'), at: nowTime(), by: 'Duty Electrician K. Sharma' };");
 evalInVM("draft.gps = { lat: 12.971, lng: 77.594, within: true, distance: 10 };");
 evalInVM("executeFinalSubmit();");

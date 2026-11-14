@@ -299,7 +299,7 @@ console.log('  ✓ PASS: Safe distance and rig hole depth strictly validated as 
 
 evalInVM(`
 nowTime = () => new Date(2026, 8, 9, 11, 0, 0);
-draft.startTime = '11:30';
+draft.startTime = '11:00';
 draft.validTillTime = '16:00';
 `);
 assert.strictEqual(evalInVM("validateWizStep(3)"), true, "Step 3 passes without drawing (drawings suppressed for PTW-007)");
@@ -556,7 +556,7 @@ evalInVM("draft.checklist = BLASTING_CHECKLIST_ITEMS.map(q => ({ q, ans: 'yes', 
 evalInVM("draft.sitePhoto = 'demo'; draft.blastingRigHolesLoaded = '15'; draft.blastingRigHoleDepthM = '4.0'; draft.blastingMufflerLayers = '3'; draft.blastingSafeDistance = '3.0'; draft.dbOtherPrecautions = 'Safe perimeter';");
 evalInVM(`
 nowTime = () => new Date(2026, 8, 9, 11, 0, 0);
-draft.startTime = '11:30';
+draft.startTime = '11:00';
 draft.validTillTime = '16:00';
 validateWizStep(3);
 `);

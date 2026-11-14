@@ -279,7 +279,7 @@ assert.strictEqual(evalInVM("validateWizStep(2)"), true, "Step 2 passes with com
 // Step 3 IST Timing validation
 evalInVM(`
 nowTime = () => new Date(2026, 8, 10, 10, 0, 0);
-draft.startTime = '10:30';
+draft.startTime = '10:00';
 draft.validTillTime = '17:30';
 `);
 assert.strictEqual(evalInVM("validateWizStep(3)"), true, "Step 3 timing passes");

@@ -246,7 +246,7 @@ console.log('  ✓ PASS: Step 2 validation passes when all 12 items answered, si
 // Step 3 Timing & Step 4 Signature Validation
 evalInVM(`
 nowTime = () => new Date(2026, 8, 10, 10, 0, 0);
-draft.startTime = '10:30';
+draft.startTime = '10:00';
 draft.validTillTime = '17:30';
 `);
 assert.strictEqual(evalInVM("validateWizStep(3)"), true, "Step 3 timing passes");
