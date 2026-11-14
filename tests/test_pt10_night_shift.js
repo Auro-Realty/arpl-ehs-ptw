@@ -535,6 +535,13 @@ evalInVM(`
     submitNightPmAck();
 `);
 
+// Advance simulated clock to 20:45 IST (15 min inside active 20:30–06:00 night shift window) for EHS Night Verification
+evalInVM(`(() => {
+    const p = PERMITS.find(x => x.id === '${p1.id}');
+    stampPermitValidityEpochs(p);
+    window.__TEST_DATE_OVERRIDE__ = new Date(p.validFromMs + 15 * 60000);
+})()`);
+
 // EHS Approves
 evalInVM("switchRole('ehs-manager')");
 evalInVM(`approvePermitStage('${p1.id}', 'ehsManager', { lat: 17.3850, lng: 78.4867, within: true }, 'data:image/png;base64,sigEHS', 'EHS Manager', 'Stairway and work zone illumination verified compliant. Authorized.', 'ehs-manager')`);
@@ -606,6 +613,7 @@ assert(pdfTexts.includes("P&M Engineer"), "PDF must mention P&M Engineer");
 
 console.log('  ✓ PASS: Dynamic 6-signatory flow validated and official Permit Report PDF generation succeeded');
 
+evalInVM("window.__TEST_DATE_OVERRIDE__ = null;");
 console.log('==================================================');
 console.log('ALL PTW-010 NIGHT SHIFT & DUAL-PHASE TESTS PASSED (100% SUCCESS RATE)');
 console.log('==================================================');
