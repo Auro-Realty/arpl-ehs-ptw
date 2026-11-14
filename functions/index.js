@@ -494,7 +494,6 @@ exports.downloadStatutoryPdf = onRequest(
         }
 
         // Verify Statutory PDF Role (STRICT EHS-ONLY: ehs-supervisor, ehs-head, ehs-officer, ehs-manager)
-        const callerRole = String(decodedToken.role || "").trim().toLowerCase();
         const callerNormRole = normalizeRoleKey(callerRole);
         const allowedEhsRoles = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"];
         if (!allowedEhsRoles.includes(callerRole) && !allowedEhsRoles.includes(callerNormRole)) {
