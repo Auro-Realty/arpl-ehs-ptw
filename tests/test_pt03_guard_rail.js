@@ -4,7 +4,7 @@
  * Exhaustive, robust, and comprehensive verification of PTW-003 Guard Rail permits:
  * 1.  Static Metadata & Constants Verification (PTW-003, PTW-003 prefix, Tower Incharge SH)
  * 2.  VM Sandbox Setup & Mock Environment Initialization
- * 3.  Location Mode Restrictions (Tower & Basement/Podium supported; Manual strictly prohibited)
+ * 3.  Location Mode Support (Tower, Basement/Podium, and Manual all supported)
  * 4.  Step 1 Validation: Mandatory guardrailActivities array & 'Others' specification
  * 5.  Statutory Checklist (GUARDRAIL_CHECKLIST_ITEMS) & Media Attachment Gating
  * 6.  Submission to Site Engineer Acknowledgment (Step 2)
@@ -36,7 +36,7 @@ assert(src.includes("key: 'guardrail'"), "PTYPE_META must register guardrail key
 assert(src.includes("code: 'PTW-003'"), "PTYPE_META must register code PTW-003");
 assert(src.includes("form: 'PTW-003'"), "PTYPE_META must register Form PTW-003");
 assert(src.includes("prefix: 'PTW-003'"), "PTYPE_META must use PTW-003 prefix");
-assert(src.includes("guardrail: ['Tower', 'Basement/Podium']"), "LOCATION_MODES_BY_PERMIT must restrict Guard Rail to Tower and Basement/Podium (Manual disabled)");
+assert(src.includes("guardrail: ['Tower', 'Basement/Podium', 'Manual']"), "LOCATION_MODES_BY_PERMIT must allow Tower, Basement/Podium, and Manual for Guard Rail");
 assert(src.includes('GUARDRAIL_CHECKLIST_ITEMS = ['), "GUARDRAIL_CHECKLIST_ITEMS constant must be defined");
 console.log('  ✓ PASS: PTW-003 Form PTW-003, PTW-003 prefix, and location restrictions verified');
 

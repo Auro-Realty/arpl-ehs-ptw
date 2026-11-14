@@ -4,7 +4,7 @@
  * Exhaustive, robust, and comprehensive verification of PTW-005 Shaft Work permits:
  * 1.  Static Metadata & Constants Verification (PTW-005, PTW-005 prefix, Tower Incharge SH)
  * 2.  VM Sandbox Setup & Mock Environment Initialization
- * 3.  Location Mode Restrictions (Tower & Basement/Podium supported; Manual strictly prohibited)
+ * 3.  Location Mode Support (Tower, Basement/Podium, and Manual all supported)
  * 4.  Step 1 Validation: Mandatory numPersonnel >= 1, scaffTagVerified: true, and shaftDeclaration: true
  * 5.  Statutory Checklist (SHAFT_CHECKLIST_ITEMS) & Media Attachment Gating
  * 6.  Submission to Site Engineer Acknowledgment (Step 2)
@@ -36,7 +36,7 @@ assert(src.includes("key: 'shaft'"), "PTYPE_META must register shaft key");
 assert(src.includes("code: 'PTW-005'"), "PTYPE_META must register code PTW-005");
 assert(src.includes("form: 'PTW-005'"), "PTYPE_META must register Form PTW-005");
 assert(src.includes("prefix: 'PTW-005'"), "PTYPE_META must use PTW-005 prefix");
-assert(src.includes("shaft: ['Tower', 'Basement/Podium']"), "LOCATION_MODES_BY_PERMIT must restrict Shaft Work to Tower and Basement/Podium (Manual disabled)");
+assert(src.includes("shaft: ['Tower', 'Basement/Podium', 'Manual']"), "LOCATION_MODES_BY_PERMIT must allow Tower, Basement/Podium, and Manual for Shaft Work");
 assert(src.includes('SHAFT_CHECKLIST_ITEMS = ['), "SHAFT_CHECKLIST_ITEMS constant must be defined");
 console.log('  ✓ PASS: PTW-005 Form PTW-005, PTW-005 prefix, and location restrictions verified');
 
