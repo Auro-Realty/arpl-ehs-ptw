@@ -148,6 +148,8 @@ class MockPDFDoc {
         return this;
     }
     addPage() { this.pages++; return this; }
+    getNumberOfPages() { return this.pages; }
+    setPage(p) { return this; }
     save(name) { this.savedName = name; return this; }
 }
 
@@ -171,6 +173,8 @@ const sandbox = {
     jspdf: { jsPDF: MockPDFDoc },
     showToast: (msg, type) => { toastMessages.push({ msg, type }); }
 };
+sandbox.window.jspdf = sandbox.jspdf;
+sandbox.window.jsPDF = MockPDFDoc;
 
 const context = vm.createContext(sandbox);
 vm.runInContext(scriptMatch[1], context);

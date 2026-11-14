@@ -159,6 +159,8 @@ class MockPDFDoc {
         return this;
     }
     addPage() { this.pages++; return this; }
+    getNumberOfPages() { return this.pages; }
+    setPage(p) { return this; }
     save(name) { this.savedName = name; return this; }
     output() { return 'data:application/pdf;base64,mockpdf'; }
 }
