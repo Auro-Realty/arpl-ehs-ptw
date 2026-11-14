@@ -8371,9 +8371,9 @@
             const raw = String(id).trim();
             const up = raw.toUpperCase();
             if (up === 'ALL' || up === 'PRJ-MASTER' || up === 'ENTERPRISE-GLOBAL') return up;
-            if (up === 'PRJ-PRL' || up === 'PRJ-PEARL' || up === 'THE PEARL' || up === 'PEARL') return 'PRJ-PEARL';
-            if (up === 'PRJ-RGT' || up === 'PRJ-REGENT' || up === 'THE REGENT' || up === 'REGENT') return 'PRJ-REGENT';
-            if (up === 'PRJ-SNC' || up === 'PRJ-SANSA' || up === 'PRJ-SA' || up === 'SANSA COUNTY' || up === 'SANSA') return 'PRJ-SANSA';
+            if (up === 'PRJ-PRL' || up === 'PRJ-PEARL' || up === 'THE PEARL' || up === 'PEARL' || up.includes('THE PEARL')) return 'PRJ-PEARL';
+            if (up === 'PRJ-RGT' || up === 'PRJ-REGENT' || up === 'THE REGENT' || up === 'REGENT' || up.includes('THE REGENT')) return 'PRJ-REGENT';
+            if (up === 'PRJ-SNC' || up === 'PRJ-SANSA' || up === 'PRJ-SA' || up === 'SANSA COUNTY' || up === 'SANSA' || up.includes('SANSA COUNTY')) return 'PRJ-SANSA';
             return raw;
         }
         window.normalizeProjectId = normalizeProjectId;
@@ -8977,7 +8977,7 @@
             const rawRk = String(roleKey || '').trim().toLowerCase();
             const normRk = normalizeRoleKey(roleKey) || rawRk;
             const pt = ptypeOf(p);
-            const pPrj = p.projectId ? normalizeProjectId(p.projectId) : (p.project ? normalizeProjectId(p.project) : '');
+            const pPrj = p.projectId ? normalizeProjectId(p.projectId) : ((!(typeof isTestEnvironment === 'function' && isTestEnvironment()) && p.project) ? normalizeProjectId(p.project) : '');
             const isCreator = !!(currentUser && (
                 (p.createdByUid && currentUser.uid && p.createdByUid === currentUser.uid) ||
                 ((p.createdByEmail || p.creatorEmail) && currentUser.email && String(p.createdByEmail || p.creatorEmail).toLowerCase() === String(currentUser.email).toLowerCase()) ||
