@@ -6617,8 +6617,8 @@
             try {
                 const t0 = Date.now();
                 const fns = getFunctions(firebase.app(), 'asia-south1');
-                const getTimeFn = httpsCallable(fns, 'getServerTime');
-                const res = await getTimeFn({});
+                const getTimeFn = httpsCallable(fns, 'transitionPermitStage');
+                const res = await getTimeFn({ action: 'GET_SERVER_TIME' });
                 const t1 = Date.now();
                 const data = res && res.data ? res.data : res;
                 if (data && typeof data.serverTimeMs === 'number') {

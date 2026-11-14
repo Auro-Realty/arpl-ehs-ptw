@@ -610,7 +610,7 @@ runSuite('FRS Critical Remediation Verification (Fixes 1-6)', () => {
     // Fix 1 & 2 Static Server Verification: functions/index.js & firestore.rules
     const fnSrc = fs.readFileSync(path.join(__dirname, '..', 'functions', 'index.js'), 'utf8');
     const rulesSrc = fs.readFileSync(path.join(__dirname, '..', 'firestore.rules'), 'utf8');
-    assert(fnSrc.includes('exports.getServerTime'), 'Fix 3: functions/index.js exports getServerTime callable');
+    assert(fnSrc.includes('"GET_SERVER_TIME"'), 'Fix 3: transitionPermitStage handles GET_SERVER_TIME server clock sync');
     assert(fnSrc.includes('db.runTransaction'), 'Fix 1: transitionPermitStage runs inside db.runTransaction');
     assert(fnSrc.includes('approvals.mep.status === "approved"') && fnSrc.includes('approvals.pm.status === "approved"') && fnSrc.includes('approvals.it.status === "approved"'), 'Fix 1: PTW-001 3-way parallel gate verified on server');
     assert(fnSrc.includes('Expired Before Activation') && fnSrc.includes('Approved – Scheduled'), 'Fix 5: Backend handles Scheduled & Expired Before Activation');

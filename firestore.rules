@@ -270,7 +270,7 @@ service cloud.firestore {
         request.resource.data.get(['statutoryDownload', 'isDownloaded'], false) == true
       ) && (
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['statutoryDownload']) ||
-        isEhsRole()
+        isEhsRole(resource.data.projectId)
       ) && (
         isSuperAdmin() ||
         request.resource.data.status == resource.data.status ||
@@ -278,7 +278,7 @@ service cloud.firestore {
           !(resource.data.status in ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Completed (Surrendered)', 'Cancelled', 'Rejected']) &&
           (
             !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activatedAt', 'autoClosedAt', 'expiredBeforeActivationAt']) ||
-            isEhsRole()
+            isEhsRole(resource.data.projectId)
           )
         )
       );

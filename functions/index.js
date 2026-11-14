@@ -2647,15 +2647,6 @@ exports.switchActiveRole = onCall({ region: REGION }, async (request) => {
 // ============================================================================
 // 7. ATOMIC PERMIT STATE TRANSITION & GEOFENCE ENFORCEMENT
 // ============================================================================
-exports.getServerTime = onCall({ region: REGION }, async () => {
-  const nowMs = Date.now();
-  return {
-    serverTimeMs: nowMs,
-    iso: new Date(nowMs).toISOString(),
-    timeZone: "Asia/Kolkata"
-  };
-});
-
 function toEpochMsServer(val) {
   if (val == null) return null;
   if (typeof val === "number") return Number.isFinite(val) ? val : null;
@@ -2681,6 +2672,15 @@ function formatIstWindowServer(ms) {
 
 exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required");
+
+  if (request.data && request.data.action === "GET_SERVER_TIME") {
+    const nowMs = Date.now();
+    return {
+      serverTimeMs: nowMs,
+      iso: new Date(nowMs).toISOString(),
+      timeZone: "Asia/Kolkata"
+    };
+  }
 
   // Rate limit: max 30 permit state transitions per minute per user
   await enforceRateLimit(request.auth.uid, "transitionPermitStage", 30, 60);
