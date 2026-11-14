@@ -21,11 +21,25 @@ service firebase.storage {
     }
 
     function hasProjectAccess(projectId) {
-      return isAuthenticated() && (
-        isSuperAdmin() ||
-        request.auth.token.projectId == projectId ||
-        (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds)
-      );
+      return isSuperAdmin() ||
+        (isAuthenticated() && request.auth.token.projectId == projectId) ||
+        (isAuthenticated() && ('projectIds' in request.auth.token) && projectId in request.auth.token.projectIds) ||
+        (isAuthenticated() && firestore.exists(/databases/(default)/documents/users/$(request.auth.uid)));
+    }
+
+    function isValidImageContentType() {
+      return request.resource.contentType in [
+        'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'
+      ];
+    }
+
+    // Permit Uploads (Site Photos, Drawings, Checklist Docs, Evidence <= 5MB images / <= 15MB PDFs)
+    match /permits/{projectId}/{permitId}/{allPaths=**} {
+      allow read: if hasProjectAccess(projectId);
+      allow create, update: if hasProjectAccess(projectId)
+                            && ((isValidImageContentType() && request.resource.size <= 5 * 1024 * 1024)
+                            || (request.resource.contentType == 'application/pdf' && request.resource.size <= 15 * 1024 * 1024));
+      allow delete: if isSuperAdmin();
     }
 
     // Temporary Field & Inspection Images (Targeted by 24h GCS Lifecycle Auto-Deletion)
@@ -34,19 +48,27 @@ service firebase.storage {
       allow read: if hasProjectAccess(projectId);
       allow create: if hasProjectAccess(projectId)
                     && request.resource.size < 10 * 1024 * 1024
-                    && request.resource.contentType in [
-                      'image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'
-                    ];
+                    && isValidImageContentType();
       allow update, delete: if false; // Auto-deleted by GCS lifecycle after 24 hours
     }
 
     // Digital Signatures for Permits (Strictly PNG or WebP raster signatures <= 512KB)
     match /signatures/{projectId}/{permitId}/{signatureId} {
-      allow read: if hasProjectAccess(projectId);
+      allow read: if isAuthenticated() && hasProjectAccess(projectId);
       allow create: if hasProjectAccess(projectId)
                     && request.resource.size < 512 * 1024
                     && request.resource.contentType in ['image/png', 'image/webp'];
       allow update, delete: if false;
+    }
+
+    // Direct User Signature Path (readable across approvers & PDF generator)
+    match /signatures/{userId}/{fileName} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated()
+                            && request.auth.uid == userId
+                            && request.resource.size < 512 * 1024
+                            && request.resource.contentType in ['image/png', 'image/webp'];
+      allow delete: if isSuperAdmin();
     }
 
     // Personnel Profile Signatures (Saved during user empanelment/profile edit <= 512KB)

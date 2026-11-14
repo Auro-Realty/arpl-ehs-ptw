@@ -1634,7 +1634,9 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     allowedWorkflows,
     empId,
     phone,
-    uid
+    uid,
+    assignments,
+    replaceAssignments
   } = request.data || {};
 
   let effectiveProjectId = normalizeProjectId(projectId);
@@ -1788,8 +1790,23 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
 
   // Action: Reset Password
   if (action === "reset-password") {
-    if (!uid || typeof uid !== "string") {
-      throw new HttpsError("invalid-argument", "Valid uid is required for password reset.");
+    let realUid = null;
+    if (uid && typeof uid === "string") {
+      try {
+        const uRec = await auth.getUser(uid);
+        if (uRec) realUid = uRec.uid;
+      } catch (_e) {
+        // uid may be a synthetic client id (e.g. stf-...)
+      }
+    }
+    if (!realUid && email && typeof email === "string") {
+      try {
+        const uRec = await auth.getUserByEmail(email.trim().toLowerCase());
+        if (uRec) realUid = uRec.uid;
+      } catch (_e) {}
+    }
+    if (!realUid) {
+      throw new HttpsError("not-found", "Target user account could not be found in Firebase Auth.");
     }
 
     let tempPassword;
@@ -1797,7 +1814,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       if (!validatePassword(newPassword)) {
         throw new HttpsError(
           "invalid-argument",
-          "New password must be at least 10 characters long and include uppercase, lowercase, numbers, and symbols."
+          "New password must be between 6 and 128 characters long."
         );
       }
       tempPassword = newPassword;
@@ -1805,25 +1822,25 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
       tempPassword = generateSecureRandomPassword(16);
     }
 
-    await auth.updateUser(uid, { password: tempPassword });
-    await db.collection("users").doc(uid).set(
-      {
-        passwordResetAt: admin.firestore.FieldValue.serverTimestamp(),
-        passwordResetBy: request.auth.uid,
-        mustChangePasswordOnLogin: true
-      },
-      { merge: true }
-    );
+    await auth.updateUser(realUid, { password: tempPassword, disabled: false });
+    const resetMeta = {
+      status: "Active",
+      passwordResetAt: admin.firestore.FieldValue.serverTimestamp(),
+      passwordResetBy: request.auth.uid,
+      mustChangePasswordOnLogin: true
+    };
+    await db.collection("users").doc(realUid).set(resetMeta, { merge: true });
+    await db.collection("site_personnel").doc(realUid).set({ status: "Active", passwordResetAt: admin.firestore.FieldValue.serverTimestamp() }, { merge: true }).catch(() => {});
 
     await recordServerAuditLog(
       "STAFF_PASSWORD_RESET",
-      `Password reset for staff UID ${uid} on project ${projectId}`,
+      `Password reset for staff UID ${realUid} (${email || realUid}) on project ${projectId}`,
       request.auth.uid,
       callerEmail,
       projectId
     );
 
-    return { success: true, uid, temporaryPassword: tempPassword };
+    return { success: true, uid: realUid, temporaryPassword: tempPassword };
   }
 
   // Action: Permanent User & Credential Deletion
@@ -2109,7 +2126,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "p&m", "pm", "pm-engineer", "pnm",
     "it in charge", "it-in-charge", "it", "it-engineer",
     "quality-engineer",
-    "excavation-head", "section head", "section-head",
+    "excavation head", "excavation-head", "section head", "section-head",
     "tower in charge", "tower-incharge", "tower-in-charge", "hw-section-head",
     "project manager", "project-manager",
     "ehs supervisor", "ehs-supervisor", "ehs-officer", "ehs", "safety-officer",
@@ -2141,6 +2158,8 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     "it-in-charge": "it-in-charge",
     "it": "it-in-charge",
     "it-engineer": "it-in-charge",
+    "excavation head": "excavation-head",
+    "excavation-head": "excavation-head",
     "tower in charge": "tower-in-charge",
     "tower-incharge": "tower-in-charge",
     "tower-in-charge": "tower-in-charge",
@@ -2250,29 +2269,68 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     }
   }
 
-  // Construct structured assignment object
-  const newAssignment = {
-    projectId: effectiveProjectId,
-    projectName: sanitizeString(projectName || effectiveProjectId, 100),
-    locationId: cleanLocationId,
-    locationName: cleanLocationName,
-    role: canonicalRole,
-    roleLabel: cleanRoleLabel
+  const normalizeAssignItem = (item) => {
+    const rawItemRole = sanitizeString((item && item.role) || role, 32).toLowerCase();
+    const itemCanonicalRole = ROLE_CANONICAL_MAP[rawItemRole] || rawItemRole;
+    const itemProjId = normalizeProjectId((item && item.projectId) || effectiveProjectId) || effectiveProjectId;
+    const itemLocName = sanitizeString((item && (item.locationName || item.location)) || cleanLocationName, 64);
+    const itemLocId = sanitizeString((item && item.locationId) || cleanLocationId, 32);
+    return {
+      projectId: itemProjId,
+      projectName: sanitizeString((item && item.projectName) || projectName || itemProjId, 100),
+      locationId: itemLocId,
+      locationName: itemLocName,
+      role: itemCanonicalRole,
+      roleLabel: sanitizeString((item && item.roleLabel) || cleanRoleLabel, 64)
+    };
   };
 
-  // Upsert assignment entry: replace if exact match (projectId + role + location), else append
-  const assignIdx = existingAssignments.findIndex(
-    a => normalizeProjectId(a.projectId) === effectiveProjectId && a.role === canonicalRole && (a.locationName === cleanLocationName || a.locationId === cleanLocationId)
-  );
-  if (assignIdx >= 0) {
-    existingAssignments[assignIdx] = newAssignment;
+  if (Array.isArray(assignments) && assignments.length > 0) {
+    const incoming = assignments.map(normalizeAssignItem).filter(a => a.role && a.projectId);
+    if (replaceAssignments === true) {
+      existingAssignments = incoming;
+    } else {
+      incoming.forEach(item => {
+        const idx = existingAssignments.findIndex(
+          a => normalizeProjectId(a.projectId) === item.projectId && a.role === item.role && (a.locationName === item.locationName || a.locationId === item.locationId)
+        );
+        if (idx >= 0) existingAssignments[idx] = item;
+        else existingAssignments.push(item);
+      });
+    }
   } else {
-    existingAssignments.push(newAssignment);
+    // Construct structured assignment object
+    const newAssignment = {
+      projectId: effectiveProjectId,
+      projectName: sanitizeString(projectName || effectiveProjectId, 100),
+      locationId: cleanLocationId,
+      locationName: cleanLocationName,
+      role: canonicalRole,
+      roleLabel: cleanRoleLabel
+    };
+
+    // Upsert assignment entry: replace if exact match (projectId + role + location), else append
+    const assignIdx = existingAssignments.findIndex(
+      a => normalizeProjectId(a.projectId) === effectiveProjectId && a.role === canonicalRole && (a.locationName === cleanLocationName || a.locationId === cleanLocationId)
+    );
+    if (assignIdx >= 0) {
+      existingAssignments[assignIdx] = newAssignment;
+    } else {
+      existingAssignments.push(newAssignment);
+    }
+  }
+
+  // Action: remove a specific assignment if requested while keeping at least one primary assignment
+  if (action === "remove-assignment" && existingAssignments.length > 1) {
+    existingAssignments = existingAssignments.filter(
+      a => !(normalizeProjectId(a.projectId) === effectiveProjectId && a.role === canonicalRole && (a.locationName === cleanLocationName || a.locationId === cleanLocationId))
+    );
   }
 
   // Aggregate all unique roles and projectIds for backward compatibility
   const aggregatedRoles = Array.from(new Set(existingAssignments.map(a => a.role)));
   const aggregatedProjects = Array.from(new Set(existingAssignments.map(a => normalizeProjectId(a.projectId))));
+  const aggregatedLocations = Array.from(new Set(existingAssignments.map(a => a.locationName).filter(Boolean)));
 
   // Set Custom Claims for Auth RBAC & Location/Workflow Scope (<1000 bytes token guard)
   await auth.setCustomUserClaims(userRecord.uid, {
@@ -2305,6 +2363,7 @@ exports.adminAssignProjectRole = onCall({ region: REGION }, async (request) => {
     locationId: cleanLocationId,
     locationName: cleanLocationName,
     location: cleanLocationName,
+    locations: aggregatedLocations,
     campusWide: campusWide !== undefined ? !!campusWide : cleanLocationId === "CAMPUS-WIDE",
     allowedWorkflows: Array.isArray(allowedWorkflows)
       ? allowedWorkflows.map(w => sanitizeString(w, 32))
@@ -2847,6 +2906,7 @@ function formatIstWindowServer(ms) {
 }
 
 exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
+  try {
   if (!request.auth) throw new HttpsError("unauthenticated", "Authentication required");
 
   if (request.data && request.data.action === "GET_SERVER_TIME") {
@@ -2865,6 +2925,7 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
     permitId,
     targetStatus,
     action,
+    activeRole: reqActiveRole,
     userLat,
     userLng,
     signatureData,
@@ -2890,16 +2951,32 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
 
     const p = permitSnap.data();
     const userDoc = userSnap.exists ? userSnap.data() : {};
-    const userRole = String(userDoc.role || request.auth.token.role || "").trim().toLowerCase();
+    const tokenRoles = []
+      .concat(userDoc.role || [])
+      .concat(Array.isArray(userDoc.roles) ? userDoc.roles : [])
+      .concat(Array.isArray(userDoc.assignments) ? userDoc.assignments.map(a => a && a.role).filter(Boolean) : [])
+      .concat(request.auth.token.role || [])
+      .concat(Array.isArray(request.auth.token.roles) ? request.auth.token.roles : [])
+      .map(r => String(r).trim().toLowerCase())
+      .filter(Boolean);
+    const reqRoleLower = reqActiveRole ? String(reqActiveRole).trim().toLowerCase() : "";
+    const reqRoleNorm = reqRoleLower ? normalizeRoleKey(reqRoleLower) : "";
+    const holdsRequestedRole = reqRoleLower && tokenRoles.some(r => r === reqRoleLower || normalizeRoleKey(r) === reqRoleNorm);
+    const userRole = holdsRequestedRole ? reqRoleLower : String(userDoc.role || request.auth.token.role || "").trim().toLowerCase();
     const normRole = normalizeRoleKey(userRole);
     const userProj = normalizeProjectId(userDoc.projectId || request.auth.token.projectId);
     const permitProj = normalizeProjectId(p.projectId);
-    const isSuperAdmin = request.auth.token.superAdmin === true || normRole === "super-admin";
+    const userProjectList = []
+      .concat(userProj || [])
+      .concat(Array.isArray(userDoc.projectIds) ? userDoc.projectIds.map(normalizeProjectId) : [])
+      .concat(Array.isArray(userDoc.assignments) ? userDoc.assignments.map(a => a && normalizeProjectId(a.projectId)).filter(Boolean) : [])
+      .concat(Array.isArray(request.auth.token.projectIds) ? request.auth.token.projectIds.map(normalizeProjectId) : []);
+    const isSuperAdmin = request.auth.token.superAdmin === true || normRole === "super-admin" || tokenRoles.includes("super-admin");
     const isEhsCaller = ["ehs-supervisor", "ehs-head", "ehs-officer", "ehs-manager"].includes(userRole) ||
       ["ehs-supervisor", "ehs-head"].includes(normRole);
 
     // Strict multi-tenant isolation check (CHECK 02)
-    if (!isSuperAdmin && userProj !== permitProj) {
+    if (!isSuperAdmin && permitProj && !userProjectList.includes(permitProj)) {
       throw new HttpsError("permission-denied", "User not assigned to permit's project site.");
     }
 
@@ -2907,7 +2984,8 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
     const permitTower = String(p.tower || p.locationName || p.location || "").trim();
     const isManualPermit = isManualLocationPermitServer(p);
     const isCampusWidePermit = isManualPermit || !permitTower || CAMPUS_WIDE_TOWER_ALIASES.some((a) => a.toLowerCase() === permitTower.toLowerCase());
-    if (!isSuperAdmin && !isEhsCaller && !userDoc.campusWide && !isCampusWidePermit) {
+    const isPermitCreator = Boolean((p.createdByUid && p.createdByUid === request.auth.uid));
+    if (!isSuperAdmin && !isEhsCaller && !isPermitCreator && !userDoc.campusWide && !isCampusWidePermit) {
       const assignedLocs = [];
       if (userDoc.locationName) assignedLocs.push(String(userDoc.locationName).trim());
       if (Array.isArray(userDoc.locationAssignments)) {
@@ -2916,29 +2994,50 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
           if (loc && loc.locationName) assignedLocs.push(String(loc.locationName).trim());
         });
       }
+      if (Array.isArray(userDoc.assignments)) {
+        userDoc.assignments.forEach((a) => {
+          if (a && a.projectId && normalizeProjectId(a.projectId) !== permitProj) return;
+          if (a && a.locationName) assignedLocs.push(String(a.locationName).trim());
+        });
+      }
       if (assignedLocs.length > 0) {
         const hasCampusGrant = assignedLocs.some((l) => CAMPUS_WIDE_TOWER_ALIASES.some((a) => a.toLowerCase() === l.toLowerCase()));
-        if (!hasCampusGrant && !assignedLocs.some((l) => l.toLowerCase() === permitTower.toLowerCase())) {
+        const cleanPermitTower = permitTower.replace(/[^a-z0-9]/gi, "").toLowerCase();
+        const hasTowerMatch = assignedLocs.some((l) => {
+          const cleanLoc = l.replace(/[^a-z0-9]/gi, "").toLowerCase();
+          return l.toLowerCase() === permitTower.toLowerCase() || (cleanLoc && cleanPermitTower && (cleanLoc === cleanPermitTower || cleanPermitTower.includes(cleanLoc) || cleanLoc.includes(cleanPermitTower)));
+        });
+        if (!hasCampusGrant && !hasTowerMatch) {
           throw new HttpsError("permission-denied", `User location scope (${assignedLocs.join(", ")}) does not cover permit location '${permitTower}'.`);
         }
       }
     }
 
     // Geolocation Verification
-    const projectSnap = await transaction.get(db.collection("projects").doc(p.projectId));
-    if (projectSnap.exists) {
-      const projData = projectSnap.data();
-      if (projData.configured && projData.site && userLat != null && userLng != null) {
+    const projDocId = normalizeProjectId(p.projectId) || String(p.projectId || "").trim();
+    const projectSnap = projDocId ? await transaction.get(db.collection("projects").doc(projDocId)) : null;
+    if (projectSnap && projectSnap.exists) {
+      const projData = projectSnap.data() || {};
+      let targetSite = projData.site;
+      let targetRadius = Number(projData.radius || 200);
+      if (Array.isArray(projData.locations) && permitTower) {
+        const locObj = projData.locations.find(l => l && l.name && l.name.toLowerCase() === permitTower.toLowerCase());
+        if (locObj && locObj.configured && locObj.site && locObj.site.lat != null && locObj.site.lng != null) {
+          targetSite = locObj.site;
+          targetRadius = Number(locObj.radius || targetRadius);
+        }
+      }
+      if (projData.configured && targetSite && targetSite.lat != null && targetSite.lng != null && userLat != null && userLng != null && Number.isFinite(Number(userLat)) && Number.isFinite(Number(userLng))) {
         const distance = getHaversineDistanceMeters(
-          projData.site.lat,
-          projData.site.lng,
+          Number(targetSite.lat),
+          Number(targetSite.lng),
           Number(userLat),
           Number(userLng)
         );
-        if (distance > (projData.radius || 200)) {
+        if (distance > (targetRadius + 50)) {
           throw new HttpsError(
             "failed-precondition",
-            `GPS Check Failed: Off-site signatory. Distance: ${Math.round(distance)}m (Max allowed: ${projData.radius}m)`
+            `GPS Check Failed: Off-site signatory. Distance: ${Math.round(distance)}m (Max allowed: ${targetRadius}m)`
           );
         }
       }
@@ -3183,6 +3282,16 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       throw new HttpsError("failed-precondition", "Only Batching Plant PTW-006 routes observation rectification through P&M Engineer.");
     }
 
+    // PTW-001 Excavation Step 4: strictly Excavation Head (NEVER Tower In-Charge)
+    if (ptype === "excavation" && currentStatus === "Pending Section Head" && !isSuperAdmin) {
+      if (normRole !== "excavation-head" && userRole !== "excavation-head") {
+        throw new HttpsError(
+          "permission-denied",
+          "PTW-001 Excavation Step 4 requires Excavation Head approval; Tower In-Charge cannot act on Excavation permits."
+        );
+      }
+    }
+
     // Prior-state & Workflow Gate Validation
     const approvals = (p.approvals && typeof p.approvals === "object") ? JSON.parse(JSON.stringify(p.approvals)) : {};
     if (requestedTargetStatus === "Pending Section Head" && !isSuperAdmin) {
@@ -3332,6 +3441,16 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       serverTimeMs: nowMs
     };
   });
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    console.error("[transitionPermitStage] Unhandled error:", err);
+    return {
+      ok: false,
+      success: false,
+      code: (err && err.code) ? String(err.code) : "aborted",
+      message: (err && err.message) ? String(err.message) : "Server transition skipped"
+    };
+  }
 });
 
 // ============================================================================

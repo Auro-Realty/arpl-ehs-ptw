@@ -26,9 +26,9 @@ service cloud.firestore {
 
     function isSuperAdmin() {
       return isAuthenticated() && (
-        request.auth.token.superAdmin == true ||
-        request.auth.token.role == 'super-admin' ||
-        request.auth.token.email == 'aic1176@aurogroup.com' ||
+        request.auth.token.get('superAdmin', false) == true ||
+        request.auth.token.get('role', '') == 'super-admin' ||
+        request.auth.token.get('email', '') == 'aic1176@aurogroup.com' ||
         (userDocExists() && userDocRole() == 'super-admin')
       );
     }
@@ -37,20 +37,20 @@ service cloud.firestore {
     function isProjectAdmin(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
-        (request.auth.token.role in ['project-admin', 'site-admin', 'admin', 'ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.projectId == projectId || request.auth.token.projectId == null || (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds))) ||
+        (request.auth.token.get('role', '') in ['project-admin', 'site-admin', 'admin', 'ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] && (request.auth.token.get('projectId', null) == projectId || request.auth.token.get('projectId', null) == null || ('projectIds' in request.auth.token && request.auth.token.projectIds is list && projectId in request.auth.token.projectIds))) ||
         (userDocExists() && (
           userDocRole() in ['project-admin', 'site-admin', 'admin', 'ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
           userDocData().get('uiRole', '') in ['admin', 'project-admin']
         ) && (
           userDocData().get('projectId', '') == projectId ||
-          (userDocData().get('projectIds', []) is list && projectId in userDocData().get('projectIds', [])) ||
+          ('projectIds' in userDocData() && userDocData().projectIds is list && projectId in userDocData().projectIds) ||
           userDocData().get('projectId', '') == '' ||
           userDocData().get('campusWide', false) == true
         )) ||
         (exists(/databases/$(database)/documents/projects/$(projectId)) && (
-          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.email ||
+          (request.auth.token.get('email', '') != '' && get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.get('email', '')) ||
           get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
-          get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.email
+          (request.auth.token.get('email', '') != '' && get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.get('email', ''))
         )) ||
         (exists(/databases/$(database)/documents/project_admins/$(request.auth.uid)) && (
           get(/databases/$(database)/documents/project_admins/$(request.auth.uid)).data.get('projectId', '') == projectId ||
@@ -59,33 +59,62 @@ service cloud.firestore {
       );
     }
 
-    // Verifies caller has read/write authority scoped to the specific worksite
-    function hasProjectAccess(projectId) {
+    // Verifies caller is assigned to target projectId (supports single-project, multi-project projectIds[], and assignments[])
+    function isAssignedToProject(projectId) {
       return isAuthenticated() && (
         isSuperAdmin() ||
-        request.auth.token.projectId == projectId ||
-        (request.auth.token.projectIds != null && projectId in request.auth.token.projectIds) ||
-        (userDocExists() && (
-          userDocData().get('projectId', '') == projectId ||
-          (userDocData().get('projectIds', []) is list && projectId in userDocData().get('projectIds', [])) ||
-          userDocData().get('campusWide', false) == true
-        )) ||
-        (exists(/databases/$(database)/documents/projects/$(projectId)) && (
-          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.email ||
-          get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
-          get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.email
-        )) ||
-        (exists(/databases/$(database)/documents/site_personnel/$(request.auth.uid)) && get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.get('projectId', '') == projectId)
+        (
+          projectId is string && projectId != '' && (
+            ('projectId' in request.auth.token && request.auth.token.projectId == projectId) ||
+            ('projectIds' in request.auth.token && request.auth.token.projectIds is list && projectId in request.auth.token.projectIds) ||
+            (userDocExists() && (
+              userDocData().get('projectId', '') == projectId ||
+              ('projectIds' in userDocData() && userDocData().projectIds is list && projectId in userDocData().projectIds) ||
+              userDocData().get('campusWide', false) == true
+            )) ||
+            (exists(/databases/$(database)/documents/projects/$(projectId)) && (
+              (request.auth.token.get('email', '') != '' && get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminEmail', '') == request.auth.token.get('email', '')) ||
+              get(/databases/$(database)/documents/projects/$(projectId)).data.get('adminUid', '') == request.auth.uid ||
+              (request.auth.token.get('email', '') != '' && get(/databases/$(database)/documents/projects/$(projectId)).data.get('safetyInchargeEmail', '') == request.auth.token.get('email', ''))
+            )) ||
+            (exists(/databases/$(database)/documents/site_personnel/$(request.auth.uid)) && (
+              get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.get('projectId', '') == projectId ||
+              ('projectIds' in get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data &&
+               get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.projectIds is list &&
+               projectId in get(/databases/$(database)/documents/site_personnel/$(request.auth.uid)).data.projectIds)
+            ))
+          )
+        )
       );
     }
 
+    // Verifies caller has read/write authority scoped to the specific worksite
+    function hasProjectAccess(projectId) {
+      return isAssignedToProject(projectId);
+    }
+
     function isEhsRole(projectId) {
-      return hasProjectAccess(projectId) && (
-        request.auth.token.role in ['ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge', 'EHS Supervisor', 'EHS Head'] ||
+      return isAssignedToProject(projectId) && (
+        request.auth.token.get('role', '') in ['ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge', 'EHS Supervisor', 'EHS Head'] ||
         (userDocExists() && (
           userDocRole() in ['ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
+          userDocData().get('activeRole', '') in ['ehs-supervisor', 'ehs-head', 'ehs-manager', 'ehs-officer', 'safety-incharge'] ||
           userDocData().get('roleLabel', '') in ['EHS Supervisor', 'EHS Head', 'EHS Safety Officer', 'EHS Manager']
         ))
+      );
+    }
+
+    function isExcavationHeadRole() {
+      return isSuperAdmin() || (
+        isAuthenticated() && (
+          request.auth.token.get('role', '') == 'excavation-head' ||
+          request.auth.token.get('ptwRole', '') == 'excavation-head' ||
+          (userDocExists() && (
+            userDocData().get('activeRole', '') == 'excavation-head' ||
+            userDocRole() == 'excavation-head' ||
+            ('roles' in userDocData() && userDocData().roles is list && 'excavation-head' in userDocData().roles)
+          ))
+        )
       );
     }
 
@@ -98,6 +127,10 @@ service cloud.firestore {
         'Cancelled',
         'Rejected'
       ];
+    }
+
+    function isTerminalPermitState() {
+      return isTerminalPermitStatus(resource.data.get('status', ''));
     }
 
     // ----------------------------------------------------------------------------
@@ -162,6 +195,23 @@ service cloud.firestore {
           resource.data.get('email', '') != 'aic1176@aurogroup.com' &&
           resource.data.get('email', '') != 'ehs.superadmin@aurorealty.com'
         )
+      );
+    }
+
+    // ----------------------------------------------------------------------------
+    // 2A. CROSS-DEVICE CLOUD DRAFTS (Strictly Scoped to Author UID or Super Admin)
+    // ----------------------------------------------------------------------------
+    match /drafts/{userId} {
+      allow read, create, update, delete: if request.auth != null && (
+        request.auth.uid == userId ||
+        isSuperAdmin()
+      );
+    }
+
+    match /users/{userId}/drafts/{draftId} {
+      allow read, create, update, delete: if request.auth != null && (
+        request.auth.uid == userId ||
+        isSuperAdmin()
       );
     }
 
@@ -257,11 +307,18 @@ service cloud.firestore {
     match /permits/{permitId} {
       allow read: if isAuthenticated() && (
         isSuperAdmin() ||
-        (resource.data.projectId != null && hasProjectAccess(resource.data.projectId))
+        (resource.data.get('status', '') == 'Draft' && resource.data.get('createdByUid', '') == request.auth.uid) ||
+        (resource.data.get('status', '') != 'Draft' && resource.data.projectId != null && isAssignedToProject(resource.data.projectId))
       );
       allow create: if isAuthenticated() && (
-        request.resource.data.projectId != null &&
-        hasProjectAccess(request.resource.data.projectId)
+        isSuperAdmin() ||
+        (request.resource.data.projectId != null && isAssignedToProject(request.resource.data.projectId)) ||
+        (request.resource.data.get('status', '') == 'Draft' && request.resource.data.get('createdByUid', '') == request.auth.uid)
+      ) && (
+        isSuperAdmin() ||
+        !('createdByUid' in request.resource.data) ||
+        request.resource.data.createdByUid == '' ||
+        request.resource.data.createdByUid == request.auth.uid
       ) && (
         request.resource.data.status in [
           'Draft',
@@ -281,10 +338,12 @@ service cloud.firestore {
         request.resource.data.statutoryDownload.get(['isDownloaded'], false) != true
       );
       allow update: if isAuthenticated() && (
-        resource.data.projectId != null &&
-        hasProjectAccess(resource.data.projectId)
+        isSuperAdmin() ||
+        (resource.data.get('status', '') == 'Draft' && resource.data.get('createdByUid', '') == request.auth.uid) ||
+        (resource.data.projectId != null && isAssignedToProject(resource.data.projectId))
       ) && (
         request.resource.data.projectId == resource.data.projectId ||
+        resource.data.get('status', '') == 'Draft' ||
         isSuperAdmin()
       ) && (
         request.resource.data.status is string &&
@@ -303,17 +362,64 @@ service cloud.firestore {
         !request.resource.data.diff(resource.data).affectedKeys().hasAny(['statutoryDownload']) ||
         isEhsRole(resource.data.projectId)
       ) && (
+        // PTW-001 Excavation Step 4 & Observation Review: strictly Excavation Head (never Tower In-Charge)
+        !(
+          (resource.data.get('ptype', '') == 'excavation' || resource.data.get('ptwCode', '') == 'PTW-001') &&
+          resource.data.get('status', '') in [
+            'Pending Section Head',
+            'Pending Excavation Head'
+          ] &&
+          request.resource.data.status != resource.data.status &&
+          !(request.resource.data.status in ['Expired Before Activation', 'Cancelled']) &&
+          !isSuperAdmin() &&
+          !isExcavationHeadRole()
+        ) &&
+        !(
+          (resource.data.get('ptype', '') == 'excavation' || resource.data.get('ptwCode', '') == 'PTW-001') &&
+          resource.data.get('status', '') in [
+            'Observation Pending Section Head Review',
+            'Observation Pending Excavation Head Review'
+          ] &&
+          request.resource.data.status != resource.data.status &&
+          !(request.resource.data.status in ['Expired Before Activation', 'Cancelled']) &&
+          !isSuperAdmin() &&
+          !isExcavationHeadRole() &&
+          !isEhsRole(resource.data.projectId)
+        )
+      ) && (
         isSuperAdmin() ||
         (
-          !isTerminalPermitStatus(resource.data.status) &&
+          !isTerminalPermitState() &&
           (
             request.resource.data.status == resource.data.status ||
-            !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activatedAt', 'autoClosedAt', 'expiredBeforeActivationAt']) ||
-            isEhsRole(resource.data.projectId)
+            isEhsRole(resource.data.projectId) ||
+            (
+              (request.resource.data.status != 'Active' || resource.data.get('status', '') == 'Approved – Scheduled') &&
+              (
+                !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activatedAt', 'autoClosedAt', 'expiredBeforeActivationAt']) ||
+                (
+                  (
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['activatedAt']) ||
+                    ('activatedAt' in resource.data && resource.data.activatedAt != null) ||
+                    resource.data.get('status', '') == 'Approved – Scheduled'
+                  ) &&
+                  (
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['autoClosedAt']) ||
+                    ('autoClosedAt' in resource.data && resource.data.autoClosedAt != null) ||
+                    request.resource.data.status == 'Auto-Closed'
+                  ) &&
+                  (
+                    !request.resource.data.diff(resource.data).affectedKeys().hasAny(['expiredBeforeActivationAt']) ||
+                    ('expiredBeforeActivationAt' in resource.data && resource.data.expiredBeforeActivationAt != null) ||
+                    request.resource.data.status == 'Expired Before Activation'
+                  )
+                )
+              )
+            )
           )
         ) ||
         (
-          isTerminalPermitStatus(resource.data.status) &&
+          isTerminalPermitState() &&
           request.resource.data.status == resource.data.status &&
           (
             (
@@ -341,12 +447,39 @@ service cloud.firestore {
           )
         )
       );
-      allow delete: if false; // Strict DPDP Act 2023 requirement: Permits can never be deleted
+      // Strict DPDP Act 2023 requirement: Non-Draft permits can never be deleted; Drafts may be deleted by creator, project member, or Super Admin
+      allow delete: if isAuthenticated() &&
+        resource.data.get('status', '') == 'Draft' && (
+          isSuperAdmin() ||
+          resource.data.get('createdByUid', '') == request.auth.uid ||
+          (resource.data.projectId != null && isAssignedToProject(resource.data.projectId))
+        );
 
       // Subcollection: Immutable Activity Log (Append-only audit trail)
       match /activity_log/{logId} {
-        allow read: if isAuthenticated();
-        allow create: if isAuthenticated();
+        allow read: if isAuthenticated() && (
+          isSuperAdmin() ||
+          (
+            exists(/databases/$(database)/documents/permits/$(permitId)) && (
+              (get(/databases/$(database)/documents/permits/$(permitId)).data.get('status', '') == 'Draft' &&
+               get(/databases/$(database)/documents/permits/$(permitId)).data.get('createdByUid', '') == request.auth.uid) ||
+              (get(/databases/$(database)/documents/permits/$(permitId)).data.get('status', '') != 'Draft' &&
+               get(/databases/$(database)/documents/permits/$(permitId)).data.projectId != null &&
+               isAssignedToProject(get(/databases/$(database)/documents/permits/$(permitId)).data.projectId))
+            )
+          )
+        );
+        allow create: if isAuthenticated() && (
+          isSuperAdmin() ||
+          (
+            existsAfter(/databases/$(database)/documents/permits/$(permitId)) && (
+              (getAfter(/databases/$(database)/documents/permits/$(permitId)).data.projectId != null &&
+               isAssignedToProject(getAfter(/databases/$(database)/documents/permits/$(permitId)).data.projectId)) ||
+              (getAfter(/databases/$(database)/documents/permits/$(permitId)).data.get('status', '') == 'Draft' &&
+               getAfter(/databases/$(database)/documents/permits/$(permitId)).data.get('createdByUid', '') == request.auth.uid)
+            )
+          )
+        );
         allow update, delete: if false; // Tamper-proof guarantee
       }
 
