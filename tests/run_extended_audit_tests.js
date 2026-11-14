@@ -153,7 +153,7 @@ const exportsFn = new Function(
         CONFINED_GAS_THRESHOLDS, isGasReadingSafe,
         getAllowedLocationModes, isPermitVisibleToRole, getPermitInitiatorRole, getObservationReviewerRole,
         computePermitWindowMs, completeStatutoryRestoration, stampPermitValidityEpochs,
-        switchRole
+        switchRole, getCurrentUser: () => currentUser
     };`
 );
 
@@ -162,6 +162,7 @@ const app = exportsFn(...Object.values(mockEnv));
 function setRole(rk) {
     if (app.switchRole) {
         app.switchRole(rk);
+        app.currentUser = mockEnv.window.currentUser || app.getCurrentUser();
     } else {
         app.currentUser = Object.assign({ key: rk, name: '' }, app.roleInfo(rk));
     }
@@ -731,8 +732,9 @@ runSuite('PTW-002..PTW-010, SUN, Manual Visibility & Restoration Governance', ()
     const shModes = app.getAllowedLocationModes('shaft');
     assert(grModes.includes('Manual') && shModes.includes('Manual'), 'PTW-003 & PTW-005 include Manual location mode');
     setRole('mep');
-    app.currentUser.locationName = 'P1';
-    app.currentUser.projectId = 'PRJ-PEARL';
+    const mepUser = app.getCurrentUser();
+    mepUser.locationName = 'P1';
+    mepUser.projectId = 'PRJ-PEARL';
     const shManual = {
         id: 'SH-VIS-001',
         ptype: 'shaft',
@@ -744,6 +746,7 @@ runSuite('PTW-002..PTW-010, SUN, Manual Visibility & Restoration Governance', ()
     };
     assert(app.isPermitVisibleToRole(shManual, 'mep') === true, 'Manual PTW-005 visible to tower-scoped MEP Engineer');
     assert(app.isPermitVisibleToRole(shManual, 'hw-section-head') === true, 'Manual PTW-005 visible to tower-scoped Section Head');
+    mepUser.locationName = '';
 
     // 2. Canonical Role & Dynamic Observation Resolvers
     assert(app.getPermitInitiatorRole({ ptype: 'electrical' }) === 'electrician', 'PTW-006 initiator resolves to electrician');
