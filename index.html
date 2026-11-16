@@ -6909,14 +6909,14 @@
             const sMin = sp[0] * 60 + sp[1];
             const eMin = ep[0] * 60 + ep[1];
 
-            let startDateStr = String(p.scheduledDate || p.validTillDate || '').slice(0, 10);
+            let startDateStr = String(p.scheduledDate || p.validFromDate || p.date || p.workDate || p.validTillDate || '').slice(0, 10);
             if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
                 const ref = p.startAt || p.validFrom || p.createdAt || nowTime();
                 startDateStr = istDateStr(ref);
-                if (p.sundayWork) {
-                    const refSun = getNextSundayFromSaturday(new Date(startDateStr + 'T12:00:00+05:30'));
-                    startDateStr = istDateStr(refSun);
-                }
+            }
+            if (p.sundayWork && /^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
+                const refSun = getNextSundayFromSaturday(new Date(startDateStr + 'T12:00:00+05:30'));
+                startDateStr = istDateStr(refSun);
             }
 
             const isOvernight = isNight && (eMin < sMin);
