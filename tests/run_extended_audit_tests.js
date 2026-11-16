@@ -153,6 +153,7 @@ const exportsFn = new Function(
         CONFINED_GAS_THRESHOLDS, isGasReadingSafe,
         getAllowedLocationModes, isPermitVisibleToRole, getPermitInitiatorRole, getObservationReviewerRole,
         computePermitWindowMs, completeStatutoryRestoration, stampPermitValidityEpochs,
+        viewDetail, trackerHtml, getNextApproverLabel,
         switchRole, getCurrentUser: () => currentUser
     };`
 );
@@ -866,6 +867,70 @@ runSuite('PTW-002..PTW-010, SUN, Manual Visibility & Restoration Governance', ()
     const rulesSrc = fs.readFileSync(path.resolve(__dirname, '..', 'firestore.rules'), 'utf8');
     assert(rulesSrc.includes('Pending Blasting In-charge Acknowledgment') && rulesSrc.includes('restorationSignOff'),
         'firestore.rules enforces Blasting initial state and Auto-Closed restoration keys');
+
+    // 6. viewDetail(p.id) before & after acknowledgeSiteEngineer across all 10 Permit Types (zero "Error displaying permit:")
+    const detailChecks = [
+        { ptype: 'excavation', expectedNextToast: 'MEP, P&M & IT In-Charge' },
+        { ptype: 'hotwork', expectedNextToast: 'Tower In-Charge / Section Head' },
+        { ptype: 'guardrail', expectedNextToast: 'Tower In-Charge / Section Head' },
+        { ptype: 'confined', expectedNextToast: 'Tower In-Charge / Section Head' },
+        { ptype: 'shaft', expectedNextToast: 'MEP' },
+        { ptype: 'electrical', expectedNextToast: 'MEP / P&M' },
+        { ptype: 'blasting', expectedNextToast: 'EHS' },
+        { ptype: 'general', expectedNextToast: 'Tower In-Charge / Section Head' },
+        { ptype: 'lifting', expectedNextToast: 'P&M' },
+        { ptype: 'nightshift', expectedNextToast: 'Tower In-Charge / Section Head' }
+    ];
+    let allDetailClean = true;
+    let allAckToastsMatch = true;
+    detailChecks.forEach((item, idx) => {
+        const pid = 'DET-REG-' + (idx + 1) + '-' + item.ptype.toUpperCase();
+        const pTest = {
+            id: pid,
+            ptype: item.ptype,
+            type: item.ptype,
+            project: 'The Pearl by Auro Realty',
+            projectId: 'PRJ-PEARL',
+            tower: 'P1',
+            location: 'Zone ' + (idx + 1),
+            status: 'Pending Site Engineer Acknowledgment',
+            createdAt: new Date(tNow - 600000),
+            submittedAt: new Date(tNow - 300000),
+            validFrom: new Date(tNow),
+            validTill: new Date(tNow + 4 * 3600000),
+            startTime: '09:00',
+            validTillTime: '17:00',
+            createdBy: 'Test Permittee',
+            createdByRole: app.getPermitInitiatorRole({ ptype: item.ptype }),
+            organization: 'ARPL',
+            checklist: (app.checklistFor(item.ptype) || []).map(q => ({ q: typeof q === 'object' ? q.text : q, ans: 'yes', comment: '' })),
+            approvals: app.newChain(item.ptype === 'electrical' ? 'electrical-site' : item.ptype),
+            activityLog: []
+        };
+        app.PERMITS.push(pTest);
+        setRole('site-engineer');
+        getEl('mock_div').innerHTML = '';
+        getEl('view-detail').innerHTML = '';
+        app.viewDetail(pid);
+        if (getEl('mock_div').innerHTML.includes('Error displaying permit:') || !getEl('view-detail').innerHTML.includes(pid)) {
+            allDetailClean = false;
+        }
+        getEl('mock_div').innerHTML = '';
+        app.acknowledgeSiteEngineer(pTest, { comment: 'Verified on site', signerName: 'Eng Test' });
+        const ackToastHtml = getEl('mock_div').innerHTML || '';
+        if (!ackToastHtml.includes(item.expectedNextToast)) {
+            allAckToastsMatch = false;
+        }
+        getEl('mock_div').innerHTML = '';
+        getEl('view-detail').innerHTML = '';
+        setRole('ehs-manager');
+        app.viewDetail(pid);
+        if (getEl('mock_div').innerHTML.includes('Error displaying permit:') || !getEl('view-detail').innerHTML.includes(pid)) {
+            allDetailClean = false;
+        }
+    });
+    assert(allDetailClean, 'viewDetail(p.id) renders cleanly across all 10 permit types before & after acknowledgeSiteEngineer with zero "Error displaying permit:" errors');
+    assert(allAckToastsMatch, 'acknowledgeSiteEngineer toast dynamically names true next stage across all 10 permit types');
 });
 
 // ==================================================================
