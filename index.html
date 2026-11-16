@@ -10778,7 +10778,7 @@
             if (!el) return;
             lastFocusedElementBeforeModal = document.activeElement;
             el.classList.add('show');
-            const mb = el.querySelector('.modal-body');
+            const mb = typeof el.querySelector === 'function' ? el.querySelector('.modal-body') : null;
             if (mb) mb.scrollTop = 0;
             if (document.body) {
                 document.body.classList.add('modal-open');
@@ -10804,7 +10804,7 @@
             const el = document.getElementById(id);
             if (!el) return;
             el.classList.remove('show');
-            const mb = el.querySelector('.modal-body');
+            const mb = typeof el.querySelector === 'function' ? el.querySelector('.modal-body') : null;
             if (mb) mb.scrollTop = 0;
             const anyOpen = document.querySelector('.modal-overlay.show, .modal-backdrop.open, .modal-backdrop.show');
             if (!anyOpen && document.body) {

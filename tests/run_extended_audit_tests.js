@@ -37,6 +37,7 @@ function getEl(id) {
                 contains: function(c) { return this._classes.has(c); }
             },
             querySelectorAll: () => [],
+            querySelector: () => null,
             addEventListener: () => {},
             removeEventListener: () => {},
             setAttribute: () => {},
