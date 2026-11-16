@@ -11565,7 +11565,7 @@
                 return;
             }
 
-            if (pt === 'electrical') {
+            if (ptypeOf(p) === 'electrical') {
                 p.status = 'Pending MEP or P&M Approval';
                 p.approvals = p.approvals || newChain('electrical-site');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Electrical Work permit to MEP / P&M Engineer for domain review (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
