@@ -6909,14 +6909,33 @@
             const sMin = sp[0] * 60 + sp[1];
             const eMin = ep[0] * 60 + ep[1];
 
-            let startDateStr = String(p.scheduledDate || p.validTillDate || '').slice(0, 10);
-            if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
-                const ref = p.startAt || p.validFrom || p.createdAt || nowTime();
-                startDateStr = istDateStr(ref);
-                if (p.sundayWork) {
-                    const refSun = getNextSundayFromSaturday(new Date(startDateStr + 'T12:00:00+05:30'));
-                    startDateStr = istDateStr(refSun);
+            const isSun = !!(p.sundayWork || p.originTile === 'SUN' || p.isSundayPermit || p.sundayPermit || String(p.permitCode || '').toUpperCase() === 'SUN' || String(p.id || '').toUpperCase().includes('-SUN-'));
+            let startDateStr = '';
+            const rawDateCand = p.scheduledDate || p.validFromDate || p.workDate || p.date || p.validTillDate || p.startAt || p.validFrom || p.createdAt || p.submittedAt;
+            if (typeof rawDateCand === 'string') {
+                const trimmed = rawDateCand.trim();
+                const isoMatch = trimmed.match(/^(\d{4}-\d{2}-\d{2})$/);
+                const dmyMatch = trimmed.match(/^(\d{1,2})\s+([A-Za-z]{3,9})\s+(\d{4})$/);
+                if (isoMatch) {
+                    startDateStr = isoMatch[1];
+                } else if (dmyMatch) {
+                    const mIdx = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'].indexOf(dmyMatch[2].slice(0, 3).toLowerCase());
+                    if (mIdx >= 0) startDateStr = dmyMatch[3] + '-' + pad(mIdx + 1) + '-' + pad( parseInt(dmyMatch[1], 10));
+                } else {
+                    const parsedMs = Date.parse(trimmed);
+                    if (!isNaN(parsedMs)) startDateStr = istDateStr(new Date(parsedMs));
                 }
+            } else if (rawDateCand) {
+                const epMs = getEpochMs(rawDateCand);
+                startDateStr = istDateStr(epMs ? new Date(epMs) : rawDateCand);
+            }
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
+                startDateStr = istDateStr(nowTime());
+            }
+            if (isSun && /^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
+                const baseDow = new Date(startDateStr + 'T12:00:00+05:30').getUTCDay();
+                const sunOffset = (7 - baseDow) % 7;
+                if (sunOffset > 0) startDateStr = addDaysIstDateStr(startDateStr, sunOffset);
             }
 
             const isOvernight = isNight && (eMin < sMin);

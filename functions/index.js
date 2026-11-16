@@ -429,12 +429,14 @@ function computePermitWindowMsServer(p) {
   const rawFromMs = p.validFromMs || toEpochMsServer(p.startAt) || toEpochMsServer(p.validFrom);
   const rawTillMs = p.validTillMs || toEpochMsServer(p.validTill);
   const pt = normalizePtypeServer(p);
-  const isSun = Boolean(p.isSundayPermit || p.sundayPermit || String(p.permitCode || "").toUpperCase() === "SUN" || String(p.id || "").toUpperCase().includes("-SUN-"));
-  let baseDate = p.validFromDate || p.date || p.workDate || (rawFromMs ? getIstPartsServer(rawFromMs).dateStr : null);
+  const isSun = Boolean(p.sundayWork || p.originTile === "SUN" || p.isSundayPermit || p.sundayPermit || String(p.permitCode || "").toUpperCase() === "SUN" || String(p.id || "").toUpperCase().includes("-SUN-"));
+  const rawCreatedMs = toEpochMsServer(p.createdAt) || toEpochMsServer(p.submittedAt);
+  let baseDate = p.validFromDate || p.workDate || p.date || (rawFromMs ? getIstPartsServer(rawFromMs).dateStr : (rawCreatedMs ? getIstPartsServer(rawCreatedMs).dateStr : null));
   if (isSun && baseDate) {
     const baseMs = parseIstDateTimeToMsServer(baseDate, "00:00");
-    if (baseMs && getIstPartsServer(baseMs).dow === 6) {
-      baseDate = addDaysIstDateStrServer(baseDate, 1);
+    if (baseMs) {
+      const sunOffset = (7 - getIstPartsServer(baseMs).dow) % 7;
+      if (sunOffset > 0) baseDate = addDaysIstDateStrServer(baseDate, sunOffset);
     }
   }
   const sTime = p.startTime || (rawFromMs ? `${String(getIstPartsServer(rawFromMs).hour).padStart(2, "0")}:${String(getIstPartsServer(rawFromMs).minute).padStart(2, "0")}` : null);
