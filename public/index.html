@@ -6909,14 +6909,14 @@
             const sMin = sp[0] * 60 + sp[1];
             const eMin = ep[0] * 60 + ep[1];
 
-            let startDateStr = String(p.scheduledDate || p.validFromDate || p.date || p.workDate || p.validTillDate || '').slice(0, 10);
+            let startDateStr = String(p.scheduledDate || p.validTillDate || '').slice(0, 10);
             if (!/^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
                 const ref = p.startAt || p.validFrom || p.createdAt || nowTime();
                 startDateStr = istDateStr(ref);
-            }
-            if (p.sundayWork && /^\d{4}-\d{2}-\d{2}$/.test(startDateStr)) {
-                const refSun = getNextSundayFromSaturday(new Date(startDateStr + 'T12:00:00+05:30'));
-                startDateStr = istDateStr(refSun);
+                if (p.sundayWork) {
+                    const refSun = getNextSundayFromSaturday(new Date(startDateStr + 'T12:00:00+05:30'));
+                    startDateStr = istDateStr(refSun);
+                }
             }
 
             const isOvernight = isNight && (eMin < sMin);
@@ -10778,7 +10778,7 @@
             if (!el) return;
             lastFocusedElementBeforeModal = document.activeElement;
             el.classList.add('show');
-            const mb = typeof el.querySelector === 'function' ? el.querySelector('.modal-body') : null;
+            const mb = el.querySelector('.modal-body');
             if (mb) mb.scrollTop = 0;
             if (document.body) {
                 document.body.classList.add('modal-open');
@@ -10804,7 +10804,7 @@
             const el = document.getElementById(id);
             if (!el) return;
             el.classList.remove('show');
-            const mb = typeof el.querySelector === 'function' ? el.querySelector('.modal-body') : null;
+            const mb = el.querySelector('.modal-body');
             if (mb) mb.scrollTop = 0;
             const anyOpen = document.querySelector('.modal-overlay.show, .modal-backdrop.open, .modal-backdrop.show');
             if (!anyOpen && document.body) {
@@ -11182,7 +11182,6 @@
 
         function getNextApproverLabel(p) {
             if (!p || !p.status) return '';
-            const pt = ptypeOf(p);
             const st = p.status;
             if (st === 'Pending Site Engineer Acknowledgment' || st === 'Pending Site Engineer Re-Acknowledgment') return 'Site Engineer (Reviewer / Approver)';
             if (st === 'Pending Blasting In-charge Acknowledgment' || st === 'Pending Blasting In-charge Re-Acknowledgment') return 'Blasting In-Charge (Permittee)';
@@ -11199,7 +11198,7 @@
                 return (pends.length ? pends.join(', ') : 'MEP, P&M, IT In-Charge') + ' (Clearance Approver)';
             }
             if (st === 'Pending Section Head' || st === 'Pending Tower Incharge' || st === 'Pending Excavation Head') {
-                return pt === 'excavation' ? 'Excavation Head (Approver)' : 'Tower In-Charge / Section Head (Approver)';
+                return ptypeOf(p) === 'excavation' ? 'Excavation Head (Approver)' : 'Tower In-Charge / Section Head (Approver)';
             }
             if (st === 'Pending Project Manager Acknowledgment' || st === 'Pending Project Manager Re-Acknowledgment') return 'Project Manager (Approver)';
             if (st === 'Pending EHS Approval') return 'EHS Supervisor / EHS Head (Issuer / Approver)';
@@ -11537,25 +11536,24 @@
             p.signatories['site-engineer'] = { name: effectiveSigner, sig: effectiveSig, consent: true, at: nowTime() };
             p.siteEngineerAck = { acknowledged: true, at: nowTime(), by: effectiveSigner, gps: effectiveGps, comment: comment || '', sig: effectiveSig };
             p.stageEnteredAt = nowTime();
-            const pt = ptypeOf(p);
             const finishSiteAck = () => {
                 executeServerTransition(p, { action: 'SITE_ENGINEER_ACK', targetStatus: p.status, gps: effectiveGps, comments: comment });
                 saveState();
             };
-            if (pt === 'nightshift') {
+            if (ptypeOf(p) === 'nightshift') {
                 p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('nightshift');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Night Shift Pre-Fill to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review & approval required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to Tower In-Charge / Section Head.', 'ok');
+                showToast('Night Shift permit acknowledged & forwarded to Tower Incharge.', 'ok');
                 finishSiteAck();
                 return;
             }
 
-            if (pt === 'lifting' || pt === 'liftplan') {
+            if (ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') {
                 p.status = 'Pending P&M Approval';
-                const isCrit = p.liftingClassification === 'critical' || pt === 'liftplan';
+                const isCrit = p.liftingClassification === 'critical' || ptypeOf(p) === 'liftplan';
                 p.approvals = p.approvals || newChain(isCrit ? 'liftplan' : 'lifting');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Lifting permit to P&M Engineer for technical verification (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
                 notify(['pm'], pLabel(p) + ' acknowledged by Site Engineer — P&M Engineer technical verification required.', 'info', p.id);
@@ -11576,7 +11574,7 @@
                 return;
             }
 
-            if (pt === 'blasting') {
+            if (ptypeOf(p) === 'blasting') {
                 p.status = 'Pending EHS Approval';
                 p.approvals = p.approvals || newChain('blasting');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Drilling & Blasting permit directly to EHS Safety Authority (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
@@ -11587,18 +11585,18 @@
                 return;
             }
 
-            if (pt === 'confined') {
+            if (ptypeOf(p) === 'confined') {
                 p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('confined');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Confined Space Entry permit to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to Tower In-Charge / Section Head.', 'ok');
+                showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
                 finishSiteAck();
                 return;
             }
 
-            if (pt === 'shaft') {
+            if (ptypeOf(p) === 'shaft') {
                 p.status = 'Pending MEP Clearance';
                 p.approvals = p.approvals || newChain('shaft');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Shaft Work permit to MEP Engineer for clearance (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
@@ -11609,35 +11607,35 @@
                 return;
             }
 
-            if (pt === 'guardrail') {
+            if (ptypeOf(p) === 'guardrail') {
                 p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('guardrail');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Guard Rail permit to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to Tower In-Charge / Section Head.', 'ok');
+                showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
                 finishSiteAck();
                 return;
             }
 
-            if (pt === 'hotwork') {
+            if (ptypeOf(p) === 'hotwork') {
                 p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('hotwork');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded Hot Work permit to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to Tower In-Charge / Section Head.', 'ok');
+                showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
                 finishSiteAck();
                 return;
             }
 
-            if (pt === 'general') {
+            if (ptypeOf(p) === 'general') {
                 p.status = 'Pending Section Head';
                 p.approvals = p.approvals || newChain('general');
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded General Work permit to Tower Incharge (Step 3).' + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
                 notify([shRoleFor(p)], pLabel(p) + ' acknowledged by Site Engineer — Tower Incharge review required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded to Tower Incharge.', 'info', p.id);
-                showToast('Permit acknowledged & forwarded to Tower In-Charge / Section Head.', 'ok');
+                showToast('Permit acknowledged & forwarded to Tower Incharge.', 'ok');
                 finishSiteAck();
                 return;
             }
@@ -11650,7 +11648,7 @@
                 p.approvals.it && p.approvals.it.status === 'approved';
 
             p.status = allParallelDone ? 'Pending Section Head' : 'Pending Parallel Approval';
-            const shTargetLabel = (pMeta(p) && pMeta(p).shLabel) || (pt === 'excavation' ? 'Excavation Head' : 'Tower Incharge');
+            const shTargetLabel = (pMeta(p) && pMeta(p).shLabel) || (ptypeOf(p) === 'excavation' ? 'Excavation Head' : 'Tower Incharge');
             logActivity(p, 'Site Engineer (' + effectiveSigner + ') acknowledged & forwarded permit' + (allParallelDone ? (' to ' + shTargetLabel + ' (parallel approvals previously cleared).') : ' to parallel gate (MEP · P&M · IT).') + (effectiveGps ? (' GPS verified within ' + prjRad + 'm.') : ''));
             if (allParallelDone) {
                 notify([shRoleFor(p)], pLabel(p) + ' re-acknowledged by Site Engineer — ' + shTargetLabel + ' approval required.', 'info', p.id);
@@ -11658,7 +11656,7 @@
                 notify(['mep', 'pm', 'it'], pLabel(p) + ' acknowledged by Site Engineer — parallel MEP, P&M and IT approvals required.', 'info', p.id);
             }
             notify(stakeholdersFor(p), pLabel(p) + ' acknowledged by Site Engineer and forwarded.', 'info', p.id);
-            showToast('Permit acknowledged & forwarded' + (allParallelDone ? (' to ' + shTargetLabel + '.') : ' to MEP, P&M & IT In-Charge (parallel gate).'), 'ok');
+            showToast('Permit acknowledged & forwarded' + (allParallelDone ? (' to ' + shTargetLabel + '.') : ' to parallel gate.'), 'ok');
             finishSiteAck();
         }
 
@@ -24480,12 +24478,10 @@ function trackerHtml(p) {
 
         function extTrackerHtml(ext, p) {
             const a = ext.approvals || {};
-            const pt = p ? ptypeOf(p) : '';
-            const ptype = pt;
-            const isExc = pt === 'excavation';
-            const isConfined = pt === 'confined';
+            const isExc = p && ptypeOf(p) === 'excavation';
+            const isConfined = p && ptypeOf(p) === 'confined';
             const shLabel = (p && pMeta(p) && pMeta(p).shLabel) || (isExc ? 'Excavation Head' : 'Tower Incharge');
-            const isBatchingPlantElec = pt === 'electrical' && p && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant');
+            const isBatchingPlantElec = p && ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant');
             function node(label, sub, state) {
                 return '<div class="tr-node ' + state + '"><div class="tr-circ">' +
                     (state === 'done' ? '<i class="fa-solid fa-check"></i>' :
@@ -24604,8 +24600,6 @@ function trackerHtml(p) {
         }
 
         function checklistViewHtml(p) {
-            const pt = p ? ptypeOf(p) : '';
-            const ptype = pt;
             return p.checklist.map((c, i) => {
                 const chip = c.ans === 'yes' ? '<span class="ci-chip ok">YES</span>' : c.ans === 'na' ? '<span class="ci-chip" style="background:var(--grey-bg);color:var(--grey);">N/A — ' + c.comment + '</span>' : '<span class="ci-chip missing">NO — ' + c.comment + '</span>';
                 let subHtml = '';
@@ -24745,18 +24739,16 @@ function trackerHtml(p) {
 
         function actionPanelHtml(p) {
             const rk = currentUser ? currentUser.key : '';
-            const pt = ptypeOf(p);
-            const ptype = pt;
-            const isHw = pt === 'hotwork';
-            const isShaft = pt === 'shaft';
-            const isGr = pt === 'guardrail';
-            const isExcavation = pt === 'excavation';
-            const isConfined = pt === 'confined';
-            const isGeneral = pt === 'general';
-            const isBlasting = pt === 'blasting';
-            const isElectrical = pt === 'electrical';
-            const isLifting = pt === 'lifting' || pt === 'liftplan';
-            const isNightShift = pt === 'nightshift';
+            const isHw = ptypeOf(p) === 'hotwork';
+            const isShaft = ptypeOf(p) === 'shaft';
+            const isGr = ptypeOf(p) === 'guardrail';
+            const isExcavation = ptypeOf(p) === 'excavation';
+            const isConfined = ptypeOf(p) === 'confined';
+            const isGeneral = ptypeOf(p) === 'general';
+            const isBlasting = ptypeOf(p) === 'blasting';
+            const isElectrical = ptypeOf(p) === 'electrical';
+            const isLifting = ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan';
+            const isNightShift = ptypeOf(p) === 'nightshift';
             const shTitle = pMeta(p).shLabel || (isExcavation ? 'Excavation Head' : 'Tower Incharge');
             const obsOpen = p.observation && p.observation.status !== 'Resolved';
             const isPermitteeForP = isElectrical ? (rk === 'electrician') : (isLifting ? (rk === 'lift-supervisor') : (rk === 'site-supervisor' || rk === 'night-supervisor' || (isBlasting && rk === 'blasting-incharge')));
@@ -25455,9 +25447,7 @@ function trackerHtml(p) {
             const p = PERMITS.find(x => x.id === id);
             if (!p) return;
             const rk = currentUser ? currentUser.key : '';
-            const pt = ptypeOf(p);
-            const ptype = pt;
-            const isExc = pt === 'excavation';
+            const isExc = ptypeOf(p) === 'excavation';
             const shTitle = pMeta(p).shLabel || (isExc ? 'Excavation Head' : 'Tower Incharge');
 
             // RBAC verification
@@ -28533,8 +28523,6 @@ function trackerHtml(p) {
             try {
                 const p = PERMITS.find(x => x.id === id);
                 if (!p) return;
-                const pt = ptypeOf(p);
-                const ptype = pt;
                 const scope = currentUser ? roleTypeScope(currentUser.key) : null;
                 if (!isPermitVisibleToRole(p, currentUser ? currentUser.key : null) || !permitMatchesScope(p, scope)) {
                     // Strict domain and workflow isolation: only roles in the approval flow can view permits.
@@ -28546,6 +28534,7 @@ function trackerHtml(p) {
                 currentView = 'detail';
                 if (p.status === 'Draft') {
                     const rk = currentUser ? currentUser.key : null;
+                    const pt = ptypeOf(p);
                     const canInitiate = rk && INITIATOR_PERMIT_RULES[rk] && INITIATOR_PERMIT_RULES[rk].includes(pt);
                     const isCreator = p.createdByRole === rk || p.createdBy === (currentUser ? currentUser.name : null);
                     if (canInitiate || isCreator || rk === 'admin' || rk === 'super-admin' || !rk) {
@@ -28553,7 +28542,7 @@ function trackerHtml(p) {
                         return;
                     }
                 }
-                if (!p.approvals) p.approvals = newChain(pt);
+                if (!p.approvals) p.approvals = newChain(ptypeOf(p));
                 const countdownMs = new Date(p.validTill) - nowTime();
                 let countdownHtml = '';
                 if (['Active', 'Extended'].includes(p.status)) {
