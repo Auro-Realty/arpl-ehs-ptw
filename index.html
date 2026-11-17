@@ -9654,6 +9654,10 @@
             return 'site-supervisor';
         }
 
+        function getPermitInitiatorLabel(p) {
+            return getRoleDisplayLabel(getPermitInitiatorRole(p));
+        }
+
         function getObservationReviewerRole(p) {
             const pt = p ? ptypeOf(p) : '';
             if (pt === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant')) {
@@ -10919,7 +10923,14 @@
 
         function resubmitExcavationCorrection(permitId) {
             const p = PERMITS.find(x => x.id === permitId);
-            if (!p) return;
+            if (!p) return false;
+            const initRole = normalizeRoleKey(getPermitInitiatorRole(p));
+            const rk = currentUser ? normalizeRoleKey(currentUser.key || currentUser.role) : '';
+            const isPermittee = !currentUser || (rk === initRole) || (p.createdByUid && currentUser.uid && p.createdByUid === currentUser.uid && rk === initRole);
+            if (!isPermittee) {
+                showToast('Only the ' + getPermitInitiatorLabel(p) + ' can rectify and re-submit a returned permit.', 'err');
+                return false;
+            }
             const notesEl = document.getElementById('rectifyNotesInput');
             const notes = notesEl ? notesEl.value.trim() : '';
             p.status = 'Pending Site Engineer Acknowledgment';
@@ -10937,6 +10948,7 @@
             if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
             showToast('Permit ' + p.id + ' rectified & re-submitted successfully.', 'ok');
             viewDetail(p.id);
+            return true;
         }
 
         window.APP_TESTING_CONFIG = window.APP_TESTING_CONFIG || { enable24HrTestAccess: false, enableDemoAutoFill: false };
@@ -12662,7 +12674,14 @@
 
         function resubmitPermit(pOrId, comment) {
             const p = (typeof pOrId === 'string') ? PERMITS.find(x => x.id === pOrId) : pOrId;
-            if (!p) return;
+            if (!p) return false;
+            const initRole = normalizeRoleKey(getPermitInitiatorRole(p));
+            const rk = currentUser ? normalizeRoleKey(currentUser.key || currentUser.role) : '';
+            const isPermittee = !currentUser || (rk === initRole) || (ptypeOf(p) === 'nightshift' && (rk === 'night-supervisor' || rk === 'site-supervisor')) || (p.createdByUid && currentUser.uid && p.createdByUid === currentUser.uid && rk === initRole);
+            if (!isPermittee) {
+                showToast('Only the ' + getPermitInitiatorLabel(p) + ' can rectify and re-submit a returned permit.', 'err');
+                return false;
+            }
             if (comment) {
                 p.resubmitComment = comment;
             }
@@ -25207,13 +25226,25 @@ function trackerHtml(p) {
                     '</div>';
             }
 
-            // ---- Returned for correction: Permittee (Site Supervisor or Blasting In-charge) refills/resubmits ----
-            if (p.status === 'Returned for Correction' && isPermitteeForP) {
-                html += '<div class="approval-action-card" style="border-color:var(--red);background:var(--red-bg);">' +
-                    '<div class="aa-title"><i class="fa-solid fa-triangle-exclamation" style="color:var(--red);"></i> Returned for Correction</div>' +
-                    '<div class="aa-desc">Returned by ' + p.returnedBy + ': "' + p.returnReason + '"<br><span style="font-size:11.5px;color:var(--text);margin-top:4px;display:block;"><b>Correction Rule:</b> Master data stays locked. You can edit the safety checklist, comments, and photos before re-submitting. Unchanged approvals persist!</span></div>' +
-                    '<button class="btn btn-primary" onclick="openCorrectionMode(\'' + p.id + '\')"><i class="fa-solid fa-pen-to-square"></i> Correct &amp; Resubmit</button>' +
-                    '</div>';
+            // ---- Returned for correction: Permittee refills/resubmits, Approvers see read-only status ----
+            if (p.status === 'Returned for Correction') {
+                const initLabel = getPermitInitiatorLabel(p);
+                const retReason = (p.approvals && p.approvals.siteEngineer && p.approvals.siteEngineer.comment) || p.returnReason || (p.rejectionOrigin && p.rejectionOrigin.comment) || 'Corrections requested';
+                const retBy = p.returnedBy || (p.rejectionOrigin && p.rejectionOrigin.by) || 'Approver';
+                if (isPermitteeForP) {
+                    html += '<div class="approval-action-card" style="border-color:#F59E0B;background:#FFFBEB;">' +
+                        '<div class="aa-title" style="color:#B45309;"><i class="fa-solid fa-pen-to-square"></i> Permit Returned for Correction</div>' +
+                        '<div class="aa-desc"><b>Returned by ' + escapeHtml(retBy) + ':</b> "' + escapeHtml(retReason) + '"<br><span style="font-size:11.5px;color:var(--text);margin-top:4px;display:block;"><b>Correction Rule:</b> Master data stays locked. You can edit the safety checklist, comments, and photos before re-submitting. Unchanged approvals persist!</span></div>' +
+                        '<div style="margin:12px 0 10px 0;"><button type="button" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="openCorrectionMode(\'' + p.id + '\')"><i class="fa-solid fa-pen-to-square"></i> Edit Permit Fields / Checklist / Attachments</button></div>' +
+                        '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">Supervisor Rectification Notes:</label><input type="text" id="rectifyNotesInput" class="input" placeholder="e.g. Added additional barricading and slope verified as requested" style="width:100%;max-width:550px;"></div>' +
+                        '<div style="display:flex;gap:10px;"><button type="button" class="btn btn-primary" onclick="' + (isExcavation ? 'resubmitExcavationCorrection(\'' + p.id + '\')' : 'resubmitPermit(\'' + p.id + '\', document.getElementById(\'rectifyNotesInput\') ? document.getElementById(\'rectifyNotesInput\').value : \'\')') + '"><i class="fa-solid fa-paper-plane"></i> ' + (isExcavation ? 'Re-Submit for Site Engineer Acknowledgment' : 'Re-Submit for Approval') + '</button></div>' +
+                        '</div>';
+                } else {
+                    html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
+                        '<div class="aa-title"><i class="fa-solid fa-hourglass-half" style="color:#B45309;"></i> Returned for Correction &mdash; Awaiting Permittee</div>' +
+                        '<div class="aa-desc">Returned by <b>' + escapeHtml(retBy) + '</b>: "' + escapeHtml(retReason) + '"<br><span style="margin-top:6px;display:block;color:var(--text-muted);font-size:12px;"><i class="fa-solid fa-clock"></i> Awaiting rectification and re-submission by <b>' + escapeHtml(initLabel) + '</b>.</span></div>' +
+                        '</div>';
+                }
             }
 
             // ---- PTW-010 Night Shift Stage 1 Approved – Awaiting Linked Permit ----
@@ -28920,18 +28951,13 @@ function trackerHtml(p) {
 
                 let excBanners = '';
                 if (detPt === 'excavation') {
-                    const nextLbl = getNextApproverLabel(p);
-                    if (nextLbl) {
-                        excBanners += '<div class="alert-banner" style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;padding:10px 14px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;"><i class="fa-solid fa-user-clock" style="color:#15803D;font-size:16px;"></i> <span>' + escapeHtml(nextLbl) + '</span></div>';
-                    }
                     if (p.status === 'Returned for Correction') {
-                        const retReason = (p.approvals && p.approvals.siteEngineer && p.approvals.siteEngineer.comment) || p.returnReason || 'Site Engineer requested corrections.';
-                        excBanners += '<div class="card card-pad dsec" style="background:#FFFBEB;border:1px solid #FDE68A;margin-bottom:14px;">' +
-                            '<div class="dsec-title" style="color:#B45309;"><i class="fa-solid fa-pen-to-square"></i> Permit Returned for Correction</div>' +
-                            '<div style="font-size:13px;color:#92400E;margin-bottom:10px;"><strong>Reason for Return:</strong> ' + escapeHtml(retReason) + '</div>' +
-                            '<div style="margin-bottom:10px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;">Supervisor Rectification Notes:</label><input type="text" id="rectifyNotesInput" class="input" placeholder="e.g. Added additional barricading and slope verified as requested" style="width:100%;"></div>' +
-                            '<div style="display:flex;gap:10px;"><button type="button" class="btn btn-primary" onclick="resubmitExcavationCorrection(\'' + p.id + '\')"><i class="fa-solid fa-paper-plane"></i> Re-Submit for Site Engineer Acknowledgment</button></div>' +
-                            '</div>';
+                        excBanners += '<div class="alert-banner" style="background:#FFFBEB;border:1px solid #FDE68A;color:#92400E;padding:10px 14px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;"><i class="fa-solid fa-user-clock" style="color:#B45309;font-size:16px;"></i> <span>Current Stage Owner: ' + escapeHtml(getPermitInitiatorLabel(p)) + ' (Awaiting Rectification)</span></div>';
+                    } else {
+                        const nextLbl = getNextApproverLabel(p);
+                        if (nextLbl) {
+                            excBanners += '<div class="alert-banner" style="background:#F0FDF4;border:1px solid #BBF7D0;color:#166534;padding:10px 14px;border-radius:6px;margin-bottom:12px;display:flex;align-items:center;gap:10px;font-size:13px;font-weight:600;"><i class="fa-solid fa-user-clock" style="color:#15803D;font-size:16px;"></i> <span>' + escapeHtml(nextLbl) + '</span></div>';
+                        }
                     }
                 }
 
