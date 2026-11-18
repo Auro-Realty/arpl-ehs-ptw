@@ -10023,7 +10023,25 @@
             if (f.size && f.size > 2 * 1024 * 1024) { showToast('Signature image is too large (max 2 MB). Please upload a smaller file.', 'warn'); return; }
             const reader = new FileReader();
             reader.onerror = function () { showToast('The signature image could not be read. Please try a different file.', 'error'); };
-            reader.onload = function (ev) { sigApplyUpload(sigUploadTargetId, ev.target.result, f.name); };
+            reader.onload = function (ev) {
+                const img = new Image();
+                img.onload = function () {
+                    const maxW = 320, maxH = 110;
+                    let w = img.width, h = img.height;
+                    const scale = Math.min(1, maxW / w, maxH / h);
+                    const targetW = Math.max(1, Math.round(w * scale));
+                    const targetH = Math.max(1, Math.round(h * scale));
+                    const offC = document.createElement('canvas');
+                    offC.width = targetW;
+                    offC.height = targetH;
+                    const offCtx = offC.getContext('2d');
+                    offCtx.clearRect(0, 0, targetW, targetH);
+                    offCtx.drawImage(img, 0, 0, targetW, targetH);
+                    const scaledDataUrl = offC.toDataURL('image/png');
+                    sigApplyUpload(sigUploadTargetId, scaledDataUrl, f.name);
+                };
+                img.src = ev.target.result;
+            };
             reader.readAsDataURL(f);
         }
         function sigApplyUpload(id, dataUrl, fname) {
@@ -10076,6 +10094,23 @@
         window.__SIG_CACHE = window.__SIG_CACHE || {};
         const SIG_HANDLERS = {};
         const SIG_PADS = {};
+        function scaleSignatureCanvasToPng(srcCanvas) {
+            if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) return null;
+            const maxW = 320;
+            const maxH = 110;
+            let w = srcCanvas.width;
+            let h = srcCanvas.height;
+            const scale = Math.min(1, maxW / w, maxH / h);
+            const targetW = Math.max(1, Math.round(w * scale));
+            const targetH = Math.max(1, Math.round(h * scale));
+            const offC = document.createElement('canvas');
+            offC.width = targetW;
+            offC.height = targetH;
+            const ctx = offC.getContext('2d');
+            ctx.clearRect(0, 0, targetW, targetH);
+            ctx.drawImage(srcCanvas, 0, 0, targetW, targetH);
+            return offC.toDataURL('image/png');
+        }
         function initSigPad(id, onChange) {
             SIG_HANDLERS[id] = { onChange: onChange };
             const cv = document.getElementById(id); if (!cv) return;
@@ -10167,7 +10202,7 @@
                 if (st.inked) {
                     const el = document.getElementById(id + '-status');
                     if (el) { el.className = 'sig-status ok'; el.innerHTML = '<i class="fa-solid fa-circle-check"></i> Signature captured'; }
-                    const dataUrl = cv.toDataURL('image/png');
+                    const dataUrl = scaleSignatureCanvasToPng(cv) || cv.toDataURL('image/png');
                     const userKey = (currentUser && (currentUser.uid || currentUser.key || currentUser.email)) || 'anon';
                     if (window.__SIG_CACHE) {
                         window.__SIG_CACHE[userKey + '_' + id] = dataUrl;
@@ -10266,15 +10301,15 @@
         function makeSimSignature(name) {
             // Auto-generated cursive signature stamped onto seeded demo records at load.
             try {
-                const c = document.createElement('canvas'); c.width = 360; c.height = 110;
+                const c = document.createElement('canvas'); c.width = 320; c.height = 110;
                 const ctx = c.getContext('2d'); if (!ctx) return null;
-                ctx.translate(20, 78); ctx.rotate(-0.05);
-                ctx.font = 'italic 34px "Segoe Script","Brush Script MT",cursive';
+                ctx.translate(16, 74); ctx.rotate(-0.05);
+                ctx.font = 'italic 30px "Segoe Script","Brush Script MT",cursive';
                 ctx.fillStyle = '#0A1628';
                 ctx.fillText(name, 0, 0);
                 ctx.rotate(0.05);
                 ctx.strokeStyle = '#0A1628'; ctx.lineWidth = 1.4;
-                ctx.beginPath(); ctx.moveTo(-4, 12); ctx.quadraticCurveTo(150, 22, 300, 8); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(-4, 12); ctx.quadraticCurveTo(130, 20, 270, 8); ctx.stroke();
                 return c.toDataURL('image/png');
             } catch (e) { return null; }
         }
@@ -10336,6 +10371,7 @@
             if (!p || typeof p !== 'object') return null;
             const copy = JSON.parse(JSON.stringify(p, (k, v) => {
                 if (v === undefined) return null;
+                if (typeof v === 'string' && v.startsWith('blob:')) return null;
                 if (v instanceof Date) return v.toISOString();
                 return v;
             }));
@@ -10343,31 +10379,6 @@
             copy.projectId = copy.projectId || (resolvedPrj ? resolvedPrj.id : (copy.project === 'Sansa County' ? 'PRJ-SANSA' : (copy.project === 'The Regent' ? 'PRJ-REGENT' : 'PRJ-PEARL')));
             copy.projectName = copy.projectName || (resolvedPrj ? resolvedPrj.name : (copy.project || 'Sansa County'));
             copy.updatedAt = new Date().toISOString();
-
-            // Strict Firestore 1 MiB Document Limit Guard (1,048,576 bytes):
-            // Compress and guard Base64 attachments before sending to Cloud Firestore
-            try {
-                if (copy.sitePhoto && typeof copy.sitePhoto === 'string' && copy.sitePhoto.length > 200000) {
-                    copy.sitePhoto = copy.sitePhoto.slice(0, 200000);
-                }
-                if (copy.drawing && copy.drawing.dataUrl && typeof copy.drawing.dataUrl === 'string' && copy.drawing.dataUrl.length > 350000) {
-                    copy.drawing.dataUrl = copy.drawing.dataUrl.slice(0, 350000);
-                }
-                (copy.checklist || []).forEach(c => {
-                    if (c && c.photo && typeof c.photo === 'string' && c.photo.length > 120000) {
-                        c.photo = c.photo.slice(0, 120000);
-                    }
-                });
-                if (copy.extension && copy.extension.photo && typeof copy.extension.photo === 'string' && copy.extension.photo.length > 150000) {
-                    copy.extension.photo = copy.extension.photo.slice(0, 150000);
-                }
-                if (copy.closure && copy.closure.photo && typeof copy.closure.photo === 'string' && copy.closure.photo.length > 150000) {
-                    copy.closure.photo = copy.closure.photo.slice(0, 150000);
-                }
-                if (copy.surrender && copy.surrender.photo && typeof copy.surrender.photo === 'string' && copy.surrender.photo.length > 150000) {
-                    copy.surrender.photo = copy.surrender.photo.slice(0, 150000);
-                }
-            } catch (_guardErr) {}
 
             return copy;
         }
@@ -10379,12 +10390,15 @@
                 const clean = cleanPermitForFirestore(p);
                 if (!clean || !clean.projectId) return Promise.resolve();
 
-                // Double check serialized byte length to guarantee payload is under 950 KiB
+                // Strict Firestore Document Limit Guard:
+                // Verify merged payload size is under 900 KB (leaving safety buffer below 1 MiB hard ceiling)
                 const serialized = JSON.stringify(clean);
-                if (serialized.length > 950000) {
-                    console.warn('[FirestoreGuard] Warning: Serialized permit (' + clean.id + ') is ' + serialized.length + ' bytes; applying maximum compaction.');
-                    if (clean.sitePhoto && clean.sitePhoto.length > 100000) clean.sitePhoto = clean.sitePhoto.slice(0, 100000);
-                    if (clean.drawing && clean.drawing.dataUrl && clean.drawing.dataUrl.length > 200000) clean.drawing.dataUrl = clean.drawing.dataUrl.slice(0, 200000);
+                if (serialized.length > 900000) {
+                    console.warn('[FirestoreGuard] Refusal: Serialized permit (' + clean.id + ') is ' + serialized.length + ' bytes, exceeding the 900 KB limit.');
+                    if (typeof showToast === 'function') {
+                        showToast('Permit size exceeds Firestore storage limit (900 KB). Please reduce photo attachments.', 'err');
+                    }
+                    return Promise.reject(new Error('Permit payload exceeds 900 KB Firestore storage limit'));
                 }
 
                 return firebase.firestore().collection('permits').doc(p.id).set(clean, { merge: true })
@@ -10760,6 +10774,37 @@
             photoModalCtx.facingMode = (photoModalCtx.facingMode === 'environment') ? 'user' : 'environment';
             startLiveCamera();
         }
+        function compressCameraPhotoCanvas(srcCanvas) {
+            if (!srcCanvas || !srcCanvas.width || !srcCanvas.height) return '';
+            function scaleAndExport(maxDim, quality) {
+                let w = srcCanvas.width;
+                let h = srcCanvas.height;
+                if (Math.max(w, h) > maxDim) {
+                    if (w >= h) {
+                        h = Math.round(h * (maxDim / w));
+                        w = maxDim;
+                    } else {
+                        w = Math.round(w * (maxDim / h));
+                        h = maxDim;
+                    }
+                }
+                const tempC = document.createElement('canvas');
+                tempC.width = Math.max(1, w);
+                tempC.height = Math.max(1, h);
+                const tempCtx = tempC.getContext('2d');
+                tempCtx.drawImage(srcCanvas, 0, 0, tempC.width, tempC.height);
+                return tempC.toDataURL('image/jpeg', quality);
+            }
+            // Adaptive compression ladder per D1: 720px/0.60 -> 600px/0.45 -> floor 500px/0.35
+            let res = scaleAndExport(720, 0.60);
+            if (res.length > 65000) {
+                res = scaleAndExport(600, 0.45);
+            }
+            if (res.length > 65000) {
+                res = scaleAndExport(500, 0.35);
+            }
+            return res;
+        }
         function captureCameraFrame() {
             if (!photoModalCtx) return;
             const vid = document.getElementById('liveCameraVideo');
@@ -10791,7 +10836,7 @@
             ctx2d.fillText(gpsStr, 12, h - Math.round(barH * 0.18));
 
             photoModalCtx.captured = {
-                dataUrl: c.toDataURL('image/jpeg', 0.88),
+                dataUrl: compressCameraPhotoCanvas(c),
                 name: 'live_photo_' + Date.now() + '.jpg',
                 ist: istStr,
                 gps: gpsStr
@@ -10842,13 +10887,49 @@
                     const f = e.target.files[0]; if (!f) return;
                     const isImage = /^image\//.test(f.type);
                     const isPdf = f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf');
-                    const reader = new FileReader();
-                    reader.onerror = function () { showToast('The drawing file could not be read. Please try a different file.', 'error'); };
-                    reader.onload = function (ev) {
-                        const rawData = ev.target.result;
-                        attachDrawing({ name: f.name, at: nowTime(), dataUrl: rawData, isImage: isImage, isPdf: isPdf });
-                    };
-                    reader.readAsDataURL(f);
+                    if (isImage) {
+                        const reader = new FileReader();
+                        reader.onerror = function () { showToast('The drawing file could not be read. Please try a different file.', 'err'); };
+                        reader.onload = function (ev) {
+                            const rawData = ev.target.result;
+                            const img = new Image();
+                            img.onload = function () {
+                                const maxDim = 1200;
+                                let w = img.width, h = img.height;
+                                if (Math.max(w, h) > maxDim) {
+                                    if (w >= h) { h = Math.round(h * (maxDim / w)); w = maxDim; }
+                                    else { w = Math.round(w * (maxDim / h)); h = maxDim; }
+                                }
+                                const c = document.createElement('canvas');
+                                c.width = Math.max(1, w); c.height = Math.max(1, h);
+                                const ctx = c.getContext('2d');
+                                ctx.fillStyle = '#FFFFFF';
+                                ctx.fillRect(0, 0, c.width, c.height);
+                                ctx.drawImage(img, 0, 0, c.width, c.height);
+                                const compData = c.toDataURL('image/jpeg', 0.70);
+                                if (compData.length > 500000) {
+                                    showToast('Drawing image exceeds 500 KB limit after compression. Please attach a simpler drawing.', 'err');
+                                    return;
+                                }
+                                attachDrawing({ name: f.name, at: nowTime(), dataUrl: compData, isImage: true, isPdf: false });
+                            };
+                            img.src = rawData;
+                        };
+                        reader.readAsDataURL(f);
+                    } else if (isPdf) {
+                        if (f.size > 500 * 1024) {
+                            showToast('Drawing PDF exceeds maximum allowed size (500 KB). Please attach an optimized PDF.', 'err');
+                            return;
+                        }
+                        const reader = new FileReader();
+                        reader.onerror = function () { showToast('The PDF file could not be read.', 'err'); };
+                        reader.onload = function (ev) {
+                            attachDrawing({ name: f.name, at: nowTime(), dataUrl: ev.target.result, isImage: false, isPdf: true });
+                        };
+                        reader.readAsDataURL(f);
+                    } else {
+                        showToast('Unsupported drawing format. Please upload a PDF or image.', 'warn');
+                    }
                     e.target.value = '';
                 });
             }
@@ -18705,6 +18786,7 @@
                 window.__PERMIT_UNSUBSCRIBE = null;
             }
             try {
+                // Storage hygiene (M5): Exclude arpl_login_bf_* (brute-force lockout) and firebase:* from any purge
                 ['ARPL_EHS_PERMITS_V3', 'arpl_ehs_prod_clean_v6', 'wizDraft', 'state.wizData'].forEach(k => localStorage.removeItem(k));
             } catch (_e) {}
 
