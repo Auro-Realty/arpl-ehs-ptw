@@ -12759,10 +12759,28 @@
                 };
             }
 
+            // Archive rejection origin into permanent returnHistory audit log before resetting
+            if (p.returnReason || p.returnedBy || p.rejectionOrigin) {
+                p.returnHistory = Array.isArray(p.returnHistory) ? p.returnHistory : [];
+                p.returnHistory.push({
+                    reason: p.returnReason || (p.rejectionOrigin ? p.rejectionOrigin.comment : '') || '',
+                    returnedBy: p.returnedBy || (p.rejectionOrigin ? p.rejectionOrigin.by : '') || '',
+                    returnedByRoleKey: p.returnedByRoleKey || (p.rejectionOrigin ? p.rejectionOrigin.roleKey : '') || retRole || '',
+                    roleLabel: (p.rejectionOrigin ? p.rejectionOrigin.roleLabel : '') || '',
+                    returnedAt: (p.rejectionOrigin ? p.rejectionOrigin.at : null) || p.returnedAt || nowTime(),
+                    resubmittedAt: nowTime(),
+                    resubmittedBy: resubmitter,
+                    resubmitComment: p.resubmitComment || ''
+                });
+            }
+
             // For Batching Plant electrical permits, P&M Engineer comes first
             if (ptypeOf(p) === 'electrical' && (p.facilityScope === 'batching_plant' || p.electricalSiteType === 'batching_plant')) {
                 p.status = 'Pending P&M Re-Acknowledgment';
                 p.pmAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
+                if (p.approvals && p.approvals.pm) {
+                    p.approvals.pm.status = 'pending'; p.approvals.pm.by = null; p.approvals.pm.sig = null;
+                }
                 notify(['pm'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — P&M Engineer statutory re-acknowledgment required.', 'info', p.id);
                 logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to P&M Engineer for statutory re-acknowledgment.');
             } else if (ptypeOf(p) === 'blasting' && p.dbOperationType === 'Blasting') {
@@ -12774,11 +12792,18 @@
                 // If Site Engineer was the one who rejected, route to Site Engineer for normal re-acknowledgment
                 p.status = 'Pending Site Engineer Acknowledgment';
                 p.siteEngineerAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
+                if (p.approvals && p.approvals.siteEngineer) {
+                    p.approvals.siteEngineer.status = 'pending'; p.approvals.siteEngineer.by = null; p.approvals.siteEngineer.sig = null;
+                }
                 notify(['site-engineer'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — Site Engineer re-acknowledgment required.', 'info', p.id);
                 logActivity(p, 'Permit resubmitted after correction by ' + resubmitter + '. Routed to Site Engineer for re-acknowledgment.');
             } else {
                 // Unified rule: Any approver rejected -> routes back to initiator for correction -> then Site Engineer for re-acknowledgment -> then returns directly to original rejector
                 p.status = 'Pending Site Engineer Re-Acknowledgment';
+                p.siteEngineerAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
+                if (p.approvals && p.approvals.siteEngineer) {
+                    p.approvals.siteEngineer.status = 'pending'; p.approvals.siteEngineer.by = null; p.approvals.siteEngineer.sig = null;
+                }
                 const origLabel = p.rejectionOrigin ? p.rejectionOrigin.roleLabel : 'Approver';
                 notify(['site-engineer'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — Site Engineer on-site re-acknowledgment required before returning to ' + origLabel + '.', 'info', p.id);
                 logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to Site Engineer for on-site re-acknowledgment before returning to ' + origLabel + ' (prior approvals retained).');
@@ -12789,6 +12814,7 @@
             notify(stakeholdersFor(p), p.id + ' resubmitted after correction by ' + resubmitter + '.', 'info', p.id);
             showToast('Permit refilled & resubmitted.', 'ok');
             saveState();
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
         }
 
         function resubmitPermit(pOrId, comment) {
@@ -12854,6 +12880,7 @@
                 notify(stakeholdersFor(p), pLabel(p) + ' re-acknowledged by P&M Engineer and forwarded to Quality Engineer.', 'info', p.id);
                 showToast('P&M Engineer re-acknowledgment completed & forwarded to Quality Engineer.', 'ok');
                 saveState();
+                if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 return;
             }
 
@@ -12964,6 +12991,7 @@
             notify(stakeholdersFor(p), pLabel(p) + ' re-acknowledged by Site Engineer and returned directly to ' + origLabel + '.', 'info', p.id);
             showToast('Permit re-acknowledged and returned directly to ' + origLabel + '.', 'ok');
             saveState();
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
         }
 
         /* ---------------- OBSERVATION WORKFLOW ---------------- */
@@ -18069,7 +18097,7 @@
 
                 // 3. Resolve role, project, location & workflow scope
                 const safeUser = await resolveAuthenticatedUserProfile(user, claims);
-                completeAuthenticatedLogin(safeUser);
+                completeAuthenticatedLogin(safeUser, true);
                 clearLoginBruteForceRecord(email);
             } catch (err) {
                 console.error('Unified login error:', err);
@@ -18553,7 +18581,7 @@
         }
         window.switchUserAssignmentContext = switchUserAssignmentContext;
 
-        function completeAuthenticatedLogin(safeUser) {
+        function completeAuthenticatedLogin(safeUser, isInteractiveLogin) {
             resetSessionInactivityTimer();
             // 1. Remove Persona Switcher & Demo Role UI permanently
             document.querySelectorAll('#quickPersonaDropdown, .persona-switcher, #roleFilterTabs, #roleCardsGrid, .role-grid, #landingRoleSection').forEach(el => el.remove());
@@ -18730,11 +18758,17 @@
                 defaultRoute = 'dashboard';
             }
 
-            const initialRoute = parseCurrentRoute();
-            if (initialRoute && isRouteAllowedForRole(safeUser.key, initialRoute.view)) {
-                navigateToRoute(initialRoute, true);
-            } else {
+            // Interactive login form submission always lands cleanly on default route (Dashboard / Admin Config)
+            if (isInteractiveLogin) {
+                window.location.hash = '#' + defaultRoute;
                 goTo(defaultRoute);
+            } else {
+                const initialRoute = parseCurrentRoute();
+                if (initialRoute && isRouteAllowedForRole(safeUser.key, initialRoute.view)) {
+                    navigateToRoute(initialRoute, true);
+                } else {
+                    goTo(defaultRoute);
+                }
             }
             if (typeof refreshNotifBell === 'function') {
                 refreshNotifBell();
@@ -29286,11 +29320,7 @@ ptypeOf(p) === 'general' ?
                     '<div class="review-item"><div class="rk">Weather</div><div class="rv">' + p.weather + '</div></div>' +
                     '<div class="review-item"><div class="rk">Planned Start</div><div class="rv">' + (p.startTime ? (fmtDate(p.createdAt) + ' &middot; ' + p.startTime + ' IST') : '&mdash;') + '</div></div>' +
                     '<div class="review-item"><div class="rk">Valid Till</div><div class="rv">' + (p.validTill ? fmtDateTime(p.validTill) : '&mdash; (draft)') + '</div></div>' +
-                    (ptypeOf(p) === 'excavation' ? (
-                        p.gps ? '<div class="card card-pad dsec" style="margin-top:12px;background:var(--slate-50);border:1px solid var(--border);"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;"><div><div style="font-weight:700;font-size:12.5px;color:var(--navy);display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-location-dot" style="color:var(--orange);"></i> Worksite GPS Location Verification</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Latitude: <b class="mono">' + (+p.gps.lat).toFixed(6) + '</b> &middot; Longitude: <b class="mono">' + (+p.gps.lng).toFixed(6) + '</b> &middot; Accuracy: ' + Math.round(p.gps.accuracy || 10) + 'm ' + (p.gps.within ? '<span class="dpdp-tag" style="background:#eafaf1;color:#1e7e34;margin-left:6px;"><i class="fa-solid fa-circle-check"></i> Within Geofence</span>' : '<span class="dpdp-tag" style="background:#fef3c7;color:#b45309;margin-left:6px;"><i class="fa-solid fa-triangle-exclamation"></i> GPS Recorded</span>') + '</div></div><a href="https://www.google.com/maps?q=' + p.gps.lat + ',' + p.gps.lng + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Map</a></div></div>' : ''
-                    ) : (
-                        (p.gps ? '<div class="map-preview" style="margin-top:12px;"><iframe loading="lazy" src="https://www.openstreetmap.org/export/embed.html?bbox=' + (p.gps.lng - 0.006) + '%2C' + (p.gps.lat - 0.006) + '%2C' + (p.gps.lng + 0.006) + '%2C' + (p.gps.lat + 0.006) + '&layer=mapnik&marker=' + p.gps.lat + '%2C' + p.gps.lng + '"></iframe></div>' : '')
-                    )) +
+                    (p.gps ? '<div class="card card-pad dsec" style="margin-top:12px;background:var(--slate-50);border:1px solid var(--border);"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;"><div><div style="font-weight:700;font-size:12.5px;color:var(--navy);display:flex;align-items:center;gap:6px;"><i class="fa-solid fa-location-dot" style="color:var(--orange);"></i> Worksite GPS Location Verification</div><div style="font-size:12px;color:var(--text-muted);margin-top:2px;">Latitude: <b class="mono">' + (+p.gps.lat).toFixed(6) + '</b> &middot; Longitude: <b class="mono">' + (+p.gps.lng).toFixed(6) + '</b> &middot; Accuracy: ' + Math.round(p.gps.accuracy || 10) + 'm ' + (p.gps.within ? '<span class="dpdp-tag" style="background:#eafaf1;color:#1e7e34;margin-left:6px;"><i class="fa-solid fa-circle-check"></i> Within Geofence</span>' : '<span class="dpdp-tag" style="background:#fef3c7;color:#b45309;margin-left:6px;"><i class="fa-solid fa-triangle-exclamation"></i> GPS Recorded</span>') + '</div></div><a href="https://www.google.com/maps?q=' + p.gps.lat + ',' + p.gps.lng + '" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-ghost"><i class="fa-solid fa-arrow-up-right-from-square"></i> Open Map</a></div></div>' : '') +
                     '</div>' +
                     '<div class="card card-pad dsec"><div class="dsec-title"><i class="fa-solid fa-triangle-exclamation"></i> Safety Checklist — ' + pMeta(p).form + ' &sect;II</div>' + checklistViewHtml(p) + '</div>' +
                     extHtml +
@@ -29320,13 +29350,13 @@ ptypeOf(p) === 'general' ?
                             ? ('<div class="attach-row" style="background:#f8fafc;border:1px solid var(--border);border-radius:6px;padding:8px 12px;display:flex;align-items:center;gap:10px;margin-top:6px;"><i class="fa-solid fa-file-pdf" style="font-size:22px;color:#dc2626;"></i><div style="flex:1;min-width:0;"><div style="font-weight:600;font-size:12.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(p.drawing.name || 'Excavation_Drawing.pdf') + '</div><div style="font-size:11px;color:var(--text-muted);">PDF Document &middot; Excavation Drawing</div></div><button type="button" class="btn btn-sm btn-outline" onclick="openPdfAttachment(\'' + p.id + '\')"><i class="fa-solid fa-arrow-up-right-from-square"></i> View PDF</button></div>')
                             : ('<div class="attach-row">' + (p.drawing.isImage && p.drawing.dataUrl ? '<img src="' + p.drawing.dataUrl + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + p.drawing.dataUrl + '\', \'' + escapeHtml(p.drawing.name || 'Excavation Drawing') + '\')">' : '<i class="fa-solid fa-compass-drafting"></i>') + ' ' + escapeHtml(p.drawing.name || 'Excavation Drawing') + ' <span style="margin-left:auto;font-size:10.5px;color:var(--text-faint);">Excavation drawing</span></div>')
                     ) : '') +
-                    (p.liftingSketch || p.sitePlanPhoto ? '<div class="attach-row">' + (((p.liftingSketch && p.liftingSketch.dataUrl && p.liftingSketch.dataUrl.startsWith('data:image')) || (p.sitePlanPhoto && p.sitePlanPhoto.dataUrl && p.sitePlanPhoto.dataUrl.startsWith('data:image'))) ? '<img src="' + ((p.liftingSketch && p.liftingSketch.dataUrl) || (p.sitePlanPhoto && p.sitePlanPhoto.dataUrl)) + '">' : '<i class="fa-solid fa-compass-drafting"></i>') + ' ' + escapeHtml((p.liftingSketch && p.liftingSketch.name) || (p.sitePlanPhoto && p.sitePlanPhoto.name) || 'lifting_site_plan.jpg') + ' <span style="margin-left:auto;font-size:10.5px;color:var(--text-faint);">Lifting Site Plan Photo / Rigging Drawing</span></div>' : '') +
-                    (p.confinedChecklistAttachment ? '<div class="attach-row">' + (p.confinedChecklistAttachment.dataUrl && p.confinedChecklistAttachment.isImage ? '<img src="' + p.confinedChecklistAttachment.dataUrl + '">' : '<i class="fa-solid fa-file-shield"></i>') + ' ' + escapeHtml(p.confinedChecklistAttachment.name || 'Confined_Space_Physical_Checklist.pdf') + ' <span style="margin-left:auto;font-size:10.5px;color:var(--text-faint);">Pre-Task Checklist Doc</span></div>' : '') +
-                    ((p.blastingInchargeAck && p.blastingInchargeAck.photo) ? '<div class="attach-row">' + (p.blastingInchargeAck.photo !== 'demo' ? '<img src="' + p.blastingInchargeAck.photo + '">' : '<i class="fa-solid fa-camera"></i>') + ' Blasting In-charge On-Site Statutory Photo</div>' : '') +
-                    (p.checklist.filter(c => c.photo).map((c, i) => '<div class="attach-row">' + (c.photo && c.photo !== 'demo' ? '<img src="' + c.photo + '">' : '<i class="fa-regular fa-image"></i>') + ' NO-item evidence photo</div>').join('')) +
-                    (p.extension && p.extension.photo ? '<div class="attach-row">' + (p.extension.photo !== 'demo' ? '<img src="' + p.extension.photo + '">' : '<i class="fa-regular fa-image"></i>') + ' Extension request evidence</div>' : '') +
-                    (p.closure && p.closure.photo ? '<div class="attach-row">' + (p.closure.photo !== 'demo' ? '<img src="' + p.closure.photo + '">' : '<i class="fa-regular fa-image"></i>') + ' Closure evidence photo</div>' : '') +
-                    (p.surrender && p.surrender.photo ? '<div class="attach-row">' + (p.surrender.photo !== 'demo' ? '<img src="' + p.surrender.photo + '">' : '<i class="fa-regular fa-image"></i>') + ' Surrender evidence photo</div>' : '') +
+                    (p.liftingSketch || p.sitePlanPhoto ? '<div class="attach-row">' + (((p.liftingSketch && p.liftingSketch.dataUrl && p.liftingSketch.dataUrl.startsWith('data:image')) || (p.sitePlanPhoto && p.sitePlanPhoto.dataUrl && p.sitePlanPhoto.dataUrl.startsWith('data:image'))) ? '<img src="' + ((p.liftingSketch && p.liftingSketch.dataUrl) || (p.sitePlanPhoto && p.sitePlanPhoto.dataUrl)) + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + ((p.liftingSketch && p.liftingSketch.dataUrl) || (p.sitePlanPhoto && p.sitePlanPhoto.dataUrl)) + '\', \'' + escapeHtml((p.liftingSketch && p.liftingSketch.name) || (p.sitePlanPhoto && p.sitePlanPhoto.name) || 'Lifting Site Plan') + '\')">' : '<i class="fa-solid fa-compass-drafting"></i>') + ' ' + escapeHtml((p.liftingSketch && p.liftingSketch.name) || (p.sitePlanPhoto && p.sitePlanPhoto.name) || 'lifting_site_plan.jpg') + ' <span style="margin-left:auto;font-size:10.5px;color:var(--text-faint);">Lifting Site Plan Photo / Rigging Drawing</span></div>' : '') +
+                    (p.confinedChecklistAttachment ? '<div class="attach-row">' + (p.confinedChecklistAttachment.dataUrl && p.confinedChecklistAttachment.isImage ? '<img src="' + p.confinedChecklistAttachment.dataUrl + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + p.confinedChecklistAttachment.dataUrl + '\', \'' + escapeHtml(p.confinedChecklistAttachment.name || 'Confined Space Checklist') + '\')">' : '<i class="fa-solid fa-file-shield"></i>') + ' ' + escapeHtml(p.confinedChecklistAttachment.name || 'Confined_Space_Physical_Checklist.pdf') + ' <span style="margin-left:auto;font-size:10.5px;color:var(--text-faint);">Pre-Task Checklist Doc</span></div>' : '') +
+                    ((p.blastingInchargeAck && p.blastingInchargeAck.photo) ? '<div class="attach-row">' + (p.blastingInchargeAck.photo !== 'demo' ? '<img src="' + p.blastingInchargeAck.photo + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + p.blastingInchargeAck.photo + '\', \'Blasting In-charge Statutory Photo\')">' : '<i class="fa-solid fa-camera"></i>') + ' Blasting In-charge On-Site Statutory Photo</div>' : '') +
+                    (p.checklist.filter(c => c.photo).map((c, i) => '<div class="attach-row">' + (c.photo && c.photo !== 'demo' ? '<img src="' + c.photo + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + c.photo + '\', \'Item Check Evidence Photo\')">' : '<i class="fa-regular fa-image"></i>') + ' NO-item evidence photo</div>').join('')) +
+                    (p.extension && p.extension.photo ? '<div class="attach-row">' + (p.extension.photo !== 'demo' ? '<img src="' + p.extension.photo + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + p.extension.photo + '\', \'Extension Request Evidence\')">' : '<i class="fa-regular fa-image"></i>') + ' Extension request evidence</div>' : '') +
+                    (p.closure && p.closure.photo ? '<div class="attach-row">' + (p.closure.photo !== 'demo' ? '<img src="' + p.closure.photo + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + p.closure.photo + '\', \'Closure Evidence Photo\')">' : '<i class="fa-regular fa-image"></i>') + ' Closure evidence photo</div>' : '') +
+                    (p.surrender && p.surrender.photo ? '<div class="attach-row">' + (p.surrender.photo !== 'demo' ? '<img src="' + p.surrender.photo + '" style="cursor:pointer;" onclick="openImageLightbox(\'' + p.surrender.photo + '\', \'Surrender Evidence Photo\')">' : '<i class="fa-regular fa-image"></i>') + ' Surrender evidence photo</div>' : '') +
                     '</div>' +
                     '</div>' +
                     '</div>';
