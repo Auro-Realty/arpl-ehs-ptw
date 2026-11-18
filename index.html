@@ -8966,18 +8966,7 @@
             const rawRk = String(roleKey || '').trim().toLowerCase();
             const normRk = normalizeRoleKey(roleKey) || rawRk;
             if (normRk === 'super-admin') return true;
-            if (!normRk || normRk === 'admin' || normRk === 'project-admin') {
-                if (currentUser && currentUser.projectId && p && p.projectId) {
-                    return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
-                }
-                return true;
-            }
-            if (currentUser && currentUser.projectId && p && p.projectId && !['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(normRk)) {
-                const uPrj = normalizeProjectId(currentUser.projectId);
-                const pPrj = normalizeProjectId(p.projectId);
-                if (uPrj && pPrj && uPrj !== 'ALL' && uPrj !== pPrj) return false;
-            }
-            // Creator & Permittee Visibility: Author or permittee roles must always see their own permits across ALL lifecycle statuses
+            // Creator & Permittee Visibility: Author must always see their own permits across ALL lifecycle statuses
             if (currentUser && p) {
                 const isCreator = (
                     (p.createdBy && currentUser.name && p.createdBy.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
@@ -8989,6 +8978,17 @@
                 if (ptypeOf(p) === 'excavation' && (normRk === 'site-supervisor' || rawRk === 'site-supervisor')) {
                     return true;
                 }
+            }
+            if (!normRk || normRk === 'admin' || normRk === 'project-admin') {
+                if (currentUser && currentUser.projectId && p && p.projectId) {
+                    return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
+                }
+                return true;
+            }
+            if (currentUser && currentUser.projectId && p && p.projectId && !['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(normRk)) {
+                const uPrj = normalizeProjectId(currentUser.projectId);
+                const pPrj = normalizeProjectId(p.projectId);
+                if (uPrj && pPrj && uPrj !== 'ALL' && uPrj !== pPrj) return false;
             }
             // Draft Visibility: Author or permittee roles must always see their own drafts
             if (p && p.status === 'Draft') {
@@ -20266,11 +20266,11 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const scope = roleTypeScope(currentUser.key);
             let rows = PERMITS.filter(p => {
                 if (currentUser && currentUser.key !== 'super-admin' && !(typeof window !== 'undefined' && window.__TEST_MODE__) && !(typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__)) {
-                    const userProj = (currentUser.projectName || currentUser.projectId || '').toLowerCase();
-                    const permitProj = (p.project || p.projectId || '').toLowerCase();
+                    const userProj = normalizeProjectId(currentUser.projectId || currentUser.projectName || '');
+                    const permitProj = normalizeProjectId(p.projectId || p.project || '');
                     if (p.status === 'Draft' && !permitProj) {
                         // Drafts with pending project selection belong to current user's workspace
-                    } else if (userProj && permitProj && !permitProj.includes(userProj) && !userProj.includes(permitProj)) {
+                    } else if (userProj && permitProj && userProj !== 'ALL' && userProj !== permitProj) {
                         return false;
                     }
                 }
@@ -20286,7 +20286,11 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     }
                 }
                 if (sf && p.status !== sf && !(sf === 'Pending Section Head' && (p.status === 'Pending Tower Incharge' || p.status === 'Pending Excavation Head'))) return false;
-                if (pf && p.project !== pf && !(p.status === 'Draft' && (!p.project || p.projectId === pf || (currentUser && (currentUser.projectName === pf || currentUser.projectId === pf))))) return false;
+                if (pf) {
+                    const normPf = normalizeProjectId(pf);
+                    const normPProj = normalizeProjectId(p.projectId || p.project);
+                    if (normPf && normPProj && normPf !== 'ALL' && normPf !== normPProj && !(p.status === 'Draft' && (!p.project || normPProj === normPf))) return false;
+                }
                 if (q && !((p.id || '').toLowerCase().includes(q) || (p.project || '').toLowerCase().includes(q) || (p.location || '').toLowerCase().includes(q) || (p.tower || '').toLowerCase().includes(q) || (pMeta(p).name || '').toLowerCase().includes(q) || (pMeta(p).code || '').toLowerCase().includes(q) || (p.contractor || '').toLowerCase().includes(q))) return false;
                 return true;
             }).sort((a, b) => new Date(b.createdAt || b.updatedAt || 0) - new Date(a.createdAt || a.updatedAt || 0));
@@ -29715,7 +29719,13 @@ ptypeOf(p) === 'general' ?
                         try { window.__PERMIT_UNSUBSCRIBE(); } catch (_) {}
                         window.__PERMIT_UNSUBSCRIBE = null;
                     }
-                    window.__PERMIT_UNSUBSCRIBE = db.collection('permits').onSnapshot(pSnap => {
+                    const isGlobalAdmin = currentUser && (currentUser.key === 'super-admin' || currentUser.campusWide === true);
+                    const userNormProj = currentUser && currentUser.projectId ? normalizeProjectId(currentUser.projectId) : '';
+                    let permitQuery = db.collection('permits');
+                    if (!isGlobalAdmin && userNormProj && userNormProj !== 'ALL') {
+                        permitQuery = permitQuery.where('projectId', '==', userNormProj);
+                    }
+                    window.__PERMIT_UNSUBSCRIBE = permitQuery.onSnapshot(pSnap => {
                         if (!pSnap.empty) {
                             let updatedAny = false;
                             pSnap.forEach(doc => {
@@ -29743,7 +29753,10 @@ ptypeOf(p) === 'general' ?
                             }
                         }
                     }, err => {
-                        console.warn('[Firestore Sync] Permits real-time listener notice:', err);
+                        console.error('[Firestore Sync] Permits listener error:', err);
+                        if (typeof showToast === 'function') {
+                            showToast('Notice: Real-time permits sync unavailable (' + (err.code || 'network') + '). Displaying cached permits.', 'warn');
+                        }
                     });
                 } catch (e) {
                     console.warn('[Firestore Sync] Permits remote collection sync notice:', e);
