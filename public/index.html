@@ -8370,9 +8370,9 @@
             const raw = String(id).trim();
             const up = raw.toUpperCase();
             if (up === 'ALL' || up === 'PRJ-MASTER' || up === 'ENTERPRISE-GLOBAL') return up;
-            if (up === 'PRJ-PRL' || up === 'PRJ-PEARL' || up === 'THE PEARL' || up === 'PEARL') return 'PRJ-PEARL';
-            if (up === 'PRJ-RGT' || up === 'PRJ-REGENT' || up === 'THE REGENT' || up === 'REGENT') return 'PRJ-REGENT';
-            if (up === 'PRJ-SNC' || up === 'PRJ-SANSA' || up === 'PRJ-SA' || up === 'SANSA COUNTY' || up === 'SANSA') return 'PRJ-SANSA';
+            if (up === 'PRJ-PRL' || up === 'PRJ-PEARL' || up === 'THE PEARL' || up === 'PEARL' || up === 'THE PEARL (PRJ-PEARL)') return 'PRJ-PEARL';
+            if (up === 'PRJ-RGT' || up === 'PRJ-REGENT' || up === 'THE REGENT' || up === 'REGENT' || up === 'THE REGENT (PRJ-REGENT)') return 'PRJ-REGENT';
+            if (up === 'PRJ-SNC' || up === 'PRJ-SANSA' || up === 'PRJ-SA' || up === 'SANSA COUNTY' || up === 'SANSA' || up === 'SANSA COUNTY (PRJ-SANSA)') return 'PRJ-SANSA';
             return raw;
         }
         window.normalizeProjectId = normalizeProjectId;
@@ -29719,11 +29719,11 @@ ptypeOf(p) === 'general' ?
                         try { window.__PERMIT_UNSUBSCRIBE(); } catch (_) {}
                         window.__PERMIT_UNSUBSCRIBE = null;
                     }
-                    const isGlobalAdmin = currentUser && (currentUser.key === 'super-admin' || currentUser.campusWide === true);
-                    const userNormProj = currentUser && currentUser.projectId ? normalizeProjectId(currentUser.projectId) : '';
+                    const isSuperAdmin = currentUser && (currentUser.key === 'super-admin' || currentUser.role === 'super-admin' || currentUser.rawRole === 'super-admin');
+                    const userNormProj = normalizeProjectId((currentUser && currentUser.projectId) || 'PRJ-PEARL');
                     let permitQuery = db.collection('permits');
-                    if (!isGlobalAdmin && userNormProj && userNormProj !== 'ALL') {
-                        permitQuery = permitQuery.where('projectId', '==', userNormProj);
+                    if (!isSuperAdmin) {
+                        permitQuery = permitQuery.where('projectId', '==', userNormProj || 'PRJ-PEARL');
                     }
                     window.__PERMIT_UNSUBSCRIBE = permitQuery.onSnapshot(pSnap => {
                         if (!pSnap.empty) {
