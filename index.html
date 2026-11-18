@@ -10942,6 +10942,7 @@
                 p.approvals.siteEngineer.sig = null;
                 p.approvals.siteEngineer.comment = null;
             }
+            resetExcavationParallelSlotsOnResubmit(p);
             logActivity(p, 'Permit rectified and re-submitted by Site Supervisor' + (notes ? ' (Notes: ' + notes + ')' : '') + '. Pending Site Engineer acknowledgment.');
             notify(['site-engineer'], pLabel(p) + ' rectified and re-submitted by Site Supervisor. Awaiting acknowledgment.', 'info', p.id);
             saveState();
@@ -11508,6 +11509,33 @@
             };
         }
 
+        function resetExcavationParallelSlotsOnResubmit(p) {
+            if (!p || ptypeOf(p) !== 'excavation' || !p.approvals) return;
+            const pre = p._preCorrectionSnapshot || {};
+            const cur = snapshotDisciplineFields(p);
+            const disciplines = ['mep', 'pm', 'it'];
+            disciplines.forEach(d => {
+                const slot = p.approvals[d];
+                if (!slot) return;
+                // If slot was rejected, returned, or cancelled, always reset to pending
+                if (slot.status === 'rejected' || slot.status === 'returned' || slot.status === 'cancelled') {
+                    p.approvals[d] = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null, consent: false };
+                    return;
+                }
+                // Option B: If slot was approved, check if domain snapshot changed
+                if (slot.status === 'approved' && pre[d]) {
+                    const preJson = JSON.stringify(pre[d]);
+                    const curJson = JSON.stringify(cur[d]);
+                    if (preJson !== curJson) {
+                        p.approvals[d] = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null, consent: false };
+                    }
+                }
+            });
+            p.returnReason = null;
+            p.returnedBy = null;
+            p.returnedByRoleKey = null;
+        }
+
         function actOnChain(chain, roleKey, decision, payload) {
             // decision: 'approved' | 'rejected' | 'cancelled'
             const normKey = normalizeRoleKey(roleKey);
@@ -11919,6 +11947,13 @@
 
 
             // Check if parallel gate is already all-approved (under the stale-approval retention rule)
+            if (ptypeOf(p) === 'excavation' && p.approvals) {
+                ['mep', 'pm', 'it'].forEach(d => {
+                    if (p.approvals[d] && (p.approvals[d].status === 'rejected' || p.approvals[d].status === 'returned' || p.approvals[d].status === 'cancelled')) {
+                        p.approvals[d] = { status: 'pending', by: null, at: null, gps: null, comment: null };
+                    }
+                });
+            }
             const allParallelDone = p.approvals &&
                 p.approvals.mep && p.approvals.mep.status === 'approved' &&
                 p.approvals.pm && p.approvals.pm.status === 'approved' &&
@@ -12614,6 +12649,9 @@
         function resubmitReturnedPermit(p) {
             const resubmitter = (currentUser && currentUser.name) || (ptypeOf(p) === 'electrical' ? 'Electrician' : 'Site Supervisor');
             if (!p.approvals) p.approvals = newChain(ptypeOf(p), p);
+            if (ptypeOf(p) === 'excavation') {
+                resetExcavationParallelSlotsOnResubmit(p);
+            }
 
             // Identify which role rejected the permit
             const retRole = (p.rejectionOrigin && p.rejectionOrigin.roleKey) || p.returnedByRoleKey || (
@@ -12768,9 +12806,10 @@
                 const shRole = shRoleFor(p);
                 notify([shRole], pLabel(p) + ' re-acknowledged by Site Engineer after corrections. Returned to ' + origLabel + ' for review.', 'info', p.id);
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') re-acknowledged permit on site after supervisor corrections. Returned directly to ' + origLabel + ' for review (prior clearances retained).');
-            } else if (origRole === 'mep' || origRole === 'pm' || origRole === 'it') {
-                if (p.approvals && p.approvals[origRole]) {
-                    p.approvals[origRole] = { status: 'pending', by: null, at: null, gps: null, comment: null };
+            } else if (origRole === 'mep' || origRole === 'pm' || origRole === 'it' || origRole === 'p&m' || origRole === 'it-in-charge') {
+                const canonRole = CHAIN_ROLE_FIELD[origRole] || origRole;
+                if (p.approvals && p.approvals[canonRole]) {
+                    p.approvals[canonRole] = { status: 'pending', by: null, at: null, gps: null, comment: null };
                 }
                 if (ptypeOf(p) === 'shaft') {
                     p.status = 'Pending MEP Clearance';
@@ -12779,8 +12818,15 @@
                     p.status = 'Pending MEP or P&M Approval';
                     notify(['mep', 'pm'], pLabel(p) + ' re-acknowledged by Site Engineer after corrections. Returned to MEP / P&M Engineer for domain clearance.', 'info', p.id);
                 } else {
+                    if (ptypeOf(p) === 'excavation' && p.approvals) {
+                        ['mep', 'pm', 'it'].forEach(d => {
+                            if (p.approvals[d] && (p.approvals[d].status === 'rejected' || p.approvals[d].status === 'returned' || p.approvals[d].status === 'cancelled')) {
+                                p.approvals[d] = { status: 'pending', by: null, at: null, gps: null, comment: null };
+                            }
+                        });
+                    }
                     p.status = 'Pending Parallel Approval';
-                    notify([origRole], pLabel(p) + ' re-acknowledged by Site Engineer after corrections. Returned to ' + origLabel + ' for clearance.', 'info', p.id);
+                    notify([canonRole], pLabel(p) + ' re-acknowledged by Site Engineer after corrections. Returned to ' + origLabel + ' for clearance.', 'info', p.id);
                 }
                 logActivity(p, 'Site Engineer (' + effectiveSigner + ') re-acknowledged permit on site after supervisor corrections. Returned directly to ' + origLabel + ' (prior clearances retained).');
             } else if (origRole === 'quality-engineer') {
@@ -19439,7 +19485,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 if (roleKey === 'blasting-incharge') return p.status === 'Pending Blasting In-charge Acknowledgment' || p.status === 'Pending Blasting In-charge Re-Acknowledgment';
                 if (roleKey === 'site-engineer') return p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment' || p.status === 'Observation Pending Site Engineer Acknowledgment';
                 if (roleKey === 'mep') return (p.status === 'Pending MEP Clearance') || (p.status === 'Pending MEP or P&M Approval' && roleCanActOnChain(p.chain, 'mep')) || (p.status === 'Pending Parallel Approval' && p.approvals && p.approvals.mep && p.approvals.mep.status === 'pending');
-                if (['pm', 'it'].includes(roleKey)) return p.status === 'Pending Parallel Approval' && p.approvals && p.approvals[roleKey] && p.approvals[roleKey].status === 'pending';
+                if (['pm', 'it'].includes(roleKey) || roleKey === 'it-in-charge') return p.status === 'Pending Parallel Approval' && p.approvals && ((p.approvals[roleKey] && p.approvals[roleKey].status === 'pending') || (p.approvals.it && p.approvals.it.status === 'pending'));
                 if (roleKey === 'excavation-head') return ptypeOf(p) === 'excavation' && (p.status === 'Pending Section Head' || p.status === 'Observation Pending Section Head Review');
                 if (roleKey === 'hw-section-head') return ptypeOf(p) !== 'excavation' && (p.status === 'Pending Section Head' || p.status === 'Pending Tower Incharge' || p.status === 'Observation Pending Section Head Review' || p.status === 'Observation Pending Tower Incharge Review');
                 if (roleKey === 'section-head') return (p.status === 'Pending Section Head' || p.status === 'Pending Tower Incharge' || p.status === 'Observation Pending Section Head Review' || p.status === 'Observation Pending Tower Incharge Review');
@@ -19455,7 +19501,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 if (roleKey === 'quality-engineer') return p.extension.status === 'Pending Quality Engineer Approval';
                 if (roleKey === 'site-engineer') return p.extension.status === 'Pending Site Engineer' && p.extension.approvals && p.extension.approvals.siteEngineer && p.extension.approvals.siteEngineer.status === 'pending';
                 if (roleKey === 'mep') return (p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && p.extension.approvals.mep && p.extension.approvals.mep.status === 'pending');
-                if (['pm', 'it'].includes(roleKey)) return p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && p.extension.approvals[roleKey] && p.extension.approvals[roleKey].status === 'pending';
+                if (['pm', 'it'].includes(roleKey) || roleKey === 'it-in-charge') return p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && ((p.extension.approvals[roleKey] && p.extension.approvals[roleKey].status === 'pending') || (p.extension.approvals.it && p.extension.approvals.it.status === 'pending'));
                 if (roleKey === 'excavation-head') return ptypeOf(p) === 'excavation' && (p.extension.status === 'Pending Section Head');
                 if (roleKey === 'hw-section-head') return ptypeOf(p) !== 'excavation' && (p.extension.status === 'Pending Section Head' || p.extension.status === 'Pending Tower Incharge');
                 if (roleKey === 'section-head') return (p.extension.status === 'Pending Section Head' || p.extension.status === 'Pending Tower Incharge');
@@ -25332,16 +25378,22 @@ function trackerHtml(p) {
 
             // ---- Parallel Gate (Step 3: MEP, P&M, IT) — Excavation only ----
             if (p.status === 'Pending Parallel Approval') {
-                if (['mep', 'pm', 'it'].includes(rk) && roleCanActOnChain(p.approvals, rk)) {
+                const normRk = normalizeRoleKey(rk || (currentUser && (currentUser.key || currentUser.role)));
+                const myField = CHAIN_ROLE_FIELD[normRk] || CHAIN_ROLE_FIELD[rk] || normRk;
+                const isParallelApprover = ['mep', 'pm', 'it'].includes(myField);
+                const mySlot = isParallelApprover && p.approvals && p.approvals[myField];
+                const canActParallel = isParallelApprover && mySlot && mySlot.status !== 'approved';
+
+                if (canActParallel) {
                     html += '<div class="approval-action-card">' +
-                        '<div class="aa-title"><i class="fa-solid fa-gavel"></i> Step 3: Parallel Approval Required (' + roleInfo(rk).label + ')</div>' +
+                        '<div class="aa-title"><i class="fa-solid fa-gavel"></i> Step 3: Parallel Approval Required (' + roleInfo(myField).label + ')</div>' +
                         '<div class="aa-desc">Parallel gate: MEP, P&amp;M, and IT must all approve before the permit routes to Excavation Head. On Reject + refill, unchanged approvals persist. Gated by GPS geofencing (' + getProjectRadius(p) + 'm), DPDP consent, and digital signature.</div>' +
                         '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
                         renderActionButton('approve', p.id, 'Approve') +
                         renderActionButton('reject', p.id, 'Reject &amp; Return to Supervisor') +
                         '</div></div>';
                 } else if (rk !== 'admin' && rk !== 'super-admin') {
-                    const pendingDisciplines = ['mep', 'pm', 'it'].filter(d => p.approvals && p.approvals[d] && p.approvals[d].status === 'pending');
+                    const pendingDisciplines = ['mep', 'pm', 'it'].filter(d => p.approvals && p.approvals[d] && p.approvals[d].status !== 'approved');
                     const pendingLabels = pendingDisciplines.map(d => roleInfo(d).label).join(', ');
                     html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
                         '<div class="aa-title"><i class="fa-solid fa-clock"></i> Step 3: Awaiting Parallel Discipline Clearances</div>' +
@@ -25882,7 +25934,9 @@ function trackerHtml(p) {
                     showToast('Access Denied: Only MEP Engineer can act at this stage.', 'err');
                     return;
                 }
-                if (p.status === 'Pending Parallel Approval' && !['mep', 'pm', 'it'].includes(rk)) {
+                const normRkForGps = normalizeRoleKey(rk || (currentUser && (currentUser.key || currentUser.role)));
+                const myFieldForGps = CHAIN_ROLE_FIELD[normRkForGps] || CHAIN_ROLE_FIELD[rk] || normRkForGps;
+                if (p.status === 'Pending Parallel Approval' && !['mep', 'pm', 'it'].includes(myFieldForGps)) {
                     showToast('Access Denied: Only parallel discipline engineers can act at this stage.', 'err');
                     return;
                 }
