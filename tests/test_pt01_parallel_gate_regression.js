@@ -238,20 +238,13 @@ p.checklist[7].ans = 'yes';
 resubmitExcavationCorrection(p.id);
 `);
 
-assert.strictEqual(evalInVM("p.status"), 'Pending Site Engineer Acknowledgment', 'Permit should be Pending Site Engineer Acknowledgment');
+assert.strictEqual(evalInVM("p.status"), 'Pending Parallel Approval', 'Permit should return directly to Pending Parallel Approval (W1)');
 // Verify Option B selective preservation
 assert.strictEqual(evalInVM("p.approvals.mep.status"), 'approved', 'Option B: MEP approval MUST be preserved (domain fields unchanged)');
 assert.strictEqual(evalInVM("p.approvals.it.status"), 'approved', 'Option B: IT approval MUST be preserved (domain fields unchanged)');
 assert.strictEqual(evalInVM("p.approvals.pm.status"), 'pending', 'Option B: P&M slot MUST be reset from rejected to pending');
 console.log('  ✓ Option B verification: MEP & IT preserved, P&M successfully reset to pending');
 
-// Step 5: Site Engineer re-acknowledges
-evalInVM(`
-currentUser = { key: 'site-engineer', role: 'site-engineer', name: 'Eng. Alice', uid: 'uid-se-01' };
-acknowledgeSiteEngineer(p, { gps: { lat: 17.4, lng: 78.3, within: true }, sig: 'data:image/png;base64,sig', comment: 'Re-inspected trench' });
-`);
-
-assert.strictEqual(evalInVM("p.status"), 'Pending Parallel Approval', 'Permit should advance to Pending Parallel Approval');
 // Check tracker HTML does NOT show Rejected for P&M
 const trHtml = evalInVM("trackerHtml(p);");
 assert(!trHtml.includes('Rejected'), 'Tracker MUST NOT show Rejected for P&M after resubmission');

@@ -3135,7 +3135,7 @@ exports.transitionPermitStage = onCall({ region: REGION }, async (request) => {
       "Pending P&M Re-Acknowledgment": ["electrician", "pm", "mep"],
       "Pending P&M Approval": ["site-engineer", "pm"],
       "Pending Quality Engineer Approval": ["pm", "quality-engineer"],
-      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it-in-charge"],
+      "Pending Parallel Approval": ["site-engineer", "mep", "pm", "it-in-charge", "site-supervisor"],
       "Pending MEP Clearance": ["site-engineer", "mep"],
       "Pending MEP or P&M Approval": ["site-engineer", "mep", "pm", "electrician"],
       "Pending Section Head": ["site-engineer", "mep", "pm", "it-in-charge", "quality-engineer", "tower-in-charge", "excavation-head"],

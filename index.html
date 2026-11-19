@@ -11014,18 +11014,38 @@
             }
             const notesEl = document.getElementById('rectifyNotesInput');
             const notes = notesEl ? notesEl.value.trim() : '';
-            p.status = 'Pending Site Engineer Acknowledgment';
             p.rectificationNotes = notes;
             p.resubmittedAt = nowTime();
-            if (p.approvals && p.approvals.siteEngineer) {
-                p.approvals.siteEngineer.status = 'pending';
-                p.approvals.siteEngineer.by = null;
-                p.approvals.siteEngineer.sig = null;
-                p.approvals.siteEngineer.comment = null;
-            }
             resetExcavationParallelSlotsOnResubmit(p);
-            logActivity(p, 'Permit rectified and re-submitted by Site Supervisor' + (notes ? ' (Notes: ' + notes + ')' : '') + '. Pending Site Engineer acknowledgment.');
-            notify(['site-engineer'], pLabel(p) + ' rectified and re-submitted by Site Supervisor. Awaiting acknowledgment.', 'info', p.id);
+
+            const retRole = (p.rejectionOrigin && p.rejectionOrigin.roleKey) || p.returnedByRoleKey || (
+                (p.approvals && p.approvals.mep && p.approvals.mep.status === 'rejected') ? 'mep' :
+                (p.approvals && p.approvals.pm && p.approvals.pm.status === 'rejected') ? 'pm' :
+                (p.approvals && p.approvals.it && p.approvals.it.status === 'rejected') ? 'it' :
+                (p.siteEngineerAck && p.siteEngineerAck.rejected) ? 'site-engineer' :
+                null
+            );
+
+            if ((retRole === 'parallel' || retRole === 'mep' || retRole === 'pm' || retRole === 'it') && p.siteEngineerAck && p.siteEngineerAck.acknowledged) {
+                p.status = 'Pending Parallel Approval';
+                const pendingRoles = [];
+                if (p.approvals && p.approvals.mep && p.approvals.mep.status === 'pending') pendingRoles.push('mep');
+                if (p.approvals && p.approvals.pm && p.approvals.pm.status === 'pending') pendingRoles.push('pm');
+                if (p.approvals && p.approvals.it && p.approvals.it.status === 'pending') pendingRoles.push('it');
+                const pendingLabels = pendingRoles.map(r => (roleInfo(r) ? roleInfo(r).label : r)).join(', ');
+                notify(pendingRoles.length ? pendingRoles : ['mep', 'pm', 'it'], pLabel(p) + ' rectified and re-submitted by Site Supervisor. Awaiting parallel clearance.', 'info', p.id);
+                logActivity(p, 'Permit rectified and re-submitted by Site Supervisor' + (notes ? ' (Notes: ' + notes + ')' : '') + '. Routed directly to Step 3 Parallel Clearance Gate (' + (pendingLabels || 'MEP, P&M, IT') + ' pending, prior clearances preserved).');
+            } else {
+                p.status = 'Pending Site Engineer Acknowledgment';
+                if (p.approvals && p.approvals.siteEngineer) {
+                    p.approvals.siteEngineer.status = 'pending';
+                    p.approvals.siteEngineer.by = null;
+                    p.approvals.siteEngineer.sig = null;
+                    p.approvals.siteEngineer.comment = null;
+                }
+                logActivity(p, 'Permit rectified and re-submitted by Site Supervisor' + (notes ? ' (Notes: ' + notes + ')' : '') + '. Pending Site Engineer acknowledgment.');
+                notify(['site-engineer'], pLabel(p) + ' rectified and re-submitted by Site Supervisor. Awaiting acknowledgment.', 'info', p.id);
+            }
             saveState();
             if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
             showToast('Permit ' + p.id + ' rectified & re-submitted successfully.', 'ok');
@@ -12806,6 +12826,16 @@
                 }
                 notify(['site-engineer'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — Site Engineer re-acknowledgment required.', 'info', p.id);
                 logActivity(p, 'Permit resubmitted after correction by ' + resubmitter + '. Routed to Site Engineer for re-acknowledgment.');
+            } else if (ptypeOf(p) === 'excavation' && (retRole === 'parallel' || retRole === 'mep' || retRole === 'pm' || retRole === 'it') && p.siteEngineerAck && p.siteEngineerAck.acknowledged) {
+                // W1: Parallel clearance gate re-entry: Return directly to Step 3, preserving Site Engineer ack and approved slots
+                p.status = 'Pending Parallel Approval';
+                const pendingRoles = [];
+                if (p.approvals && p.approvals.mep && p.approvals.mep.status === 'pending') pendingRoles.push('mep');
+                if (p.approvals && p.approvals.pm && p.approvals.pm.status === 'pending') pendingRoles.push('pm');
+                if (p.approvals && p.approvals.it && p.approvals.it.status === 'pending') pendingRoles.push('it');
+                const pendingLabels = pendingRoles.map(r => (roleInfo(r) ? roleInfo(r).label : r)).join(', ');
+                notify(pendingRoles.length ? pendingRoles : ['mep', 'pm', 'it'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — Parallel clearance required.', 'info', p.id);
+                logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed directly to Step 3 Parallel Clearance Gate (' + (pendingLabels || 'MEP, P&M, IT') + ' pending, prior clearances preserved).');
             } else {
                 // Unified rule: Any approver rejected -> routes back to initiator for correction -> then Site Engineer for re-acknowledgment -> then returns directly to original rejector
                 p.status = 'Pending Site Engineer Re-Acknowledgment';
