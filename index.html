@@ -11649,7 +11649,11 @@
             p.escalation = { stage1: false, stage2: false };
             stampPermitValidityEpochs(p);
             const creator = p.createdBy || (currentUser && currentUser.name) || roleInfo('site-supervisor').label;
-            p.status = 'Pending Site Engineer Acknowledgment';
+            const isBatchingElecEarly = ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant');
+            p.status = isBatchingElecEarly ? 'Pending P&M Acknowledgment' : 'Pending Site Engineer Acknowledgment';
+            if (isBatchingElecEarly && !p.approvals) {
+                p.approvals = newChain('electrical-batching');
+            }
             persistPermitToFirestore(p);
             if (p.parentNightShiftId) {
                 const parent = PERMITS.find(x => x.id === p.parentNightShiftId);
@@ -11723,6 +11727,7 @@
                     notify(stakeholdersFor(p), pLabel(p) + ' submitted by Electrician. Awaiting Site Engineer acknowledgment.', 'info', p.id);
                 }
                 saveState();
+                if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 return;
             }
             if (ptypeOf(p) === 'blasting') {
@@ -12781,8 +12786,8 @@
                 if (p.approvals && p.approvals.pm) {
                     p.approvals.pm.status = 'pending'; p.approvals.pm.by = null; p.approvals.pm.sig = null;
                 }
-                notify(['pm'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — P&M Engineer statutory re-acknowledgment required.', 'info', p.id);
-                logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to P&M Engineer for statutory re-acknowledgment.');
+                notify(['pm'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — P&M Engineer statutory acknowledgment required.', 'info', p.id);
+                logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to P&M Engineer for statutory acknowledgment.');
             } else if (ptypeOf(p) === 'blasting' && p.dbOperationType === 'Blasting') {
                 p.status = 'Pending Blasting In-charge Re-Acknowledgment';
                 p.blastingInchargeAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
@@ -24492,7 +24497,10 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     if (wasCorrection) {
                         resubmitReturnedPermit(p);
                     } else {
-                        if (ptypeOf(p) === 'blasting' && (p.drillingBlastingType === 'blasting' || p.dbOperationType === 'Blasting')) {
+                        const isBatchingElec = ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant');
+                        if (isBatchingElec) {
+                            p.status = 'Pending P&M Acknowledgment';
+                        } else if (ptypeOf(p) === 'blasting' && (p.drillingBlastingType === 'blasting' || p.dbOperationType === 'Blasting')) {
                             p.status = 'Pending Blasting In-charge Acknowledgment';
                         } else if (ptypeOf(p) !== 'confined') {
                             p.status = 'Pending Site Engineer Acknowledgment';
@@ -24603,7 +24611,7 @@ function trackerHtml(p) {
         if (isBatching) {
             // TOPOLOGY A: BATCHING PLANT (4-STAGE SPECIALIST FLOW)
             // Step 2: P&M Engineer Isolation Ack
-            const isPmAckActive = p.status === 'Pending P&M Acknowledgment';
+            const isPmAckActive = p.status === 'Pending P&M Acknowledgment' || p.status === 'Pending P&M Re-Acknowledgment';
             const isPmDone = !!(p.pmAck && p.pmAck.acknowledged) || !!(a.pm && a.pm.status === 'approved');
             const isPmRejected = !!(p.pmAck && p.pmAck.rejected) || !!(a.pm && (a.pm.status === 'rejected' || a.pm.status === 'cancelled'));
             const pmState = isPmDone ? 'done' : (isPmRejected ? 'rejected' : (isPmAckActive ? 'current' : ''));
@@ -25284,7 +25292,7 @@ function trackerHtml(p) {
             }
 
             // ---- Step 2: P&M Engineer Acknowledgment (Batching Plant Electrical) ----
-            if (p.status === 'Pending P&M Acknowledgment') {
+            if (p.status === 'Pending P&M Acknowledgment' || p.status === 'Pending P&M Re-Acknowledgment') {
                 if (rk === 'pm') {
                     html += '<div class="approval-action-card" style="border-color:#16A34A;background:rgba(22,163,74,0.06);">' +
                         '<div class="aa-title"><i class="fa-solid fa-bolt" style="color:#16A34A;"></i> Step 2: P&amp;M Engineer Acknowledgment &amp; Statutory Declaration</div>' +
@@ -29066,6 +29074,12 @@ function trackerHtml(p) {
                         resumeDraft(p);
                         return;
                     }
+                }
+                // Auto-healing for Batching Plant electrical permits erroneously set to Site Engineer
+                if (ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant') && p.status === 'Pending Site Engineer Acknowledgment' && (!p.siteEngineerAck || !p.siteEngineerAck.acknowledged)) {
+                    p.status = 'Pending P&M Acknowledgment';
+                    if (!p.approvals) p.approvals = newChain('electrical-batching');
+                    if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 }
                 if (!p.approvals) p.approvals = newChain(ptypeOf(p));
                 const countdownMs = new Date(p.validTill) - nowTime();
