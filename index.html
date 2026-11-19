@@ -11737,7 +11737,7 @@
                     p.blastingStatutoryDecl = true;
                     p.signatories['blasting-incharge'] = { name: creator, sig: p.signature ? (p.signature.dataUrl || p.signature) : 'Signed', consent: true, at: nowTime() };
                     p.status = 'Pending Site Engineer Acknowledgment';
-                    logActivity(p, 'Drilling & Blasting permit (Blasting operation) submitted by Blasting / Drilling In-charge (' + creator + ') with PESA statutory safety declaration. Awaiting Site Engineer acknowledgment (Step 3).');
+                    logActivity(p, 'Drilling & Blasting permit (Blasting operation) submitted by Blasting / Drilling In-charge (' + creator + ') with PESA statutory safety declaration. Awaiting Site Engineer acknowledgment (Step 2).');
                     notify(['site-engineer'], pLabel(p) + ' submitted by Blasting / Drilling In-charge — Site Engineer acknowledgment required.', 'info', p.id);
                     notify(stakeholdersFor(p), pLabel(p) + ' submitted by Blasting / Drilling In-charge. Awaiting Site Engineer acknowledgment.', 'info', p.id);
                 } else {
@@ -11747,6 +11747,7 @@
                     notify(stakeholdersFor(p), pLabel(p) + ' submitted. Awaiting Site Engineer acknowledgment.', 'info', p.id);
                 }
                 saveState();
+                if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 return;
             }
             // Excavation (PTW-001): Step 1 completed by Site Supervisor -> Step 2: Site Engineer Acknowledgment
@@ -12788,11 +12789,14 @@
                 }
                 notify(['pm'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — P&M Engineer statutory acknowledgment required.', 'info', p.id);
                 logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to P&M Engineer for statutory acknowledgment.');
-            } else if (ptypeOf(p) === 'blasting' && p.dbOperationType === 'Blasting') {
-                p.status = 'Pending Blasting In-charge Re-Acknowledgment';
-                p.blastingInchargeAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
-                notify(['blasting-incharge'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — Blasting / Drilling In-charge statutory re-acknowledgment required before Site Engineer.', 'info', p.id);
-                logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to Blasting / Drilling In-charge for statutory re-acknowledgment before Site Engineer.');
+            } else if (ptypeOf(p) === 'blasting') {
+                p.status = 'Pending Site Engineer Re-Acknowledgment';
+                p.siteEngineerAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
+                if (p.approvals && p.approvals.siteEngineer) {
+                    p.approvals.siteEngineer.status = 'pending'; p.approvals.siteEngineer.by = null; p.approvals.siteEngineer.sig = null;
+                }
+                notify(['site-engineer'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — Site Engineer technical re-acknowledgment required.', 'info', p.id);
+                logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to Site Engineer for technical re-acknowledgment.');
             } else if (retRole === 'site-engineer') {
                 // If Site Engineer was the one who rejected, route to Site Engineer for normal re-acknowledgment
                 p.status = 'Pending Site Engineer Acknowledgment';
@@ -24500,8 +24504,6 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                         const isBatchingElec = ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant');
                         if (isBatchingElec) {
                             p.status = 'Pending P&M Acknowledgment';
-                        } else if (ptypeOf(p) === 'blasting' && (p.drillingBlastingType === 'blasting' || p.dbOperationType === 'Blasting')) {
-                            p.status = 'Pending Blasting In-charge Acknowledgment';
                         } else if (ptypeOf(p) !== 'confined') {
                             p.status = 'Pending Site Engineer Acknowledgment';
                         }
@@ -29079,6 +29081,12 @@ function trackerHtml(p) {
                 if (ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant') && p.status === 'Pending Site Engineer Acknowledgment' && (!p.siteEngineerAck || !p.siteEngineerAck.acknowledged)) {
                     p.status = 'Pending P&M Acknowledgment';
                     if (!p.approvals) p.approvals = newChain('electrical-batching');
+                    if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+                }
+                // Auto-healing for Blasting permits erroneously set to Blasting In-charge self-acknowledgment
+                if (ptypeOf(p) === 'blasting' && (p.status === 'Pending Blasting In-charge Acknowledgment' || p.status === 'Pending Blasting In-charge Re-Acknowledgment')) {
+                    p.status = (p.status === 'Pending Blasting In-charge Re-Acknowledgment') ? 'Pending Site Engineer Re-Acknowledgment' : 'Pending Site Engineer Acknowledgment';
+                    if (!p.approvals) p.approvals = newChain('blasting');
                     if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 }
                 if (!p.approvals) p.approvals = newChain(ptypeOf(p));

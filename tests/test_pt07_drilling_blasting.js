@@ -315,22 +315,8 @@ evalInVM("executeFinalSubmit();");
 
 const submittedPermit = evalInVM("PERMITS[PERMITS.length - 1]");
 assert.strictEqual(submittedPermit.ptype, 'blasting', "Submitted permit type must be blasting");
-// In statutory test sandbox, set to Pending Blasting In-charge Acknowledgment to verify acknowledgment engine
-evalInVM("PERMITS[PERMITS.length - 1].status = 'Pending Blasting In-charge Acknowledgment';");
-assert.strictEqual(evalInVM("PERMITS[PERMITS.length - 1].status"), 'Pending Blasting In-charge Acknowledgment', "Blasting permit set to Pending Blasting In-charge Acknowledgment for statutory ack test");
-console.log('  ✓ PASS: Blasting permit submitted into Pending Blasting In-charge Acknowledgment');
-
-// Switch role to blasting-incharge
-evalInVM("currentUser = { key: 'blasting-incharge', name: 'PESO Blaster Khan', role: 'Blasting In-charge' };");
-
-// Acknowledge by Blasting In-charge requires statutory PESO declaration and photo
-evalInVM("acknowledgeBlastingIncharge(PERMITS[PERMITS.length - 1], { gps: { lat: 17.44, lng: 78.38, within: true }, comment: 'PESO explosive storage and blast perimeter verified physically.', sig: makeSimSignature('PESO Blaster Khan'), signerName: 'PESO Blaster Khan', declaration: true, photo: 'demo' });");
-
-const ackPermit = evalInVM("PERMITS[PERMITS.length - 1]");
-assert.strictEqual(ackPermit.status, 'Pending Site Engineer Acknowledgment', "After Blasting In-charge acknowledgment, permit must route to Site Engineer");
-assert(ackPermit.blastingInchargeAck && ackPermit.blastingInchargeAck.acknowledged, "blastingInchargeAck must be recorded");
-assert.strictEqual(ackPermit.signatories['blasting-incharge'].name, 'PESO Blaster Khan', "Blasting In-charge signatory must be recorded");
-console.log('  ✓ PASS: Blasting In-charge acknowledgment routes cleanly to Site Engineer');
+assert.strictEqual(submittedPermit.status, 'Pending Site Engineer Acknowledgment', "Blasting permit submitted directly into Pending Site Engineer Acknowledgment");
+console.log('  ✓ PASS: Blasting permit submitted into Pending Site Engineer Acknowledgment (3-stage direct spine)');
 
 // --- 7. Scenario 8: Route from Site Engineer directly -> EHS Approval ---
 console.log('\n--- 7. Site Engineer -> EHS Approval (PTW-007 Canonical Spine) ---');
@@ -461,28 +447,28 @@ evalInVM("draft.signature = { dataUrl: makeSimSignature('PESO Blaster Khan'), at
 evalInVM("draft.gps = { lat: 17.44, lng: 78.38, within: true, distance: 10 };");
 evalInVM("executeFinalSubmit();");
 
-evalInVM("var retPermit = PERMITS[PERMITS.length - 1]; retPermit.status = 'Pending Blasting In-charge Acknowledgment';");
-assert.strictEqual(evalInVM("retPermit.status"), 'Pending Blasting In-charge Acknowledgment', "Permit pending in-charge ack");
+evalInVM("var retPermit = PERMITS[PERMITS.length - 1];");
+assert.strictEqual(evalInVM("retPermit.status"), 'Pending Site Engineer Acknowledgment', "Permit pending Site Engineer ack");
 
-// Blasting In-charge rejects permit
-evalInVM("currentUser = { key: 'blasting-incharge', name: 'PESO Blaster Khan', role: 'Blasting In-charge' };");
-evalInVM("rejectBlastingIncharge(retPermit, { comment: 'Safe distance calculation insufficient for 18kg ANFO charge. Increase cordon to 250m.', sig: makeSimSignature('PESO Blaster Khan'), signerName: 'PESO Blaster Khan', gps: { lat: 17.44, lng: 78.38, within: true } });");
+// Site Engineer rejects permit
+evalInVM("currentUser = { key: 'site-engineer', name: 'Engineer Suresh', role: 'Site Engineer' };");
+evalInVM("rejectSiteEngineer(retPermit, { comment: 'Safe distance calculation insufficient for 18kg ANFO charge. Increase cordon to 250m.', sig: makeSimSignature('Engineer Suresh'), signerName: 'Engineer Suresh', gps: { lat: 17.44, lng: 78.38, within: true } });");
 assert.strictEqual(evalInVM("retPermit.status"), 'Returned for Correction', "Rejection must return permit for correction");
-assert.strictEqual(evalInVM("retPermit.returnedByRoleKey"), 'blasting-incharge', "returnedByRoleKey must be blasting-incharge");
-console.log('  ✓ PASS: Blasting In-charge rejection returns permit to Permittee for correction');
+assert.strictEqual(evalInVM("retPermit.returnedByRoleKey"), 'site-engineer', "returnedByRoleKey must be site-engineer");
+console.log('  ✓ PASS: Site Engineer rejection returns permit to Permittee for correction');
 
 // Blasting In-charge corrects and resubmits
 evalInVM("currentUser = { key: 'blasting-incharge', name: 'PESO Blaster Khan', role: 'Blasting In-charge', label: 'Blasting / Drilling In-charge' };");
 evalInVM("retPermit.blastingSafeDistance = '250 meters cordon perimeter verified';");
 evalInVM("resubmitReturnedPermit(retPermit);");
-assert.strictEqual(evalInVM("retPermit.status"), 'Pending Blasting In-charge Re-Acknowledgment', "Resubmission must route to Blasting In-charge Re-Acknowledgment");
-console.log('  ✓ PASS: Resubmission routes to Pending Blasting In-charge Re-Acknowledgment');
+assert.strictEqual(evalInVM("retPermit.status"), 'Pending Site Engineer Re-Acknowledgment', "Resubmission must route directly to Site Engineer Re-Acknowledgment");
+console.log('  ✓ PASS: Resubmission routes to Pending Site Engineer Re-Acknowledgment');
 
-// Blasting In-charge re-acknowledges
-evalInVM("currentUser = { key: 'blasting-incharge', name: 'PESO Blaster Khan', role: 'Blasting In-charge' };");
-evalInVM("acknowledgeBlastingIncharge(retPermit, { comment: '250m cordon perimeter verified on site with warning sirens.', sig: makeSimSignature('PESO Blaster Khan'), signerName: 'PESO Blaster Khan', declaration: true, photo: 'demo', gps: { lat: 17.44, lng: 78.38, within: true } });");
-assert.strictEqual(evalInVM("retPermit.status"), 'Pending Site Engineer Re-Acknowledgment', "Re-acknowledgment routes to Site Engineer");
-console.log('  ✓ PASS: Blasting In-charge statutory re-acknowledgment routes forward to Site Engineer Re-Acknowledgment');
+// Site Engineer re-acknowledges
+evalInVM("currentUser = { key: 'site-engineer', name: 'Engineer Suresh', role: 'Site Engineer' };");
+evalInVM("acknowledgeSiteEngineer(retPermit, { comment: '250m cordon perimeter verified on site with warning sirens.', sig: makeSimSignature('Engineer Suresh'), signerName: 'Engineer Suresh', gps: { lat: 17.44, lng: 78.38, within: true } });");
+assert.strictEqual(evalInVM("retPermit.status"), 'Pending EHS Approval', "Re-acknowledgment routes forward to Pending EHS Approval");
+console.log('  ✓ PASS: Site Engineer statutory re-acknowledgment routes forward to Pending EHS Approval');
 
 // --- 11. Scenario 12: Active Observations & Post-Blast Surrender Clearance ---
 console.log('\n--- 11. Active Observations & Surrender Declaration ---');
