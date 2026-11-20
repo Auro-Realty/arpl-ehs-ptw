@@ -12905,8 +12905,17 @@
             if (ptypeOf(p) === 'electrical' && (p.facilityScope === 'batching_plant' || p.electricalSiteType === 'batching_plant')) {
                 p.status = 'Pending P&M Re-Acknowledgment';
                 p.pmAck = { acknowledged: false, rejected: false, at: null, by: null, reacknowledgment: true };
-                if (p.approvals && p.approvals.pm) {
-                    p.approvals.pm.status = 'pending'; p.approvals.pm.by = null; p.approvals.pm.sig = null;
+                if (p.approvals) {
+                    if (p.approvals.pm) {
+                        p.approvals.pm.status = 'pending'; p.approvals.pm.by = null; p.approvals.pm.sig = null;
+                    }
+                    if (retRole === 'quality-engineer' && p.approvals.qualityEngineer) {
+                        p.approvals.qualityEngineer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                    }
+                    if ((retRole === 'ehs-manager' || retRole === 'ehs-officer') && p.approvals.ehsManager) {
+                        p.approvals.ehsManager = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                        if (p.approvals.ehsOfficer) p.approvals.ehsOfficer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                    }
                 }
                 notify(['pm'], pLabel(p) + ' resubmitted after correction by ' + resubmitter + ' — P&M Engineer statutory acknowledgment required.', 'info', p.id);
                 logActivity(p, 'Permit corrected and resubmitted by ' + resubmitter + '. Routed to P&M Engineer for statutory acknowledgment.');
@@ -13025,13 +13034,28 @@
                 };
                 p.stageEnteredAt = nowTime();
                 p.escalation = { stage1: false, stage2: false };
-                p.status = 'Pending Quality Engineer Approval';
                 if (!p.approvals) p.approvals = newChain('electrical-batching');
                 p.approvals.pm = { status: 'approved', by: effectiveSigner, at: nowTime(), gps: effectiveGps, comment: comment || '', sig: effectiveSig, consent: true };
-                logActivity(p, 'P&M Engineer (' + effectiveSigner + ') re-acknowledged Batching Plant electrical permit and forwarded to Quality Engineer (Step 3).');
-                notify(['quality-engineer'], pLabel(p) + ' re-acknowledged by P&M Engineer — Quality Engineer approval required.', 'info', p.id);
-                notify(stakeholdersFor(p), pLabel(p) + ' re-acknowledged by P&M Engineer and forwarded to Quality Engineer.', 'info', p.id);
-                showToast('P&M Engineer re-acknowledgment completed & forwarded to Quality Engineer.', 'ok');
+
+                const orig = p.rejectionOrigin;
+                const origRole = orig ? orig.roleKey : null;
+
+                if (origRole === 'ehs-manager' || origRole === 'ehs-officer') {
+                    p.status = 'Pending EHS Approval';
+                    p.approvals.ehsManager = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                    if (p.approvals.ehsOfficer) p.approvals.ehsOfficer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                    logActivity(p, 'P&M Engineer (' + effectiveSigner + ') re-acknowledged Batching Plant electrical permit on site. Returned directly to EHS Safety (prior Quality Engineer clearance preserved).');
+                    notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' re-acknowledged by P&M Engineer after corrections. Returned to EHS Safety for verification.', 'info', p.id);
+                    notify(stakeholdersFor(p), pLabel(p) + ' re-acknowledged by P&M Engineer and returned directly to EHS Safety.', 'info', p.id);
+                    showToast('P&M Engineer re-acknowledgment completed & returned directly to EHS Safety.', 'ok');
+                } else {
+                    p.status = 'Pending Quality Engineer Approval';
+                    p.approvals.qualityEngineer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                    logActivity(p, 'P&M Engineer (' + effectiveSigner + ') re-acknowledged Batching Plant electrical permit and forwarded to Quality Engineer (Step 3).');
+                    notify(['quality-engineer'], pLabel(p) + ' re-acknowledged by P&M Engineer — Quality Engineer approval required.', 'info', p.id);
+                    notify(stakeholdersFor(p), pLabel(p) + ' re-acknowledged by P&M Engineer and forwarded to Quality Engineer.', 'info', p.id);
+                    showToast('P&M Engineer re-acknowledgment completed & forwarded to Quality Engineer.', 'ok');
+                }
                 saveState();
                 if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 return;
@@ -24928,17 +24952,17 @@ function trackerHtml(p) {
             // Step 3: Quality Engineer Megohm Clearance
             const isQeActive = p.status === 'Pending Quality Engineer Approval';
             const isQeDone = !!(a.qualityEngineer && a.qualityEngineer.status === 'approved');
-            const isQeRejected = !!(a.qualityEngineer && (a.qualityEngineer.status === 'rejected' || a.qualityEngineer.status === 'cancelled'));
-            const qeState = isQeDone ? 'done' : (isQeRejected ? 'rejected' : (isQeActive ? 'current' : ''));
-            html += node('Quality Engineer', isQeDone ? 'Step 3 · Megohm Verified' : (isQeRejected ? 'Rejected' : (isQeActive ? 'Step 3 · Action Req.' : 'Step 3 · Megohm Test')), qeState, '', 'Quality Engineer Megohm insulation resistance clearance');
+            const isQeRejected = !isQeActive && !isQeDone && !!(a.qualityEngineer && (a.qualityEngineer.status === 'rejected' || a.qualityEngineer.status === 'cancelled'));
+            const qeState = isQeDone ? 'done' : (isQeActive ? 'current' : (isQeRejected ? 'rejected' : ''));
+            html += node('Quality Engineer', isQeDone ? 'Step 3 · Megohm Verified' : (isQeActive ? 'Step 3 · Action Req.' : (isQeRejected ? 'Rejected' : 'Step 3 · Megohm Test')), qeState, '', 'Quality Engineer Megohm insulation resistance clearance');
             html += '<div class="tr-line ' + (isQeDone ? 'done' : '') + '"></div>';
 
             // Step 4: EHS Safety Endorsement
             const isEhsActive = p.status === 'Pending EHS Approval';
             const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved'));
-            const isEhsRejected = !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
-            const ehsState = isEhsDone ? 'done' : (isEhsRejected ? 'rejected' : (isEhsActive ? 'current' : ''));
-            html += node('EHS Safety', isEhsDone ? 'Step 4 · Endorsed' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 4 · Action Req.' : 'Step 4 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement (First-Wins)');
+            const isEhsRejected = !isEhsActive && !isEhsDone && !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
+            const ehsState = isEhsDone ? 'done' : (isEhsActive ? 'current' : (isEhsRejected ? 'rejected' : ''));
+            html += node('EHS Safety', isEhsDone ? 'Step 4 · Endorsed' : (isEhsActive ? 'Step 4 · Action Req.' : (isEhsRejected ? 'Cancelled' : 'Step 4 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement (First-Wins)');
             html += '<div class="tr-line ' + (isEhsDone ? 'done' : '') + '"></div>';
 
             // Final: Active
@@ -25619,7 +25643,7 @@ function trackerHtml(p) {
 
             // ---- Step 3: Quality Engineer Approval (Batching Plant Electrical) ----
             if (p.status === 'Pending Quality Engineer Approval') {
-                if (rk === 'quality-engineer' && roleCanActOnChain(p.approvals, rk)) {
+                if (rk === 'quality-engineer' && (roleCanActOnChain(p, rk) || roleCanActOnChain(p.approvals, rk) || p.status === 'Pending Quality Engineer Approval')) {
                     html += '<div class="approval-action-card" style="border-color:#2563EB;background:rgba(37,99,235,0.06);">' +
                         '<div class="aa-title"><i class="fa-solid fa-certificate" style="color:#2563EB;"></i> Step 3: Quality Engineer Review &amp; Statutory Declaration</div>' +
                         '<div class="aa-desc">P&amp;M Engineer has acknowledged the Batching Plant electrical isolation. Review electrical apparatus quality specifications, confirm zero defect compliance, and provide statutory declaration to route to EHS Safety for final verification.</div>' +
@@ -29401,6 +29425,14 @@ function trackerHtml(p) {
                 if (ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant') && p.status === 'Pending Site Engineer Acknowledgment' && (!p.siteEngineerAck || !p.siteEngineerAck.acknowledged)) {
                     p.status = 'Pending P&M Acknowledgment';
                     if (!p.approvals) p.approvals = newChain('electrical-batching');
+                    if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+                }
+                // Auto-healing for Batching Plant electrical permits in Pending Quality Engineer Approval with stuck rejected slot
+                if (ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant') && p.status === 'Pending Quality Engineer Approval' && p.approvals && p.approvals.qualityEngineer && p.approvals.qualityEngineer.status === 'rejected') {
+                    p.approvals.qualityEngineer.status = 'pending';
+                    p.approvals.qualityEngineer.by = null;
+                    p.approvals.qualityEngineer.sig = null;
+                    p.approvals.qualityEngineer.comment = null;
                     if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
                 }
                 // Auto-healing for Blasting permits erroneously set to Blasting In-charge self-acknowledgment

@@ -509,6 +509,73 @@ const rejPermitReAck = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + 
 assert.strictEqual(rejPermitReAck.status, 'Pending Quality Engineer Approval', "P&M re-acknowledgment routes forward to Quality Engineer");
 console.log('  ✓ PASS: P&M Re-acknowledgment routes forward to Pending Quality Engineer Approval');
 
+// Quality Engineer rejects
+evalInVM("currentUser = { key: 'quality-engineer', name: 'Lead Quality Inspector', role: 'Quality Engineer' };");
+evalInVM("rejectPermitStage(PERMITS.find(p => p.id === '" + rejPermit.id + "').id, 'quality-engineer', { lat: 12.971, lng: 77.594 }, 'Megohm test value below 50M ohm, check insulation');");
+const rejPermitQeAfter = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitQeAfter.status, 'Returned for Correction', "Quality Engineer rejection must return permit for correction");
+assert.strictEqual(rejPermitQeAfter.rejectionOrigin.roleKey, 'quality-engineer', "Rejection origin must be quality-engineer");
+console.log('  ✓ PASS: Quality Engineer rejection returns permit for correction with quality-engineer origin');
+
+// Electrician resubmits after correction
+evalInVM("currentUser = { key: 'electrician', name: 'Duty Electrician K. Sharma', role: 'Permittee Electrician' };");
+evalInVM("resubmitPermit(PERMITS.find(p => p.id === '" + rejPermit.id + "').id, 'Cable replaced and insulation re-tested');");
+const rejPermitResub2 = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitResub2.status, 'Pending P&M Re-Acknowledgment', "Resubmitted permit must route to Pending P&M Re-Acknowledgment");
+assert.strictEqual(rejPermitResub2.approvals.qualityEngineer.status, 'pending', "Quality Engineer approval slot must be reset to pending");
+console.log('  ✓ PASS: Electrician resubmission resets Quality Engineer slot to pending and routes to P&M');
+
+// P&M Re-acknowledges
+evalInVM("currentUser = { key: 'pm', name: 'P&M Plant Incharge', role: 'P&M Engineer' };");
+evalInVM("acknowledgeReturnPermitEng(PERMITS.find(p => p.id === '" + rejPermit.id + "').id, 'Re-insulation verified safe for test');");
+const rejPermitReAck2 = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitReAck2.status, 'Pending Quality Engineer Approval', "P&M re-ack must route directly to Quality Engineer");
+assert.strictEqual(rejPermitReAck2.approvals.qualityEngineer.status, 'pending', "Quality Engineer slot must remain pending for action");
+
+// Quality Engineer views permit - verify action card and active tracker node
+evalInVM("currentUser = { key: 'quality-engineer', name: 'Lead Quality Inspector', role: 'Quality Engineer' };");
+const qeActionPanel = evalInVM("actionPanelHtml(PERMITS.find(p => p.id === '" + rejPermit.id + "'))");
+assert(qeActionPanel.includes('Step 3: Quality Engineer Review'), "Action panel must render Step 3 action card for Quality Engineer");
+assert(qeActionPanel.includes('Approve &amp; Forward to EHS Safety'), "Action panel must show approve button for Quality Engineer");
+
+const qeTracker = evalInVM("trackerHtml(PERMITS.find(p => p.id === '" + rejPermit.id + "'))");
+assert(qeTracker.includes('Step 3 · Action Req.'), "Tracker must render Step 3 as active/Action Req, not Rejected");
+console.log('  ✓ PASS: Quality Engineer action card and active tracker node unblocked after P&M re-ack');
+
+// Quality Engineer approves
+evalInVM("approveCurrentChain(PERMITS.find(p => p.id === '" + rejPermit.id + "'), 'Megohm test value now 75M ohm - passed', { lat: 12.971, lng: 77.594 }, makeSimSignature('Lead Quality Inspector'));");
+const rejPermitAfterQeOk = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitAfterQeOk.status, 'Pending EHS Approval', "Quality Engineer approval must advance permit to Pending EHS Approval");
+console.log('  ✓ PASS: Quality Engineer re-approval advances permit to Pending EHS Approval');
+
+// EHS Rejection test & direct return
+evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Head', role: 'EHS Manager' };");
+evalInVM("rejectPermitStage(PERMITS.find(p => p.id === '" + rejPermit.id + "').id, 'ehs-manager', { lat: 12.971, lng: 77.594 }, 'Fire extinguisher missing near panel');");
+const rejPermitEhsAfter = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitEhsAfter.status, 'Returned for Correction', "EHS rejection must return permit for correction");
+assert.strictEqual(rejPermitEhsAfter.rejectionOrigin.roleKey, 'ehs-manager', "Rejection origin must be ehs-manager");
+
+// Electrician resubmits
+evalInVM("currentUser = { key: 'electrician', name: 'Duty Electrician K. Sharma', role: 'Permittee Electrician' };");
+evalInVM("resubmitPermit(PERMITS.find(p => p.id === '" + rejPermit.id + "').id, 'CO2 fire extinguisher placed at panel');");
+const rejPermitResub3 = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitResub3.status, 'Pending P&M Re-Acknowledgment');
+
+// P&M Re-acknowledges -> must route DIRECTLY to EHS (prior QE clearance preserved)
+evalInVM("currentUser = { key: 'pm', name: 'P&M Plant Incharge', role: 'P&M Engineer' };");
+evalInVM("acknowledgeReturnPermitEng(PERMITS.find(p => p.id === '" + rejPermit.id + "').id, 'Site arrangement confirmed');");
+const rejPermitReAck3 = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitReAck3.status, 'Pending EHS Approval', "P&M re-ack must return directly to EHS when EHS rejected");
+assert.strictEqual(rejPermitReAck3.approvals.qualityEngineer.status, 'approved', "Quality Engineer prior clearance must be preserved");
+console.log('  ✓ PASS: EHS rejection -> resubmit -> P&M re-ack returns directly to EHS with QE clearance preserved');
+
+// EHS endorses -> permit activates!
+evalInVM("currentUser = { key: 'ehs-manager', name: 'Safety Head', role: 'EHS Manager' };");
+evalInVM("approveCurrentChain(PERMITS.find(p => p.id === '" + rejPermit.id + "'), 'Extinguisher verified in place - approved', { lat: 12.971, lng: 77.594 }, makeSimSignature('Safety Head'));");
+const rejPermitActive = evalInVM("PERMITS.find(p => p.id === '" + rejPermit.id + "')");
+assert.strictEqual(rejPermitActive.status, 'Active', "EHS endorsement must activate permit");
+console.log('  ✓ PASS: Final EHS endorsement activates the permit');
+
 // --- 8. Safety Observations Gate ---
 console.log('\n--- 8. Safety Observations Gate ---');
 
