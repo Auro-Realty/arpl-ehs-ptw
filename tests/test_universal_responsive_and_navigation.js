@@ -11,7 +11,7 @@ const publicIndexPath = path.join(__dirname, '..', 'public', 'index.html');
 const functionsPath = path.join(__dirname, '..', 'functions', 'index.js');
 const readmePath = path.join(__dirname, '..', 'README.md');
 
-const indexHtml = fs.readFileSync(rootIndexPath, 'utf8');
+const indexHtml = fs.readFileSync(rootIndexPath, 'utf8').replace(/\r\n/g, '\n');
 const publicHtml = fs.readFileSync(publicIndexPath, 'utf8');
 const functionsJs = fs.readFileSync(functionsPath, 'utf8');
 const readmeMd = fs.readFileSync(readmePath, 'utf8');

@@ -220,6 +220,29 @@ evalInVM("draft.dbChargeAmount = '0';");
 assert.strictEqual(evalInVM("validateWizStep(1)"), false, "Step 1 must fail if dbChargeAmount is <= 0");
 evalInVM("draft.dbChargeAmount = '15.5';");
 
+// Test Blasting Date & Time Validation: daylight hours (06:00 to 18:30 IST)
+evalInVM("window.__TEST_MODE__ = false;"); // enforce production daylight validation
+evalInVM("draft.drillingBlastingType = 'blasting'; draft.dbOperationType = 'Blasting';");
+
+// 1. Post-sunset blast time (19:00 IST) must fail
+evalInVM("draft.dbDateTime = '2026-11-20T19:00';");
+assert.strictEqual(evalInVM("validateWizStep(1)"), false, "Step 1 must fail if blast time is after 18:30 IST sunset stop");
+console.log('  ✓ PASS: Post-sunset blast time (19:00) strictly rejected by Step 1 validation');
+
+// 2. Pre-dawn blast time (05:00 IST) must fail
+evalInVM("draft.dbDateTime = '2026-11-20T05:00';");
+assert.strictEqual(evalInVM("validateWizStep(1)"), false, "Step 1 must fail if blast time is before 06:00 IST sunrise");
+console.log('  ✓ PASS: Pre-dawn blast time (05:00) strictly rejected by Step 1 validation');
+
+// 3. Valid daylight blast time (11:00 IST) passes
+evalInVM("draft.dbDateTime = '2026-11-20T11:00';");
+assert.strictEqual(evalInVM("validateWizStep(1)"), true, "Step 1 passes with valid daylight blast time (11:00 IST)");
+console.log('  ✓ PASS: Valid daylight blast time (11:00) accepted and synced to draft.validTillDate and draft.startTime');
+assert.strictEqual(evalInVM("draft.validTillDate"), '2026-11-20', "validTillDate must sync with dbDateTime date");
+assert.strictEqual(evalInVM("draft.startTime"), '11:00', "startTime must sync with dbDateTime time");
+
+evalInVM("window.__TEST_MODE__ = true;");
+
 // Test Drilling branch validation
 evalInVM("draft.drillingBlastingType = 'drilling'; draft.dbOperationType = 'Drilling';");
 evalInVM("draft.dbDrillDiameter = '0.150';");

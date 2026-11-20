@@ -321,6 +321,74 @@ assert.strictEqual(evalInVM("p2.approvals.mep.status"), 'pending', 'MEP MUST res
 assert.strictEqual(evalInVM("p2.approvals.it.status"), 'approved', 'IT remains approved because location/q4 did not change');
 console.log('  ✓ Option B domain invalidation correctly invalidated MEP and preserved IT');
 
+// --- 5. Testing True Parallel Clearance Gate Non-Blocking Rejection ---
+console.log('\n--- 5. Testing True Parallel Clearance Gate Non-Blocking Rejection ---');
+evalInVM(`
+const p3 = {
+    id: 'PTW-TEST-EXC-003',
+    ptype: 'excavation',
+    permitCode: 'PTW-001',
+    projectName: 'The Pearl',
+    tower: 'Tower 1',
+    location: 'Open Foundation Sector 2',
+    depth: '2.5',
+    width: '1.5',
+    length: '5.0',
+    slope: '1:1',
+    checklist: [
+        { id: 1, ans: 'yes' },
+        { id: 2, ans: 'yes' },
+        { id: 3, ans: 'yes' },
+        { id: 4, ans: 'yes' },
+        { id: 5, ans: 'yes' },
+        { id: 6, ans: 'yes' },
+        { id: 7, ans: 'yes' },
+        { id: 8, ans: 'yes' }
+    ],
+    createdBy: 'Site Supervisor John',
+    createdByRole: 'site-supervisor',
+    status: 'Pending Parallel Approval',
+    approvals: newChain('excavation'),
+    siteEngineerAck: { acknowledged: true }
+};
+PERMITS.push(p3);
+
+// 1. MEP approves
+currentUser = { key: 'mep', role: 'mep', name: 'MEP Eng. Bob', uid: 'uid-mep-01' };
+approvePermitStage(p3, 'mep', { lat: 17.4, lng: 78.3, within: true }, 'MEP clear', 'data:image/png;base64,sig', 'MEP Eng. Bob');
+`);
+
+assert.strictEqual(evalInVM("p3.status"), 'Pending Parallel Approval', 'Permit must stay in Pending Parallel Approval after MEP approves');
+assert.strictEqual(evalInVM("p3.approvals.mep.status"), 'approved', 'MEP slot is approved');
+
+// 2. P&M rejects while IT is still pending
+evalInVM(`
+currentUser = { key: 'pm', role: 'pm', name: 'P&M Eng. Charlie', uid: 'uid-pm-01' };
+rejectPermitStage(p3, 'pm', { lat: 17.4, lng: 78.3, within: true }, 'Need hydraulic excavator test certificate', 'data:image/png;base64,sig', 'P&M Eng. Charlie');
+`);
+
+assert.strictEqual(evalInVM("p3.status"), 'Pending Parallel Approval', 'Permit MUST REMAIN in Pending Parallel Approval even after P&M rejects because IT is still pending!');
+assert.strictEqual(evalInVM("p3.approvals.pm.status"), 'rejected', 'P&M slot is marked as rejected');
+assert.strictEqual(evalInVM("p3.approvals.it.status"), 'pending', 'IT slot is still pending');
+console.log('  ✓ Permit remains in Pending Parallel Approval after P&M rejection (non-blocking)');
+
+// 3. Verify IT In-Charge still sees active buttons and can approve
+evalInVM("currentUser = { key: 'it-in-charge', role: 'it-in-charge', name: 'Dracula', uid: 'uid-dracula-01' };");
+const itPanel = evalInVM("actionPanelHtml(p3);");
+assert(itPanel.includes('Step 3: Parallel Approval Required'), 'IT In-Charge MUST see active action card even after P&M rejection');
+assert(itPanel.includes('Approve') && itPanel.includes('Reject'), 'IT In-Charge MUST see active action buttons');
+assert.strictEqual(evalInVM("roleCanActOnChain(p3.approvals, 'it-in-charge')"), true, 'roleCanActOnChain must return true for IT In-Charge');
+console.log('  ✓ IT In-Charge can still view active action card and action buttons');
+
+// 4. IT In-Charge approves (completing all 3 decisions)
+evalInVM(`
+approvePermitStage(p3, 'it-in-charge', { lat: 17.4, lng: 78.3, within: true }, 'Fiber lines cleared', 'data:image/png;base64,sig', 'Dracula');
+`);
+
+assert.strictEqual(evalInVM("p3.status"), 'Returned for Correction', 'Now that all 3 parallel slots decided and P&M was rejected, status must transition to Returned for Correction');
+assert(evalInVM("p3.returnReason").includes('Need hydraulic excavator test certificate'), 'Return reason must capture P&M rejection reason');
+console.log('  ✓ Permit transitions to Returned for Correction after all 3 parallel slots complete review');
+
 console.log('\n================================================================');
 console.log('ALL PARALLEL GATE & OPTION B REGRESSION TESTS PASSED (100%)');
 console.log('================================================================\n');

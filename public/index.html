@@ -8966,6 +8966,10 @@
             const rawRk = String(roleKey || '').trim().toLowerCase();
             const normRk = normalizeRoleKey(roleKey) || rawRk;
             if (normRk === 'super-admin') return true;
+            // Site Engineer must NEVER see Draft permits anywhere
+            if (normRk === 'site-engineer' && p && p.status === 'Draft') {
+                return false;
+            }
             // Creator & Permittee Visibility: Author must always see their own permits across ALL lifecycle statuses
             if (currentUser && p) {
                 const isCreator = (
@@ -10627,8 +10631,9 @@
             } else if (ctx.lastError) {
                 html += '<div class="form-error" style="display:flex;margin-top:10px;"><i class="fa-solid fa-triangle-exclamation"></i> <b>GPS Access Error:</b> ' + escapeHtml(ctx.lastError) + '</div>';
             }
-            html += '<div class="gps-sim-btns" style="margin-top:12px;">' +
+            html += '<div class="gps-sim-btns" style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">' +
                 '<button type="button" class="btn btn-sm btn-primary" onclick="tryRealGPS()"><i class="fa-solid fa-location-crosshairs"></i> ' + (ctx.lastError ? 'Retry Live Device GPS Capture' : 'Capture Live Device GPS') + '</button>' +
+                '<button type="button" class="btn btn-sm btn-ghost" onclick="simulateGPS(true)" style="border:1px dashed var(--orange);color:var(--orange);"><i class="fa-solid fa-flask"></i> Snap to Worksite (Test Mode)</button>' +
                 '</div>';
             document.getElementById('gpsModalBody').innerHTML = html;
         }
@@ -10659,7 +10664,8 @@
                 gpsModalCtx.captured = computeCapture(pos.coords.latitude, pos.coords.longitude, 'Live Device GPS Reading', pos.coords.accuracy, pos.timestamp);
                 delete gpsModalCtx.lastError;
                 if (confirmBtn) {
-                    confirmBtn.disabled = Boolean(gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within);
+                    const allowTesting = (typeof isTestEnvironment === 'function' && isTestEnvironment()) || (window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess);
+                    confirmBtn.disabled = Boolean(!allowTesting && gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within);
                 }
                 renderGPSModalBody();
             }, function (err) {
@@ -10679,7 +10685,8 @@
             if (onSite) { lat = site.lat + (Math.random() - 0.5) * 0.0002; lng = site.lng + (Math.random() - 0.5) * 0.0002; }
             else { lat = site.lat + 0.015; lng = site.lng + 0.015; }
             gpsModalCtx.captured = computeCapture(lat, lng, onSite ? (site.address || 'Worksite vicinity') : 'Remote location');
-            document.getElementById('gpsConfirmBtn').disabled = gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within;
+            const allowTesting = (typeof isTestEnvironment === 'function' && isTestEnvironment()) || (window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess);
+            document.getElementById('gpsConfirmBtn').disabled = Boolean(!allowTesting && gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within);
             renderGPSModalBody();
         }
         function confirmGPS() {
@@ -10687,7 +10694,8 @@
                 showToast('Please capture your live device GPS location first.', 'warn');
                 return;
             }
-            if (gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within) {
+            const allowTesting = (typeof isTestEnvironment === 'function' && isTestEnvironment()) || (window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess);
+            if (!allowTesting && gpsModalCtx.gateEnabled && !gpsModalCtx.captured.within) {
                 showToast('Geofence Violation: Your captured GPS coordinates are outside the authorized worksite boundary.', 'err');
                 return;
             }
@@ -11014,6 +11022,16 @@
             }
             const notesEl = document.getElementById('rectifyNotesInput');
             const notes = notesEl ? notesEl.value.trim() : '';
+            if (window.wiz && window.wiz.__originalSnapshot && (window.wiz.__permitId === p.id || (draft && draft.id === p.id))) {
+                const currentSnap = JSON.stringify(getPermitEditableSnapshot(p));
+                if (currentSnap === window.wiz.__originalSnapshot || !notes) {
+                    showToast('Mandatory Edit Required: Please modify/rectify the rejected permit details before re-submitting.', 'warn');
+                    return false;
+                }
+            } else if (!notes) {
+                showToast('Mandatory Edit Required: Please modify/rectify the rejected permit details before re-submitting.', 'warn');
+                return false;
+            }
             p.rectificationNotes = notes;
             p.resubmittedAt = nowTime();
             resetExcavationParallelSlotsOnResubmit(p);
@@ -11387,6 +11405,10 @@
                 if ((!chain.ehsManager || chain.ehsManager.status !== 'approved') && (!chain.ehsOfficer || chain.ehsOfficer.status !== 'approved')) return 'ehs';
                 return 'complete';
             }
+            const mepPend = !chain.mep || chain.mep.status === 'pending';
+            const pmPend = !chain.pm || chain.pm.status === 'pending';
+            const itPend = !chain.it || chain.it.status === 'pending';
+            if (mepPend || pmPend || itPend) return 'parallel';
             if (chain.mep.status === 'rejected' || chain.pm.status === 'rejected' || chain.it.status === 'rejected') return 'rejected-parallel';
             if (chain.sectionHead.status === 'rejected' || chain.sectionHead.status === 'cancelled') return 'rejected-sectionhead';
             if (chain.ehsManager.status === 'rejected' || chain.ehsManager.status === 'cancelled' || chain.ehsOfficer.status === 'rejected' || chain.ehsOfficer.status === 'cancelled') return 'rejected-ehs';
@@ -12176,6 +12198,42 @@
                     if (child && !['Active', 'Extended', 'Approved – Scheduled'].includes(child.status)) activatePermit(child);
                 }
                 activatePermit(p);
+            } else if (newStage === 'rejected-parallel') {
+                p.status = 'Returned for Correction';
+                const a = p.approvals || {};
+                const rejReasons = [];
+                const rejectors = [];
+                if (a.mep && a.mep.status === 'rejected') { rejReasons.push('MEP: ' + (a.mep.comment || 'Clearance rejected')); rejectors.push('MEP (' + (a.mep.by || '') + ')'); }
+                if (a.pm && a.pm.status === 'rejected') { rejReasons.push('P&M: ' + (a.pm.comment || 'Clearance rejected')); rejectors.push('P&M (' + (a.pm.by || '') + ')'); }
+                if (a.it && a.it.status === 'rejected') { rejReasons.push('IT: ' + (a.it.comment || 'Clearance rejected')); rejectors.push('IT In-Charge (' + (a.it.by || '') + ')'); }
+                p.returnReason = rejReasons.join(' | ') || comment;
+                p.returnedBy = rejectors.join(', ') || (roleInfo(roleKey).label + ' (' + effectiveSigner + ')');
+                p.returnedByRoleKey = 'parallel';
+                p.rejectionOrigin = {
+                    workflow: 'initial',
+                    roleKey: 'parallel',
+                    roleLabel: 'Parallel Gate (' + rejectors.join(', ') + ')',
+                    by: p.returnedBy,
+                    at: nowTime(),
+                    comment: p.returnReason
+                };
+                p.returnedAt = nowTime();
+                p._preCorrectionSnapshot = snapshotDisciplineFields(p);
+                logActivity(p, 'Parallel clearance review concluded with rejections by ' + p.returnedBy + '. Permit RETURNED FOR CORRECTION: ' + p.returnReason);
+                notify(['site-supervisor'], pLabel(p) + ' parallel clearance review concluded with rejections by ' + p.returnedBy + '. Please rectify and re-submit.', 'warn', p.id);
+                notify(stakeholdersFor(p), pLabel(p) + ' returned following parallel clearance review — correction required: "' + p.returnReason + '"', 'error', p.id);
+                showToast('Parallel review concluded with rejections. Permit returned to Site Supervisor for correction.', 'warn');
+                saveState();
+                if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+                return;
+            } else if (newStage === 'parallel') {
+                p.status = 'Pending Parallel Approval';
+                logActivity(p, roleInfo(roleKey).label + ' (' + effectiveSigner + ') approved at this stage.' + (gps ? (' GPS verified within ' + prjRad + 'm.') : ''));
+                notify(stakeholdersFor(p), pLabel(p) + ' — ' + roleInfo(roleKey).label + ' approval recorded. Awaiting remaining parallel clearances.', 'info', p.id);
+                showToast('Approval recorded for ' + roleInfo(roleKey).label + '.', 'ok');
+                saveState();
+                if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+                return;
             } else {
                 executeServerTransition(p, { action: 'STAGE_APPROVED', targetStatus: p.status, gps, comments: comment });
                 notify(stakeholdersFor(p), pLabel(p) + ' — ' + roleInfo(roleKey).label + ' approval recorded. Awaiting remaining clearances.', 'info', p.id);
@@ -12231,6 +12289,49 @@
                 p.cancelledAt = nowTime();
                 logActivity(p, 'Permit CANCELLED by ' + roleInfo(roleKey).label + ' (' + effectiveSigner + '): ' + comment);
                 notify(stakeholdersFor(p), pLabel(p) + ' CANCELLED by ' + roleInfo(roleKey).label + '. Stop work immediately. Official report PDF generated.', 'error', p.id);
+            } else if (ptypeOf(p) === 'excavation' && (p.status === 'Pending Parallel Approval') && ['mep', 'pm', 'it'].includes(normalizeRoleKey(roleKey))) {
+                const a = p.approvals || {};
+                const mepPending = !a.mep || a.mep.status === 'pending';
+                const pmPending = !a.pm || a.pm.status === 'pending';
+                const itPending = !a.it || a.it.status === 'pending';
+                const remainingPends = [];
+                if (mepPending) remainingPends.push('MEP');
+                if (pmPending) remainingPends.push('P&M');
+                if (itPending) remainingPends.push('IT In-Charge');
+
+                if (remainingPends.length > 0) {
+                    p.status = 'Pending Parallel Approval';
+                    logActivity(p, roleInfo(roleKey).label + ' (' + effectiveSigner + ') rejected clearance: ' + comment + '. Permit remains in parallel review awaiting ' + remainingPends.join(', ') + '.');
+                    notify(stakeholdersFor(p), pLabel(p) + ' — ' + roleInfo(roleKey).label + ' clearance rejected. Awaiting decisions from ' + remainingPends.join(', ') + '.', 'warn', p.id);
+                    showToast('Rejection recorded for ' + roleInfo(roleKey).label + '. Awaiting decisions from remaining parallel disciplines (' + remainingPends.join(', ') + ').', 'warn');
+                    if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+                    saveState();
+                    return;
+                }
+
+                p.status = 'Returned for Correction';
+                const rejReasons = [];
+                const rejectors = [];
+                if (a.mep && a.mep.status === 'rejected') { rejReasons.push('MEP: ' + (a.mep.comment || 'Clearance rejected')); rejectors.push('MEP (' + (a.mep.by || '') + ')'); }
+                if (a.pm && a.pm.status === 'rejected') { rejReasons.push('P&M: ' + (a.pm.comment || 'Clearance rejected')); rejectors.push('P&M (' + (a.pm.by || '') + ')'); }
+                if (a.it && a.it.status === 'rejected') { rejReasons.push('IT: ' + (a.it.comment || 'Clearance rejected')); rejectors.push('IT In-Charge (' + (a.it.by || '') + ')'); }
+                p.returnReason = rejReasons.join(' | ') || comment;
+                p.returnedBy = rejectors.join(', ') || (roleInfo(roleKey).label + ' (' + effectiveSigner + ')');
+                p.returnedByRoleKey = 'parallel';
+                p.rejectionOrigin = {
+                    workflow: 'initial',
+                    roleKey: 'parallel',
+                    roleLabel: 'Parallel Gate (' + rejectors.join(', ') + ')',
+                    by: effectiveSigner,
+                    at: nowTime(),
+                    comment: p.returnReason,
+                    gps: gps,
+                    sig: sig
+                };
+                p.returnedAt = nowTime();
+                logActivity(p, 'Permit returned following parallel clearance review by ' + p.returnedBy + ': ' + p.returnReason);
+                notify(['site-supervisor'], pLabel(p) + ' returned following parallel clearance review — correction required: "' + p.returnReason + '"', 'error', p.id);
+                notify(stakeholdersFor(p), pLabel(p) + ' returned following parallel clearance review — correction required: "' + p.returnReason + '"', 'error', p.id);
             } else {
                 p.status = 'Returned for Correction';
                 p.returnReason = comment;
@@ -12866,9 +12967,22 @@
                 showToast('Only the ' + getPermitInitiatorLabel(p) + ' can rectify and re-submit a returned permit.', 'err');
                 return false;
             }
+            const notesEl = document.getElementById('rectifyNotesInput');
+            const notes = (comment || (notesEl ? notesEl.value.trim() : '') || (p.rectificationNotes || '')).trim();
+            if (window.wiz && window.wiz.__originalSnapshot && (window.wiz.__permitId === p.id || (draft && draft.id === p.id))) {
+                const currentSnap = JSON.stringify(getPermitEditableSnapshot(p));
+                if (currentSnap === window.wiz.__originalSnapshot || !notes) {
+                    showToast('Mandatory Edit Required: Please modify/rectify the rejected permit details before re-submitting.', 'warn');
+                    return false;
+                }
+            } else if (!notes) {
+                showToast('Mandatory Edit Required: Please modify/rectify the rejected permit details before re-submitting.', 'warn');
+                return false;
+            }
             if (comment) {
                 p.resubmitComment = comment;
             }
+            p.rectificationNotes = notes;
             return resubmitReturnedPermit(p);
         }
 
@@ -18469,7 +18583,12 @@
                     showToast('Operating offline. Native IndexedDB persistence active; all writes queued safely.', 'warn');
                 }
             });
-            window.addEventListener('DOMContentLoaded', () => {
+            window.addEventListener('beforeunload', () => {
+            if (typeof autoSaveWizDraft === 'function' && typeof currentView !== 'undefined' && currentView === 'create') {
+                autoSaveWizDraft(true);
+            }
+        });
+        window.addEventListener('DOMContentLoaded', () => {
                 updateConnectivityUI(navigator.onLine);
             });
         }
@@ -19827,16 +19946,20 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const createTileDesc = sundayMode ? "Creation Locked on Sunday" : "Permittee: Initiate new permit";
                 const createTileCls = sundayMode ? "k-grey" : "k-orange";
 
+                // Exact Order: Drafts, Active, In Approval Chain, Closed, Extension Requests, Expired, Escalations, Notification Number
+                const escalationsCount = mine.filter(p => typeof isEscalated === 'function' && isEscalated(p)).length;
+                const unreadNotifsCount = notifsForCurrentUser().filter(n => !n.read).length;
+
                 html += '<div class="kpi-strip">' +
-                    kpiCard('k-grey', 'fa-file-pen', 'My Drafts', drafts.length, 'Not yet submitted', "filterRegisterAndGo('Draft')") +
+                    kpiCard('k-grey', 'fa-file-pen', 'Drafts', drafts.length, 'My Drafts &middot; In-progress', "filterRegisterAndGo('Draft')") +
+                    kpiCard('k-blue', 'fa-bolt', 'Active', active.length, 'Active Permits &middot; Open Observations (' + obs.length + ')', "filterRegisterAndGo('Active')") +
                     kpiCard('k-amber', 'fa-hourglass-half', 'In Approval Chain', pendingAppr.length, 'Across workflow stages', "goTo('register')") +
-                    kpiCard('k-blue', 'fa-bolt', 'Active Permits', active.length, 'Currently valid on site', "filterRegisterAndGo('Active')") +
-                    kpiCard('k-red', 'fa-triangle-exclamation', 'Open Observations', obs.length, 'Requires corrective response', "filterRegisterAndGo('Active – Observation Open')") +
+                    kpiCard('k-green', 'fa-box-archive', 'Closed', closed.length, 'Surrendered / archived', "filterRegisterAndGo('Completed (Surrendered)')") +
                     '</div><div class="kpi-strip">' +
                     kpiCard('k-purple', 'fa-stopwatch', 'Extension Requests', extReq.length, 'Under review by Section Head / EHS', "goTo('register')") +
-                    kpiCard('k-green', 'fa-box-archive', 'Closed Permits', closed.length, 'Surrendered / archived', "filterRegisterAndGo('Completed (Surrendered)')") +
-                    kpiCard(createTileCls, createTileIcon, sundayMode ? 'Sunday Lockout' : 'Create Permit', sundayMode ? 'LOCKED' : '', createTileDesc, createTileOnclick) +
-                    kpiCard('k-teal', 'fa-bell', 'Notifications', notifsForCurrentUser().length, 'View all alerts', "goTo('notifications')") +
+                    kpiCard('k-red', 'fa-triangle-exclamation', 'Expired', expired.length, 'Permits elapsed or auto-closed', "filterRegisterAndGo('Expired')") +
+                    kpiCard('k-orange', 'fa-triangle-exclamation', 'Escalations', escalationsCount, 'Overdue SLA escalations', "goTo('register')") +
+                    kpiCard('k-teal', 'fa-bell', 'Notification Number', unreadNotifsCount, notifsForCurrentUser().length + ' Total Alerts', "goTo('notifications')") +
                     '</div>';
 
                 // 3. Sunday Permitted Closure Surface (If Sunday and active permits exist)
@@ -19886,16 +20009,31 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 const pendingAck = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && (p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment' || p.status === 'Observation Pending Site Engineer Acknowledgment'));
                 const active = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Active', 'Extended'].includes(p.status));
                 const closed = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status));
-                if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.dashboards && APP_CONFIG.dashboards.siteEngineer) {
-                    const defs = APP_CONFIG.dashboards.siteEngineer;
-                    html += '<div class="kpi-strip">' + defs.map(d => kpiCard(d.cls, d.icon, d.label, typeof d.count === 'function' ? d.count() : d.count, typeof d.foot === 'function' ? d.foot() : d.foot, d.action)).join('') + '</div>';
-                } else {
-                    html += '<div class="kpi-strip">' +
-                        kpiCard('k-amber', 'fa-clipboard-check', 'Pending Acknowledgment', pendingAck.length, 'Step 2 & Obs: Acknowledge', "goTo('register')") +
-                        kpiCard('k-green', 'fa-bolt', 'Active On-Site', active.length, 'Work in progress', "filterRegisterAndGo('Active')") +
-                        kpiCard('k-grey', 'fa-box-archive', 'Surrendered Permits', closed.length, 'Closed safely', "filterRegisterAndGo('Completed (Surrendered)')") +
-                        '</div>';
-                }
+                // Exact Order: Pending Acknowledgements, Pending Reacknowledgements, Pending Extension Approval, Rejected and Returned Permits, Active, In Approval Chain, Surrendered, Expired, Escalations, Notification Number
+                const pendingAckCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && p.status === 'Pending Site Engineer Acknowledgment').length;
+                const pendingReackCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && (p.status === 'Pending Site Engineer Re-Acknowledgment' || p.status === 'Observation Pending Site Engineer Acknowledgment')).length;
+                const pendingExtCount = pendingExtensionsForRole('site-engineer').length;
+                const rejectedReturnedCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && (p.status === 'Returned for Correction' || p.status === 'Rejected')).length;
+                const activeCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && ['Active', 'Extended'].includes(p.status)).length;
+                const inChainCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && !['Draft', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender', 'Auto-Closed', 'Expired', 'Expired Before Activation', 'Rejected', 'Cancelled', 'Returned for Correction'].includes(p.status)).length;
+                const surrenderedCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status)).length;
+                const expiredCount = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && ['Auto-Closed', 'Expired', 'Expired Before Activation'].includes(p.status)).length;
+                const seEscalations = PERMITS.filter(p => isPermitVisibleToRole(p, 'site-engineer') && typeof isEscalated === 'function' && isEscalated(p)).length;
+                const seUnreadNotifs = notifsForCurrentUser().filter(n => !n.read).length;
+
+                html += '<div class="kpi-strip">' +
+                    kpiCard('k-amber', 'fa-clipboard-check', 'Pending Acknowledgements', pendingAckCount, 'Pending Acknowledgment &middot; Step 2', "goTo('register')") +
+                    kpiCard('k-orange', 'fa-rotate-left', 'Pending Reacknowledgements', pendingReackCount, 'Re-verification required', "goTo('register')") +
+                    kpiCard('k-purple', 'fa-stopwatch', 'Pending Extension Approval', pendingExtCount, 'Extension requests', "goTo('register')") +
+                    kpiCard('k-red', 'fa-triangle-exclamation', 'Rejected and Returned Permits', rejectedReturnedCount, 'Returned / rejected', "goTo('register')") +
+                    '</div><div class="kpi-strip">' +
+                    kpiCard('k-green', 'fa-bolt', 'Active', activeCount, 'Active On-Site &middot; Work in progress', "filterRegisterAndGo('Active')") +
+                    kpiCard('k-blue', 'fa-hourglass-half', 'In Approval Chain', inChainCount, 'Moving through workflow', "goTo('register')") +
+                    kpiCard('k-grey', 'fa-box-archive', 'Surrendered', surrenderedCount, 'Closed safely', "filterRegisterAndGo('Completed (Surrendered)')") +
+                    kpiCard('k-red', 'fa-calendar-xmark', 'Expired', expiredCount, 'Expired permits', "goTo('register')") +
+                    kpiCard('k-orange', 'fa-bell-concierge', 'Escalations', seEscalations, 'Overdue SLA escalations', "goTo('register')") +
+                    kpiCard('k-teal', 'fa-bell', 'Notification Number', seUnreadNotifs, notifsForCurrentUser().length + ' Total Alerts', "goTo('notifications')") +
+                    '</div>';
 
                 const actionsHtml = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.dashboards && APP_CONFIG.dashboards.siteEngineerActions)
                     ? renderDashboardActions(APP_CONFIG.dashboards.siteEngineerActions)
@@ -19929,17 +20067,26 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                         activeScopeLabel = PTYPE_META[scope].short + ' — currently on site';
                     }
                 }
-                if (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.dashboards && APP_CONFIG.dashboards.approvers) {
-                    const defs = APP_CONFIG.dashboards.approvers;
-                    html += '<div class="kpi-strip">' + defs.map(d => kpiCard(d.cls, d.icon, d.label, typeof d.count === 'function' ? d.count(rk, scope) : d.count, typeof d.foot === 'function' ? d.foot(rk, scope) : d.foot, d.action)).join('') + '</div>';
-                } else {
-                    html += '<div class="kpi-strip">' +
-                        kpiCard('k-amber', 'fa-hourglass-half', 'Pending My Approval', pending.length, scopeLabel, "goTo('register')") +
-                        kpiCard('k-purple', 'fa-stopwatch', 'Pending Extension Approval', extPending.length, 'Extension requests', "goTo('register')") +
-                        kpiCard('k-blue', 'fa-bolt', 'Active Permits', active.length, activeScopeLabel, "goTo('register')") +
-                        kpiCard('k-green', 'fa-circle-check', 'Approved by Me', approvedByMe.length, 'All-time', "goTo('register')") +
-                        '</div>';
-                }
+                // Exact Order: Pending Approval, Pending Extension Approval, In Approval Chain, Active, Surrendered, Rejected, Expired, Escalations, Notification Number
+                const inChainApprover = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && !['Draft', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender', 'Auto-Closed', 'Expired', 'Expired Before Activation', 'Rejected', 'Cancelled', 'Returned for Correction'].includes(p.status) && permitMatchesScope(p, scope)).length;
+                const surrenderedApprover = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Closed', 'Auto-Closed', 'Completed (Surrendered)', 'Closed – Pending Surrender'].includes(p.status) && permitMatchesScope(p, scope)).length;
+                const rejectedApprover = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Rejected', 'Returned for Correction'].includes(p.status) && permitMatchesScope(p, scope)).length;
+                const expiredApprover = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && ['Auto-Closed', 'Expired', 'Expired Before Activation'].includes(p.status) && permitMatchesScope(p, scope)).length;
+                const escalationsApprover = PERMITS.filter(p => isPermitVisibleToRole(p, rk) && typeof isEscalated === 'function' && isEscalated(p) && permitMatchesScope(p, scope)).length;
+                const unreadNotifsApprover = notifsForCurrentUser().filter(n => !n.read).length;
+
+                html += '<div class="kpi-strip">' +
+                    kpiCard('k-amber', 'fa-hourglass-half', 'Pending Approval', pending.length, 'Pending My Approval &middot; ' + scopeLabel, "goTo('register')") +
+                    kpiCard('k-purple', 'fa-stopwatch', 'Pending Extension Approval', extPending.length, 'Extension requests', "goTo('register')") +
+                    kpiCard('k-blue', 'fa-diagram-project', 'In Approval Chain', inChainApprover, 'Across workflow stages', "goTo('register')") +
+                    kpiCard('k-green', 'fa-bolt', 'Active', active.length, 'Active Permits &middot; ' + activeScopeLabel + ' &middot; Approved by Me (' + approvedByMe.length + ')', "goTo('register')") +
+                    '</div><div class="kpi-strip">' +
+                    kpiCard('k-grey', 'fa-box-archive', 'Surrendered', surrenderedApprover, 'Surrendered safely', "filterRegisterAndGo('Completed (Surrendered)')") +
+                    kpiCard('k-red', 'fa-circle-xmark', 'Rejected', rejectedApprover, 'Returned / rejected', "goTo('register')") +
+                    kpiCard('k-purple', 'fa-calendar-xmark', 'Expired', expiredApprover, 'Expired permits', "goTo('register')") +
+                    kpiCard('k-orange', 'fa-triangle-exclamation', 'Escalations', escalationsApprover, 'Overdue SLA escalations', "goTo('register')") +
+                    kpiCard('k-teal', 'fa-bell', 'Notification Number', unreadNotifsApprover, notifsForCurrentUser().length + ' Total Alerts', "goTo('notifications')") +
+                    '</div>';
 
                 const actionsHtml = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.dashboards && APP_CONFIG.dashboards.approverActions)
                     ? renderDashboardActions(APP_CONFIG.dashboards.approverActions)
@@ -20304,6 +20451,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const tf = document.getElementById('regTypeFilter') ? document.getElementById('regTypeFilter').value : '';
             const scope = roleTypeScope(currentUser.key);
             let rows = PERMITS.filter(p => {
+                if (currentUser && currentUser.key === 'site-engineer' && p.status === 'Draft') return false;
                 if (currentUser && currentUser.key !== 'super-admin' && !(typeof window !== 'undefined' && window.__TEST_MODE__) && !(typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__)) {
                     const userProj = normalizeProjectId(currentUser.projectId || currentUser.projectName || '');
                     const permitProj = normalizeProjectId(p.projectId || p.project || '');
@@ -20568,6 +20716,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             }, 30);
         }
         function resumeDraft(p) {
+            if (currentUser && currentUser.key === 'site-engineer') return;
             correctionMode = false;
             draft = p;
             if (!draft.ptype) draft.ptype = 'excavation';
@@ -20589,8 +20738,37 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             renderWizStep(false);
             showToast('Draft ' + p.id + ' resumed. Continue where you left off.', 'ok');
         }
+        function getPermitEditableSnapshot(p) {
+            if (!p) return {};
+            return {
+                checklist: p.checklist ? JSON.parse(JSON.stringify(p.checklist)) : {},
+                comments: p.comments || '',
+                photos: p.photos || [],
+                attachments: p.attachments || [],
+                hazardControls: p.hazardControls ? JSON.parse(JSON.stringify(p.hazardControls)) : {},
+                specs: p.specs ? JSON.parse(JSON.stringify(p.specs)) : {},
+                equipment: p.equipment ? JSON.parse(JSON.stringify(p.equipment)) : {},
+                excavationSpecs: p.excavationSpecs ? JSON.parse(JSON.stringify(p.excavationSpecs)) : {}
+            };
+        }
+
+        function startRectifyPermit(id) {
+            const p = PERMITS.find(x => x.id === id);
+            if (!p) return;
+            window.wiz = window.wiz || {};
+            window.wiz.__originalSnapshot = JSON.stringify(getPermitEditableSnapshot(p));
+            window.wiz.__permitId = p.id;
+            openCorrectionMode(id);
+        }
+
         function openCorrectionMode(id) {
             const p = PERMITS.find(x => x.id === id);
+            if (!p) return;
+            window.wiz = window.wiz || {};
+            if (!window.wiz.__originalSnapshot || window.wiz.__permitId !== p.id) {
+                window.wiz.__originalSnapshot = JSON.stringify(getPermitEditableSnapshot(p));
+                window.wiz.__permitId = p.id;
+            }
             if (!p) return;
             correctionMode = true;
             draft = p;
@@ -20776,7 +20954,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const curCfg = (typeof APP_CONFIG !== 'undefined' && APP_CONFIG.permitTypes && APP_CONFIG.permitTypes[curPt]) || pMeta(draft) || {};
             const curIcon = curCfg.icon || 'fa-file-circle-plus';
             if (cvt) cvt.innerHTML = correctionMode ? '<i class="fa-solid fa-pen-to-square"></i> Correct &amp; Re-submit Permit' : '<i class="fa-solid ' + curIcon + '"></i> Create ' + (curCfg.short || pMeta(draft).short) + ' Permit';
-            if (cvs) cvs.innerHTML = correctionMode ? (draft.id + ' &middot; Returned for Correction &mdash; master data is locked; checklist, photos and attachments are editable') : (pMeta(draft).code + ' &middot; Permit to Work &mdash; ' + pMeta(draft).name + ' &middot; ' + pMeta(draft).form + ' Rev.01');
+            if (cvs) cvs.innerHTML = (correctionMode ? (draft.id + ' &middot; Returned for Correction &mdash; master data is locked; checklist, photos and attachments are editable') : (pMeta(draft).code + ' &middot; Permit to Work &mdash; ' + pMeta(draft).name + ' &middot; ' + pMeta(draft).form + ' Rev.01')) + '<span id="wizAutoSaveIndicator" style="font-size:11px;color:var(--text-muted);font-weight:600;margin-left:8px;"></span>';
             const body = document.getElementById('wizardBody');
             if (wizStep === 1) body.innerHTML = step1Html();
             if (wizStep === 2) body.innerHTML = step2Html();
@@ -20786,6 +20964,12 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             if (wizStep === 2) wireStep2();
             if (wizStep === 3) wireStep3();
             if (wizStep === 4) wireStep4();
+            if (body) {
+                body.querySelectorAll('input, select, textarea').forEach(input => {
+                    input.addEventListener('input', () => { if (typeof autoSaveWizDraft === 'function') autoSaveWizDraft(); });
+                    input.addEventListener('change', () => { if (typeof autoSaveWizDraft === 'function') autoSaveWizDraft(); });
+                });
+            }
             updateNextButtonState();
 
             if (shouldPreserve && typeof window !== 'undefined') {
@@ -21072,9 +21256,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<label class="radio-pill ' + (!isOpBlasting ? 'sel' : '') + '"><input type="radio" name="drillingBlastingType" value="drilling" ' + (!isOpBlasting ? 'checked' : '') + ' onchange="onDrillingBlastingTypeChange(\'drilling\')"' + disAttr + '> 🔩 Drilling</label>' +
                     '<label class="radio-pill ' + (isOpBlasting ? 'sel' : '') + '"><input type="radio" name="drillingBlastingType" value="blasting" ' + (isOpBlasting ? 'checked' : '') + ' onchange="onDrillingBlastingTypeChange(\'blasting\')"' + disAttr + '> 💥 Blasting</label>' +
                     '</div><div class="form-error" id="dbTypeError" style="display:none;"><i class="fa-solid fa-circle-exclamation"></i> Select either Drilling or Blasting.</div></div>' +
-                    '<div class="form-field full" id="ff-db-datetime"><label>Date &amp; Time of Blast <span class="req">*</span></label>' +
+                    '<div class="form-field full" id="ff-db-datetime"><label>' + (isOpBlasting ? 'Date &amp; Time of Blast' : 'Date &amp; Time of Drilling') + ' <span class="req">*</span></label>' +
                     '<input type="datetime-local" id="inDbDateTime" value="' + escapeHtml(draft.dbDateTime || '') + '" oninput="draft.dbDateTime=this.value;validateWizStep(1)"' + disAttr + '>' +
-                    '<div class="form-error"><i class="fa-solid fa-circle-exclamation"></i> Date &amp; Time of Blast is mandatory.</div></div>';
+                    '<div class="form-error" id="dbDateTimeError"><i class="fa-solid fa-circle-exclamation"></i> Date &amp; Time of ' + (isOpBlasting ? 'Blast' : 'Drilling') + ' is mandatory.</div></div>';
 
                 if (isOpBlasting) {
                     html += '<div class="form-field" id="ff-db-charge"><label>Amount of charge (Kg) <span class="req">*</span></label>' +
@@ -23197,12 +23381,14 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const isBlastingPermit = ptypeOf(draft) === 'blasting';
             const isBlastingOp = isBlastingPermit && (draft.drillingBlastingType === 'blasting' || draft.dbOperationType === 'Blasting');
             const isExc = ptypeOf(draft) === 'excavation';
-            const allow24Hr = isExc && window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess;
+            const allow24Hr = (isExc || isBlastingPermit) && window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess;
             if (allow24Hr) draft.isTestPermit = true;
             const maxEndMin = allow24Hr ? (24 * 60) : (isBlastingOp ? (18 * 60 + 30) : OFFICE_END_MIN);
             const startCap = allow24Hr ? (23 * 60 + 50) : (isBlastingOp ? (18 * 60 + 20) : START_LATEST_MIN);
+            const isFutureDate = !!(draft.validTillDate && draft.validTillDate > istDateStr());
+            const earliestStartMin = isBlastingOp ? (6 * 60) : OFFICE_START_MIN;
 
-            let firstStart = allow24Hr ? 0 : (isSundayPermit ? OFFICE_START_MIN : Math.max(OFFICE_START_MIN, Math.ceil((nowMin + 1) / 10) * 10));
+            let firstStart = allow24Hr ? 0 : (isSundayPermit || isFutureDate ? earliestStartMin : Math.max(earliestStartMin, Math.ceil((nowMin + 1) / 10) * 10));
             let startOpts = '';
             if (isNightShift) {
                 const nightStarts = ['20:30', '21:00', '21:30', '22:00', '22:30', '23:00'];
@@ -23210,7 +23396,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             } else {
                 for (let m = firstStart; m <= startCap; m += 10) {
                     const v = minutesToHHMM(m);
-                    startOpts += '<option value="' + v + '" ' + (draft.startTime === v ? 'selected' : '') + '>' + v + ((isSundayPermit || allow24Hr || m <= nowMin) ? '' : ' &nbsp;(in ' + fmtDur(m - nowMin) + ')') + '</option>';
+                    startOpts += '<option value="' + v + '" ' + (draft.startTime === v ? 'selected' : '') + '>' + v + ((isSundayPermit || allow24Hr || isFutureDate || m <= nowMin) ? '' : ' &nbsp;(in ' + fmtDur(m - nowMin) + ')') + '</option>';
                 }
             }
             const noStartSlots = !isNightShift && !startOpts;
@@ -23227,7 +23413,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             }
             const displayWorkDate = isSundayPermit ? (draft.validTillDate || getNextSundayDateStr()) : draft.validTillDate;
             const bannerHtml = allow24Hr
-                ? '<div class="section-banner" style="background:#EEF2FF;border-left:4px solid #6366F1;color:#3730A3;"><i class="fa-solid fa-flask" style="color:#6366F1;"></i> <b>24-Hour Testing Access Mode Active:</b> You can create and test this Excavation permit around the clock (00:00–23:50 IST). Work window will be saved as a test permit.</div>'
+                ? '<div class="section-banner" style="background:#EEF2FF;border-left:4px solid #6366F1;color:#3730A3;"><i class="fa-solid fa-flask" style="color:#6366F1;"></i> <b>24-Hour Testing Access Mode Active:</b> You can create and test this permit around the clock (00:00–23:50 IST). Work window will be saved as a test permit.</div>'
                 : isSundayPermit
                 ? '<div class="section-banner" style="background:#FEF3C7;border-left:4px solid #D97706;color:#92400E;"><i class="fa-solid fa-calendar-day" style="color:#D97706;"></i> <b>Sunday Work Scheduling (Statutory Flow):</b> This permit is prepared on Saturday for Sunday execution (<b>' + fmtDate(displayWorkDate) + '</b>). Planned working hours are <b>08:30 to 19:30 IST</b>. Select Sunday planned Start Time and End Time. <b>Permit execution, closure, and surrender occur strictly on Sunday as per scheduled validity.</b></div>'
                 : isNightShift
@@ -23236,9 +23422,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 ? '<div class="section-banner" style="background:#FFF3E0;border-left:4px solid #E65100;color:#BF360C;"><i class="fa-solid fa-sun" style="color:#E65100;"></i> <b>Statutory Sunset Hard Stop:</b> Blasting operations must conclude by <b>18:30 IST</b> (Sunset hard stop rule). Select planned Start Time (up to 18:20) and End Time (strictly capped at 18:30 IST).</div>'
                 : '<div class="section-banner"><i class="fa-solid fa-clock"></i> Office working hours are 08:30 to 19:30 IST. Select the <b>planned Start Time</b> (08:30&ndash;18:30, 10-minute steps) and the <b>End Time</b> (up to 19:30). The End Time must always be later than the Start Time. If your work needs more time later, request an Extension once the permit is Active.</div>';
 
-            const startDateLabel = isSundayPermit ? 'Scheduled Work Date (Sunday, IST)' : 'Start Date (auto &mdash; today, IST)';
-            const startDateVal = isSundayPermit ? fmtDate(displayWorkDate) : fmtDate(nowTime());
-            const validDateVal = fmtDate(displayWorkDate) + (isSundayPermit ? ' (Sunday execution & closure only)' : ' (today only)');
+            const startDateLabel = isSundayPermit ? 'Scheduled Work Date (Sunday, IST)' : (isFutureDate ? 'Scheduled Work Date (IST)' : 'Start Date (auto &mdash; today, IST)');
+            const startDateVal = (isSundayPermit || isFutureDate) ? fmtDate(displayWorkDate) : fmtDate(nowTime());
+            const validDateVal = fmtDate(displayWorkDate) + (isSundayPermit ? ' (Sunday execution & closure only)' : (isFutureDate ? ' (Scheduled date)' : ' (today only)'));
 
             return bannerHtml +
                 '<div class="form-grid">' +
@@ -23951,7 +24137,49 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 } else if (isBlasting) {
                     const opType = draft.drillingBlastingType || (draft.dbOperationType ? draft.dbOperationType.toLowerCase() : '');
                     const opOk = opType === 'drilling' || opType === 'blasting';
-                    const dtOk = !!(draft.dbDateTime && draft.dbDateTime.trim());
+                    let dtOk = !!(draft.dbDateTime && draft.dbDateTime.trim());
+                    const dtErrEl = document.getElementById('dbDateTimeError');
+                    const allow24Hr = window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess;
+                    const isTestEnv = (typeof isTestEnvironment === 'function' && isTestEnvironment());
+
+                    if (!dtOk) {
+                        if (dtErrEl) dtErrEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Date &amp; Time of ' + (opType === 'blasting' ? 'Blast' : 'Drilling') + ' is mandatory.';
+                    } else {
+                        const raw = draft.dbDateTime.trim();
+                        const parts = raw.split(/[T ]/);
+                        const dStr = parts[0];
+                        const tStr = parts[1];
+                        if (!dStr || !tStr) {
+                            dtOk = false;
+                            if (dtErrEl) dtErrEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Enter a valid date and time (YYYY-MM-DD HH:MM).';
+                        } else {
+                            const [h, m] = tStr.split(':').map(Number);
+                            const tMin = (h || 0) * 60 + (m || 0);
+                            const todayStr = (typeof istDateStr === 'function') ? istDateStr() : new Date().toISOString().slice(0, 10);
+                            if (!isTestEnv && !allow24Hr && dStr < todayStr) {
+                                dtOk = false;
+                                if (dtErrEl) dtErrEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Operation date cannot be in the past.';
+                            } else if (opType === 'blasting') {
+                                if (!allow24Hr && (tMin < 6 * 60 || tMin > 18 * 60 + 30)) {
+                                    dtOk = false;
+                                    if (dtErrEl) dtErrEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Blasting operations must be scheduled during daylight hours between 06:00 and 18:30 IST (Sunset hard stop rule).';
+                                }
+                            } else if (opType === 'drilling') {
+                                if (!allow24Hr && (tMin < 6 * 60 || tMin > 20 * 60 + 30)) {
+                                    dtOk = false;
+                                    if (dtErrEl) dtErrEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Drilling operations must be scheduled between 06:00 and 20:30 IST.';
+                                }
+                            }
+                            if (dtOk) {
+                                draft.validTillDate = dStr;
+                                draft.scheduledDate = dStr;
+                                const timeStr = String(h || 0).padStart(2, '0') + ':' + String(m || 0).padStart(2, '0');
+                                if (!draft.startTime) {
+                                    draft.startTime = timeStr;
+                                }
+                            }
+                        }
+                    }
                     markField('ff-db-datetime', dtOk);
                     ok = ok && opOk && dtOk;
 
@@ -24317,12 +24545,23 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     ok = startOk && endOk;
                 } else {
                     let startOk = false, sMin = null;
+                    const allow24Hr = (isBlasting || ptypeOf(draft) === 'excavation') && window.APP_TESTING_CONFIG && window.APP_TESTING_CONFIG.enable24HrTestAccess;
+                    const isFutureDate = !!(draft.validTillDate && draft.validTillDate > istDateStr());
+                    const earliestAllowed = isOpBlasting ? (6 * 60) : OFFICE_START_MIN;
+                    const latestAllowed = allow24Hr ? (23 * 60 + 50) : (isOpBlasting ? (18 * 60 + 20) : START_LATEST_MIN);
                     if (!draft.startTime) { ok = false; }
                     else {
                         const sp = draft.startTime.split(':').map(Number); sMin = sp[0] * 60 + sp[1];
-                        if (sMin < OFFICE_START_MIN || sMin > START_LATEST_MIN) {
-                            ok = false; if (sErr) { sErr.style.display = 'flex'; sErr.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Planned Start Time must be between 08:30 and 18:30 IST.'; } markField('ff-starttime', false);
-                        } else if (!isSundayPermit && sMin < nowMin) {
+                        if (!allow24Hr && (sMin < earliestAllowed || sMin > latestAllowed)) {
+                            ok = false;
+                            if (sErr) {
+                                sErr.style.display = 'flex';
+                                sErr.innerHTML = isOpBlasting
+                                    ? '<i class="fa-solid fa-circle-exclamation"></i> Planned Start Time for Blasting must be between 06:00 and 18:20 IST.'
+                                    : '<i class="fa-solid fa-circle-exclamation"></i> Planned Start Time must be between 08:30 and 18:30 IST.';
+                            }
+                            markField('ff-starttime', false);
+                        } else if (!isSundayPermit && !isFutureDate && !allow24Hr && sMin < nowMin) {
                             ok = false; if (sErr) { sErr.style.display = 'flex'; sErr.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> Planned Start Time cannot be in the past (current time ' + minutesToHHMM(nowMin) + ' IST).'; } markField('ff-starttime', false);
                         } else { startOk = true; if (sErr) sErr.style.display = 'none'; markField('ff-starttime', true); }
                     }
@@ -24331,7 +24570,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                         const [h, m] = draft.validTillTime.split(':').map(Number);
                         const mins = h * 60 + m;
                         if (sMin !== null && mins <= sMin) { ok = false; if (errEl) { errEl.style.display = 'flex'; errEl.innerHTML = '<i class="fa-solid fa-circle-exclamation"></i> End Time must be later than the planned Start Time (' + draft.startTime + ').'; } markField('ff-validtime', false); }
-                        else if (mins > maxEndMin) {
+                        else if (!allow24Hr && mins > maxEndMin) {
                             ok = false;
                             if (errEl) {
                                 errEl.style.display = 'flex';
@@ -24571,11 +24810,47 @@ function trackerHtml(p) {
     function node(label, sub, state, onclickAttr, tooltip) {
         const click = onclickAttr ? (' onclick="' + onclickAttr + '" style="cursor:pointer;"') : '';
         const title = tooltip ? (' title="' + escapeHtml(tooltip) + '"') : '';
+        let displaySub = sub;
+        if (state === 'done') {
+            let appName = '';
+            let appTime = '';
+            const norm = String(label || '').toLowerCase();
+            let rec = null;
+            if (norm.includes('site supervisor') || norm.includes('electrician') || norm.includes('pre-fill') || norm.includes('blasting in-charge') || norm.includes('lift supervisor') || norm.includes('initiator') || norm.includes('applicant')) {
+                rec = { by: p.createdBy || (p.signature ? p.signature.by : ''), at: p.createdAt || (p.signature ? p.signature.at : null) };
+            } else if (norm.includes('site engineer')) {
+                if (p.siteEngineerAck && p.siteEngineerAck.by) rec = { by: p.siteEngineerAck.by, at: p.siteEngineerAck.at };
+                else if (a.siteEngineer && a.siteEngineer.by) rec = a.siteEngineer;
+            } else if (norm.includes('mep')) {
+                rec = a.mep;
+            } else if (norm.includes('p&m') || norm.includes('pm')) {
+                rec = a.pm;
+            } else if (norm.includes('it')) {
+                rec = a.it;
+            } else if (norm.includes('quality')) {
+                rec = a.qualityEngineer;
+            } else if (norm.includes('section head') || norm.includes('tower incharge') || norm.includes('excavation head')) {
+                rec = a.sectionHead;
+            } else if (norm.includes('project manager')) {
+                rec = a.projectManager;
+            } else if (norm.includes('ehs')) {
+                rec = (a.ehsManager && a.ehsManager.status === 'approved' && a.ehsManager.by) ? a.ehsManager : (a.ehsOfficer && a.ehsOfficer.status === 'approved' ? a.ehsOfficer : (a.ehsManager || a.ehsOfficer));
+            }
+            if (rec && rec.by) {
+                appName = rec.by;
+                appTime = rec.at ? (' · ' + (typeof fmtTime === 'function' ? fmtTime(rec.at) : '')) : '';
+            }
+            if (appName) {
+                displaySub = '✔ Approved · ' + appName + appTime;
+            } else if (!displaySub.includes('✔') && !displaySub.includes('Approved')) {
+                displaySub = '✔ Approved';
+            }
+        }
         return '<div class="tr-node ' + state + '"' + click + title + '><div class="tr-circ">' + 
             (state === 'done' ? '<i class="fa-solid fa-check"></i>' : 
              state === 'rejected' ? '<i class="fa-solid fa-xmark"></i>' : 
              (state === 'current' ? '<i class="fa-solid fa-hourglass-half"></i>' : '<i class="fa-solid fa-clock"></i>')) + 
-            '</div><div class="tr-label">' + label + '</div><div class="tr-sub">' + sub + '</div></div>';
+            '</div><div class="tr-label">' + label + '</div><div class="tr-sub">' + displaySub + '</div></div>';
     }
 
     let html = '<div class="tracker">';
@@ -25441,7 +25716,7 @@ function trackerHtml(p) {
                     html += '<div class="approval-action-card" style="border-color:#F59E0B;background:#FFFBEB;">' +
                         '<div class="aa-title" style="color:#B45309;"><i class="fa-solid fa-pen-to-square"></i> Permit Returned for Correction</div>' +
                         '<div class="aa-desc"><b>Returned by ' + escapeHtml(retBy) + ':</b> "' + escapeHtml(retReason) + '"<br><span style="font-size:11.5px;color:var(--text);margin-top:4px;display:block;"><b>Correction Rule:</b> Master data stays locked. You can edit the safety checklist, comments, and photos before re-submitting. Unchanged approvals persist!</span></div>' +
-                        '<div style="margin:12px 0 10px 0;"><button type="button" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;" onclick="openCorrectionMode(\'' + p.id + '\')"><i class="fa-solid fa-pen-to-square"></i> Edit Permit Fields / Checklist / Attachments</button></div>' +
+                        '<div style="margin:12px 0 10px 0;"><button type="button" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;background:#F97316;color:#fff;border-color:#EA580C;font-weight:700;" onclick="startRectifyPermit(\'' + p.id + '\')"><i class="fa-solid fa-pen-to-square"></i> ✏️ Edit &amp; Rectify Permit</button></div>' +
                         '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">Supervisor Rectification Notes:</label><input type="text" id="rectifyNotesInput" class="input" placeholder="e.g. Added additional barricading and slope verified as requested" style="width:100%;max-width:550px;"></div>' +
                         '<div style="display:flex;gap:10px;"><button type="button" class="btn btn-primary" onclick="' + (isExcavation ? 'resubmitExcavationCorrection(\'' + p.id + '\')' : 'resubmitPermit(\'' + p.id + '\', document.getElementById(\'rectifyNotesInput\') ? document.getElementById(\'rectifyNotesInput\').value : \'\')') + '"><i class="fa-solid fa-paper-plane"></i> ' + (isExcavation ? 'Re-Submit for Site Engineer Acknowledgment' : 'Re-Submit for Approval') + '</button></div>' +
                         '</div>';
@@ -25542,7 +25817,7 @@ function trackerHtml(p) {
                 const myField = CHAIN_ROLE_FIELD[normRk] || CHAIN_ROLE_FIELD[rk] || normRk;
                 const isParallelApprover = ['mep', 'pm', 'it'].includes(myField);
                 const mySlot = isParallelApprover && p.approvals && p.approvals[myField];
-                const canActParallel = isParallelApprover && mySlot && mySlot.status !== 'approved';
+                const canActParallel = isParallelApprover && mySlot && mySlot.status === 'pending';
 
                 if (canActParallel) {
                     html += '<div class="approval-action-card">' +
@@ -25553,11 +25828,18 @@ function trackerHtml(p) {
                         renderActionButton('reject', p.id, 'Reject &amp; Return to Supervisor') +
                         '</div></div>';
                 } else if (rk !== 'admin' && rk !== 'super-admin') {
-                    const pendingDisciplines = ['mep', 'pm', 'it'].filter(d => p.approvals && p.approvals[d] && p.approvals[d].status !== 'approved');
+                    const pendingDisciplines = ['mep', 'pm', 'it'].filter(d => p.approvals && p.approvals[d] && p.approvals[d].status === 'pending');
                     const pendingLabels = pendingDisciplines.map(d => roleInfo(d).label).join(', ');
+                    const mySlotStatus = isParallelApprover && mySlot && mySlot.status;
+                    let statusNote = '';
+                    if (mySlotStatus === 'approved') {
+                        statusNote = '<div style="margin-top:6px;font-size:12px;color:var(--green);font-weight:600;"><i class="fa-solid fa-circle-check"></i> Your clearance (' + roleInfo(myField).label + ') is approved and on file.</div>';
+                    } else if (mySlotStatus === 'rejected') {
+                        statusNote = '<div style="margin-top:6px;font-size:12px;color:var(--red);font-weight:600;"><i class="fa-solid fa-circle-xmark"></i> Your rejection (' + roleInfo(myField).label + ') is recorded' + (mySlot.comment ? (': "' + escapeHtml(mySlot.comment) + '"') : '') + '. Waiting for other parallel disciplines before return.</div>';
+                    }
                     html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
                         '<div class="aa-title"><i class="fa-solid fa-clock"></i> Step 3: Awaiting Parallel Discipline Clearances</div>' +
-                        '<div class="aa-desc">Parallel clearance required from: <b>' + (pendingLabels || 'MEP, P&amp;M, IT') + '</b>. Under production RBAC policy, please use the <b>Switch User</b> button in the top navigation bar to log in as the designated discipline engineer.</div>' +
+                        '<div class="aa-desc">Parallel clearance required from: <b>' + (pendingLabels || 'MEP, P&amp;M, IT') + '</b>. Under production RBAC policy, please use the <b>Switch User</b> button in the top navigation bar to log in as the designated discipline engineer.' + statusNote + '</div>' +
                         '</div>';
                 }
             }
@@ -26096,9 +26378,16 @@ function trackerHtml(p) {
                 }
                 const normRkForGps = normalizeRoleKey(rk || (currentUser && (currentUser.key || currentUser.role)));
                 const myFieldForGps = CHAIN_ROLE_FIELD[normRkForGps] || CHAIN_ROLE_FIELD[rk] || normRkForGps;
-                if (p.status === 'Pending Parallel Approval' && !['mep', 'pm', 'it'].includes(myFieldForGps)) {
-                    showToast('Access Denied: Only parallel discipline engineers can act at this stage.', 'err');
-                    return;
+                if (p.status === 'Pending Parallel Approval') {
+                    if (!['mep', 'pm', 'it'].includes(myFieldForGps)) {
+                        showToast('Access Denied: Only parallel discipline engineers can act at this stage.', 'err');
+                        return;
+                    }
+                    const mySlot = p.approvals && p.approvals[myFieldForGps];
+                    if (mySlot && mySlot.status !== 'pending') {
+                        showToast('You have already recorded your decision (' + mySlot.status + ') for this permit.', 'warn');
+                        return;
+                    }
                 }
                 if (p.status === 'Pending Section Head') {
                     const targetShRole = shRoleFor(p);
@@ -29069,6 +29358,7 @@ function trackerHtml(p) {
             try {
                 const p = PERMITS.find(x => x.id === id);
                 if (!p) return;
+                if (currentUser && currentUser.key === 'site-engineer' && p.status === 'Draft') return;
                 const scope = currentUser ? roleTypeScope(currentUser.key) : null;
                 const isCreator = currentUser && p && (
                     (p.createdBy && currentUser.name && p.createdBy.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
