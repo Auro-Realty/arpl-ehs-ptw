@@ -8197,7 +8197,7 @@
                 // Item 15: Specific other precautions mandatory
                 if (!draft || !draft.dbOtherPrecautions || !draft.dbOtherPrecautions.trim()) return false;
             }
-            if (c.ans === 'no') return !!(c.comment && c.comment.trim() && c.photo);
+            if (c.ans === 'no') return !!(c.comment && c.comment.trim());
             if (c.ans === 'na') return true;
             return true;
         }
@@ -8232,12 +8232,10 @@
                 }
             }
             if (!c.ans) return 'Item ' + (idx + 1) + ': answer pending';
-            const miss = [];
-            if (c.ans === 'no') {
-                if (!(c.comment && c.comment.trim())) miss.push('comment');
-                if (!c.photo) miss.push('work site photo');
+            if (c.ans === 'no' && !(c.comment && c.comment.trim())) {
+                return 'Item ' + (idx + 1) + ': comment pending';
             }
-            return miss.length ? 'Item ' + (idx + 1) + ': ' + miss.join(' + ') + ' pending' : null;
+            return null;
         }
         function equipDisplay(rec) {
             return (rec.equipment || []).map(e => (e === 'Others' && rec.equipmentOther) ? 'Others — ' + rec.equipmentOther : e).join(', ');
@@ -23214,24 +23212,24 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const answered = draft.checklist.filter(checklistItemComplete).length;
             const total = draft.checklist.length;
             let html = isNightShift
-                ? '<div class="section-banner"><i class="fa-solid fa-moon"></i> Night Shift Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 13 statutory items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Work-area site photo is deferred to 8:30 PM Night Handover.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-moon"></i> Night Shift Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 13 statutory items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. Work-area site photo is deferred to 8:30 PM Night Handover.</div>'
                 : isLifting
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Common Safety Points &amp; Requirements (' + (ptypeOf(draft) === 'liftplan' ? 'Critical Lift Safety Checklist' : 'Routine Lifting Safety Checklist') + ') — ' + pMeta(draft).form + ' &sect;II. All 14 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Work-area site photo is mandatory.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Common Safety Points &amp; Requirements (' + (ptypeOf(draft) === 'liftplan' ? 'Critical Lift Safety Checklist' : 'Routine Lifting Safety Checklist') + ') — ' + pMeta(draft).form + ' &sect;II. All 14 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. 1 work-area site photo is mandatory.</div>'
                 : isElectrical
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Electrical Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 14 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Work-area site photo was captured in Step 1.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Electrical Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 14 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. Work-area site photo was captured in Step 1.</div>'
                 : isBlasting
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Drilling &amp; Blasting Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 15 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Item 8 auto-picks site weather. Item 15 requires mandatory safety precautions. Work-area site photo is mandatory.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Drilling &amp; Blasting Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 15 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. Item 8 auto-picks site weather. Item 15 requires mandatory safety precautions. 1 work-area site photo is mandatory.</div>'
                 : isConfined
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Confined Space Entry Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 15 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Item 14 requires multi-gas detector test readings within safe limits. Item 15 requires the physical checklist attachment. Work-area site photo was captured in Step 1.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Confined Space Entry Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 15 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. Item 14 requires multi-gas detector test readings within safe limits. Item 15 requires the physical checklist attachment. Work-area site photo was captured in Step 1.</div>'
                 : isGuardrail
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Guard Rail / Floor Protection Removal Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 9 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Item 3 covers Openings (Above, Below, Workplace). Work-area site photo was captured in Step 1.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Guard Rail / Floor Protection Removal Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 9 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. Item 3 covers Openings (Above, Below, Workplace). Work-area site photo was captured in Step 1.</div>'
                 : isShaft
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Shaft Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 10 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. Work-area site photo was captured in Step 1.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Shaft Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 10 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. Work-area site photo was captured in Step 1.</div>'
                 : isHw
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Hot Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 20 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. A work-area site photo is mandatory before you can proceed.</div>'
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Hot Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 20 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. 1 work-area site photo is mandatory before you can proceed.</div>'
                 : isGeneral
-                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> General Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All ' + total + ' items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. A work-area site photo is mandatory before you can proceed.</div>'
-                : '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Excavation Safety Checklist — ' + pMeta(draft).form + ' &sect;II. Every item requires a response — YES, N/A, and NO are the three options. Selecting NO requires a mandatory comment AND a mandatory photo of the work site (Do not post irrelevant pictures). N/A requires a mandatory comment. Work-area site photo is mandatory.</div>';
+                ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> General Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All ' + total + ' items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. 1 work-area site photo is mandatory before you can proceed.</div>'
+                : '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Excavation Safety Checklist — ' + pMeta(draft).form + ' &sect;II. Every item requires a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment. N/A comment is optional. 1 work-area site photo is mandatory before you can proceed (drawing plan is optional).</div>';
             html += '<div class="checklist-progress"><span style="font-size:12px;font-weight:700;color:var(--navy);" id="ck2ProgressTxt">' + answered + ' / ' + total + ' complete</span><div class="bar"><div class="fill" id="ck2ProgressFill" style="width:' + Math.round((answered / total) * 100) + '%;"></div></div></div>';
             html += '<div class="ck2-summary pending" id="ck2Summary"></div>';
             if (isLifting) {
@@ -23363,15 +23361,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '</div>' +
                     '<div class="ci-extra ' + (c.ans === 'no' || c.ans === 'na' ? 'show' : '') + '" id="ciExtra' + i + '">' +
                     '<textarea placeholder="' + (c.ans === 'no' ? 'Describe the site condition and the practical solution applied (mandatory)&hellip;' : 'Describe why this item is not applicable (optional)&hellip;') + '" oninput="draft.checklist[' + i + '].comment=this.value;if(typeof triggerDebouncedAutoSave===\'function\')triggerDebouncedAutoSave();updateNextButtonState();">' + (c.comment || '') + '</textarea>' +
-                    (c.ans === 'no'
-                        ? ('<div style="margin-top:8px;padding:8px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
-                           '<div><span style="font-size:11.5px;font-weight:700;color:#991B1B;"><i class="fa-solid fa-camera"></i> Mandatory Work Site Photo <span class="req">*</span></span>' +
-                           '<div style="font-size:10.5px;color:#B91C1C;">Evidence photo required &mdash; Do not post irrelevant pictures.</div></div>' +
-                           (c.photo
-                               ? '<div style="display:flex;align-items:center;gap:8px;"><img src="' + c.photo + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1.5px solid #22C55E;"><button type="button" class="btn btn-sm btn-ghost" onclick="captureChecklistPhoto(' + i + ')"><i class="fa-solid fa-rotate"></i> Retake</button><span style="font-size:11px;color:#15803D;font-weight:700;"><i class="fa-solid fa-circle-check"></i> Attached</span></div>'
-                               : '<button type="button" class="btn btn-sm btn-danger" onclick="captureChecklistPhoto(' + i + ')"><i class="fa-solid fa-camera"></i> Capture Work Site Photo</button>') +
-                           '</div>')
-                        : '') +
+
                     '</div>' +
                     '</div>';
             });

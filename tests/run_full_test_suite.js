@@ -238,16 +238,12 @@ runSuite('Permit Metadata, Checklists & Location', () => {
     assert(grChecklist[2].includes('(Above, Below, Workplace)'), 'Guard Rail checklist item 3 checks multi-level fall protection');
 
     // Checklist completeness rules:
-    // NO response: comment mandatory, work site photo mandatory
-    const itemNoWithComment = { q: 'Test Q', ans: 'no', comment: 'Solution applied', photo: 'data:image/jpeg;base64,mockphoto', gps: null };
-    assert(app.checklistItemComplete(itemNoWithComment, 0, 'hotwork') === true, 'Checklist NO with comment and photo is complete');
-    assert(app.checklistItemMissing(itemNoWithComment, 0, 'hotwork') === null, 'Checklist NO with comment and photo has no missing requirements');
+    // NO response: comment mandatory, GPS and photo not required
+    const itemNoWithComment = { q: 'Test Q', ans: 'no', comment: 'Solution applied', photo: null, gps: null };
+    assert(app.checklistItemComplete(itemNoWithComment, 0, 'hotwork') === true, 'Checklist NO with comment is complete without photo or GPS');
+    assert(app.checklistItemMissing(itemNoWithComment, 0, 'hotwork') === null, 'Checklist NO with comment has no missing requirements');
 
-    const itemNoWithoutPhoto = { q: 'Test Q', ans: 'no', comment: 'Solution applied', photo: null, gps: null };
-    assert(app.checklistItemComplete(itemNoWithoutPhoto, 0, 'hotwork') === false, 'Checklist NO without photo is incomplete');
-    assert(app.checklistItemMissing(itemNoWithoutPhoto, 0, 'hotwork') !== null, 'Checklist NO without photo reports missing work site photo');
-
-    const itemNoWithoutComment = { q: 'Test Q', ans: 'no', comment: '', photo: 'data:image/jpeg;base64,mockphoto', gps: null };
+    const itemNoWithoutComment = { q: 'Test Q', ans: 'no', comment: '', photo: null, gps: null };
     assert(app.checklistItemComplete(itemNoWithoutComment, 0, 'hotwork') === false, 'Checklist NO without comment is incomplete');
     assert(app.checklistItemMissing(itemNoWithoutComment, 0, 'hotwork') !== null, 'Checklist NO without comment reports missing comment');
 

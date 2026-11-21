@@ -268,8 +268,8 @@ draft.checklist = GUARDRAIL_CHECKLIST_ITEMS.map((q, idx) => ({
 `);
 assert.strictEqual(evalInVM("validateWizStep(2)"), false, "Step 2 fails when 'no' item lacks mandatory comment");
 
-// Provide comment and item photo for 'no' item, but site photo missing
-evalInVM("draft.checklist[0].comment = 'Warning signboards posted 5m prior to edge'; draft.checklist[0].photo = 'data:image/jpeg;base64,guardrail_item_photo'; draft.sitePhoto = null;");
+// Provide comment for 'no' item, but site photo missing
+evalInVM("draft.checklist[0].comment = 'Warning signboards posted 5m prior to edge'; draft.sitePhoto = null;");
 assert.strictEqual(evalInVM("validateWizStep(2)"), false, "Step 2 fails when site photo is missing");
 
 // Step 2 passes when site photo attached
