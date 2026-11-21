@@ -23056,6 +23056,45 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 draft.checklist[13].ans = 'yes';
                 draft.checklist[13].comment = null;
             }
+
+            // Particularly for O2: update status badge in-place so DOM is not recreated on keystroke, allowing two digits to be entered seamlessly
+            if (param === 'o2') {
+                const o2StatusEl = document.getElementById('inConfinedO2Status');
+                const o2CardEl = document.getElementById('inConfinedO2Card');
+                const o2Safe = isGasReadingSafe('o2', draft.gasReadings.o2);
+                if (o2StatusEl) {
+                    o2StatusEl.innerHTML = (draft.gasReadings.o2 == null)
+                        ? '<span style="color:#9CA3AF;"><i class="fa-regular fa-clock"></i> Awaiting reading</span>'
+                        : o2Safe
+                        ? '<span style="color:#059669;"><i class="fa-solid fa-check"></i> Safe (19.5–21.0%)</span>'
+                        : '<span style="color:#DC2626;"><i class="fa-solid fa-triangle-exclamation"></i> Danger (&lt;19.5% or &gt;21%)</span>';
+                }
+                if (o2CardEl) {
+                    o2CardEl.style.borderColor = (draft.gasReadings.o2 != null ? (o2Safe ? '#A7F3D0' : '#FECACA') : '#E5E7EB');
+                }
+                const gasBanner = document.getElementById('confinedGasBanner');
+                if (gasBanner) {
+                    gasBanner.style.background = allSafe ? '#ECFDF5' : '#FFFBEB';
+                    gasBanner.style.borderColor = allSafe ? '#A7F3D0' : '#FDE68A';
+                    gasBanner.innerHTML = allSafe
+                        ? '<i class="fa-solid fa-circle-check" style="color:#059669;font-size:14px;"></i><span style="color:#065F46;font-weight:600;">All 4 atmospheric parameters are verified within statutory safe limits. Item 14 satisfied.</span>'
+                        : '<i class="fa-solid fa-circle-exclamation" style="color:#D97706;font-size:14px;"></i><span style="color:#92400E;">Multi-gas readings pending or outside limits. All 4 readings must be safe before Item 14 can be marked YES.</span>';
+                }
+                if (allSafe) {
+                    const ck14 = document.querySelectorAll('.checklist-item')[13];
+                    if (ck14) {
+                        const optYes = ck14.querySelector('.ci-opt.yes');
+                        if (optYes) optYes.classList.add('sel');
+                        const optNo = ck14.querySelector('.ci-opt.no');
+                        if (optNo) optNo.classList.remove('sel');
+                        const optNa = ck14.querySelector('.ci-opt.na');
+                        if (optNa) optNa.classList.remove('sel');
+                    }
+                }
+                validateWizStep(2);
+                return;
+            }
+
             renderWizStep();
             validateWizStep(2);
         }
@@ -23297,14 +23336,14 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                         '<div style="margin-top:5px;font-size:10.5px;font-weight:600;">' +
                         (gr.co == null ? '<span style="color:#9CA3AF;"><i class="fa-regular fa-clock"></i> Awaiting reading</span>' : coSafe ? '<span style="color:#059669;"><i class="fa-solid fa-check"></i> Safe (&lt;25 PPM)</span>' : '<span style="color:#DC2626;"><i class="fa-solid fa-triangle-exclamation"></i> Danger (&ge;25 PPM)</span>') +
                         '</div></div>' +
-                        '<div style="background:#fff;border:1px solid ' + (gr.o2 != null ? (o2Safe ? '#A7F3D0' : '#FECACA') : '#E5E7EB') + ';border-radius:6px;padding:10px;">' +
+                        '<div id="inConfinedO2Card" style="background:#fff;border:1px solid ' + (gr.o2 != null ? (o2Safe ? '#A7F3D0' : '#FECACA') : '#E5E7EB') + ';border-radius:6px;padding:10px;">' +
                         '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;"><span style="font-size:11px;font-weight:700;color:var(--navy);">Oxygen (O2)</span><span style="font-size:10px;padding:1px 6px;border-radius:4px;background:#F3F4F6;color:#4B5563;font-weight:600;">19.5–21.0%</span></div>' +
-                        '<input type="number" step="0.1" min="0" placeholder="e.g. 20.8" value="' + (gr.o2 != null ? gr.o2 : '') + '" oninput="onConfinedGasInput(\'o2\', this.value)" style="width:100%;padding:6px 8px;font-size:12.5px;border:1px solid var(--border);border-radius:4px;">' +
-                        '<div style="margin-top:5px;font-size:10.5px;font-weight:600;">' +
+                        '<input type="number" id="inConfinedO2" step="0.1" min="0" max="100" placeholder="e.g. 20.8" value="' + (gr.o2 != null ? gr.o2 : '') + '" oninput="onConfinedGasInput(\'o2\', this.value)" style="width:100%;padding:6px 8px;font-size:12.5px;border:1px solid var(--border);border-radius:4px;">' +
+                        '<div id="inConfinedO2Status" style="margin-top:5px;font-size:10.5px;font-weight:600;">' +
                         (gr.o2 == null ? '<span style="color:#9CA3AF;"><i class="fa-regular fa-clock"></i> Awaiting reading</span>' : o2Safe ? '<span style="color:#059669;"><i class="fa-solid fa-check"></i> Safe (19.5–21.0%)</span>' : '<span style="color:#DC2626;"><i class="fa-solid fa-triangle-exclamation"></i> Danger (&lt;19.5% or &gt;21%)</span>') +
                         '</div></div>' +
                         '</div>' +
-                        '<div style="margin-top:10px;padding:8px 12px;border-radius:6px;background:' + (allSafe ? '#ECFDF5' : '#FFFBEB') + ';border:1px solid ' + (allSafe ? '#A7F3D0' : '#FDE68A') + ';font-size:11.5px;display:flex;align-items:center;gap:8px;">' +
+                        '<div id="confinedGasBanner" style="margin-top:10px;padding:8px 12px;border-radius:6px;background:' + (allSafe ? '#ECFDF5' : '#FFFBEB') + ';border:1px solid ' + (allSafe ? '#A7F3D0' : '#FDE68A') + ';font-size:11.5px;display:flex;align-items:center;gap:8px;">' +
                         (allSafe
                             ? '<i class="fa-solid fa-circle-check" style="color:#059669;font-size:14px;"></i><span style="color:#065F46;font-weight:600;">All 4 atmospheric parameters are verified within statutory safe limits. Item 14 satisfied.</span>'
                             : '<i class="fa-solid fa-circle-exclamation" style="color:#D97706;font-size:14px;"></i><span style="color:#92400E;">Multi-gas readings pending or outside limits. All 4 readings must be safe before Item 14 can be marked YES.</span>') +
