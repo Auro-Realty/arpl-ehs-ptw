@@ -4591,11 +4591,12 @@
             }
 
             .toast-stack {
-                left: 10px;
-                right: 10px;
+                left: auto;
+                right: 16px;
                 top: 68px;
                 bottom: auto;
-                max-width: none;
+                max-width: calc(100vw - 32px);
+                z-index: 1050;
             }
 
             .toast {
@@ -5526,7 +5527,7 @@
                     title="Close Navigation" aria-label="Close Navigation Drawer"><i class="fa-solid fa-xmark"></i></button>
             </div>
             <div id="navContainer"></div>
-            <div class="sidebar-footer">ARPL EHS Permit-to-Work &middot; Statutory Safety Portal<br>Enterprise Production &middot; Data Residency: asia-south1</div>
+            <div class="sidebar-footer" style="display:none;"></div>
         </aside>
 
         <div class="main">
@@ -8196,7 +8197,7 @@
                 // Item 15: Specific other precautions mandatory
                 if (!draft || !draft.dbOtherPrecautions || !draft.dbOtherPrecautions.trim()) return false;
             }
-            if (c.ans === 'no') return !!(c.comment && c.comment.trim());
+            if (c.ans === 'no') return !!(c.comment && c.comment.trim() && c.photo);
             if (c.ans === 'na') return true;
             return true;
         }
@@ -8232,7 +8233,10 @@
             }
             if (!c.ans) return 'Item ' + (idx + 1) + ': answer pending';
             const miss = [];
-            if (c.ans === 'no' && !(c.comment && c.comment.trim())) miss.push('comment');
+            if (c.ans === 'no') {
+                if (!(c.comment && c.comment.trim())) miss.push('comment');
+                if (!c.photo) miss.push('work site photo');
+            }
             return miss.length ? 'Item ' + (idx + 1) + ': ' + miss.join(' + ') + ' pending' : null;
         }
         function equipDisplay(rec) {
@@ -8966,8 +8970,27 @@
             const rawRk = String(roleKey || '').trim().toLowerCase();
             const normRk = normalizeRoleKey(roleKey) || rawRk;
             if (normRk === 'super-admin') return true;
-            // Site Engineer must NEVER see Draft permits anywhere
-            if (normRk === 'site-engineer' && p && p.status === 'Draft') {
+            // Strict Draft Isolation: Unsubmitted drafts (status === 'Draft') are visible ONLY to authoring supervisor
+            if (p && p.status === 'Draft') {
+                if (!currentUser) return false;
+                const rk = normalizeRoleKey(currentUser.key) || currentUser.key;
+                if (rk === 'site-engineer') return false;
+                if (p.createdByUid && currentUser.uid) {
+                    return p.createdByUid === currentUser.uid;
+                }
+                if (p.createdByEmail && currentUser.email) {
+                    return p.createdByEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                }
+                if (p.creatorEmail && currentUser.email) {
+                    return p.creatorEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase();
+                }
+                if (p.createdBy && currentUser.name) {
+                    return p.createdBy.trim().toLowerCase() === currentUser.name.trim().toLowerCase();
+                }
+                if (!currentUser.uid && !currentUser.email && !currentUser.name) {
+                    if (p.createdRoleKey && currentUser.key && p.createdRoleKey === currentUser.key) return true;
+                    if (p.createdByRole && currentUser.key && p.createdByRole === currentUser.key) return true;
+                }
                 return false;
             }
             // Creator & Permittee Visibility: Author must always see their own permits across ALL lifecycle statuses
@@ -9873,9 +9896,55 @@
             const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
             return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
         }
+        function getHighestExistingPermitSeq() {
+            let maxSeq = 0;
+            if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                PERMITS.forEach(p => {
+                    if (p && p.id) {
+                        const m = String(p.id).match(/-(d{4,6})$/);
+                        if (m) {
+                            const val = parseInt(m[1], 10);
+                            if (!isNaN(val) && val > maxSeq) maxSeq = val;
+                        }
+                    }
+                });
+            }
+            return maxSeq;
+        }
+
+        async function allocateUniquePermitNumber(type) {
+            const pfx = (PTYPE_META[type || 'excavation'] ? PTYPE_META[type || 'excavation'].prefix : 'PTW-001') + '-2026-';
+            const highestLocal = getHighestExistingPermitSeq();
+            if (typeof firebase !== 'undefined' && firebase.firestore) {
+                try {
+                    const db = firebase.firestore();
+                    const counterRef = db.collection('system_counters').doc('permits');
+                    const nextSeq = await db.runTransaction(async (transaction) => {
+                        const counterDoc = await transaction.get(counterRef);
+                        let curSeq = 0;
+                        if (counterDoc.exists) {
+                            curSeq = counterDoc.data().currentSeq || 0;
+                        }
+                        const candidate = Math.max(curSeq, highestLocal) + 1;
+                        transaction.set(counterRef, { currentSeq: candidate, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
+                        return candidate;
+                    });
+                    permitSeq = Math.max(permitSeq, nextSeq + 1);
+                    return pfx + String(nextSeq).padStart(6, '0');
+                } catch (e) {
+                    console.warn('Atomic counter transaction fallback:', e);
+                }
+            }
+            const localSeq = Math.max(permitSeq++, highestLocal + 1);
+            permitSeq = localSeq + 1;
+            return pfx + String(localSeq).padStart(6, '0');
+        }
+
         function genPermitNumber(type) {
-            const n = permitSeq++;
-            return (PTYPE_META[type || 'excavation'].prefix) + '-2026-' + String(n).padStart(6, '0');
+            const highestLocal = getHighestExistingPermitSeq();
+            const seq = Math.max(permitSeq++, highestLocal + 1);
+            permitSeq = seq + 1;
+            return (PTYPE_META[type || 'excavation'].prefix) + '-2026-' + String(seq).padStart(6, '0');
         }
         function projectByName(nameOrId) {
             if (!nameOrId) return null;
@@ -10557,7 +10626,7 @@
             if (!currentUser) return [];
             const rk = currentUser.key;
             const normRk = normalizeRoleKey(rk);
-            return NOTIFICATIONS.filter(n => {
+            const list = NOTIFICATIONS.filter(n => {
                 if (!n.roleTargets) return false;
                 if (n.roleTargets.includes('all') || n.roleTargets.includes(rk)) return true;
                 if (normRk === 'tower-in-charge' && (n.roleTargets.includes('hw-section-head') || n.roleTargets.includes('section-head') || n.roleTargets.includes('tower-in-charge'))) return true;
@@ -10565,6 +10634,12 @@
                 if ((rk === 'ehs-manager' || rk === 'ehs-officer') && n.roleTargets.includes('ehs')) return true;
                 return false;
             });
+            list.sort((a, b) => {
+                const ta = a.ts || a.timestamp || 0;
+                const tb = b.ts || b.timestamp || 0;
+                return (typeof tb === 'number' && typeof ta === 'number') ? (tb - ta) : (new Date(tb) - new Date(ta));
+            });
+            return list;
         }
         function refreshNotifBell() {
             const dot = document.getElementById('notifDot');
@@ -18932,26 +19007,22 @@
                 startEscalationTimer();
             }
 
-            // Default landing route per role with Intelligent URL Deep Link Restoration
-            let defaultRoute = 'dashboard';
-            if (safeUser.key === 'admin') {
-                defaultRoute = 'admin-config';
-            } else if (safeUser.key === 'super-admin') {
-                defaultRoute = 'dashboard';
-            }
+            // Item 2: Always land unconditionally on Dashboard for every role on sign-in, login, and page load/refresh
+            window.location.hash = '#dashboard';
+            currentView = 'dashboard';
+            goTo('dashboard');
 
-            // Interactive login form submission always lands cleanly on default route (Dashboard / Admin Config)
-            if (isInteractiveLogin) {
-                window.location.hash = '#' + defaultRoute;
-                goTo(defaultRoute);
-            } else {
-                const initialRoute = parseCurrentRoute();
-                if (initialRoute && isRouteAllowedForRole(safeUser.key, initialRoute.view)) {
-                    navigateToRoute(initialRoute, true);
-                } else {
-                    goTo(defaultRoute);
+            // Item 1: Pop up unread notifications on sign-in (most-recent first, up to top 3)
+            setTimeout(() => {
+                if (typeof notifsForCurrentUser === 'function' && typeof showToast === 'function') {
+                    const unread = notifsForCurrentUser().filter(n => !n.read);
+                    unread.slice(0, 3).forEach((n, idx) => {
+                        setTimeout(() => {
+                            showToast(n.message, n.severity === 'error' ? 'err' : (n.severity === 'warn' ? 'warn' : 'info'));
+                        }, idx * 450);
+                    });
                 }
-            }
+            }, 600);
             if (typeof refreshNotifBell === 'function') {
                 refreshNotifBell();
             }
@@ -19512,6 +19583,9 @@
                 showToast('Access Denied: Only Administrators can configure site GPS, geofencing, and personnel accounts.', 'warn');
                 goTo('dashboard');
                 return false;
+            }
+            if (currentView === 'create' && view !== 'create' && typeof autoSaveDraft === 'function' && draft && !correctionMode) {
+                autoSaveDraft();
             }
             currentView = view;
             if (view !== 'detail') currentDetailId = null;
@@ -20528,7 +20602,18 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<td>' + (p.validTill ? fmtDateTime(p.validTill) : '<span style="color:var(--text-faint);">&mdash; Draft</span>') + '</td>' +
                     '<td>' + requestedByDisplayFor(p) + '</td>' +
                     (p.status === 'Draft'
-                        ? '<td><button class="btn btn-sm btn-primary" title="Resume Draft" onclick="event.stopPropagation();resumeDraft(PERMITS.find(x => x.id === \'' + p.id + '\'))" style="padding:4px 10px;font-size:11.5px;white-space:nowrap;"><i class="fa-solid fa-pen-to-square"></i> Resume</button></td>'
+                        ? (currentUser && (
+                            (p.createdByUid && currentUser.uid && p.createdByUid === currentUser.uid) ||
+                            (p.createdByEmail && currentUser.email && p.createdByEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+                            (p.creatorEmail && currentUser.email && p.creatorEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
+                            (p.createdBy && currentUser.name && p.createdBy.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
+                            (!currentUser.uid && !currentUser.email && !currentUser.name && (
+                                (p.createdRoleKey && currentUser.key && p.createdRoleKey === currentUser.key) ||
+                                (p.createdByRole && currentUser.key && p.createdByRole === currentUser.key)
+                            ))
+                          )
+                            ? '<td><button class="btn btn-sm btn-primary" title="Resume Draft" onclick="event.stopPropagation();resumeDraft(PERMITS.find(x => x.id === \'' + p.id + '\'))" style="padding:4px 10px;font-size:11.5px;white-space:nowrap;"><i class="fa-solid fa-pen-to-square"></i> Resume</button></td>'
+                            : '<td><span style="color:var(--text-muted);font-size:11px;">Draft</span></td>')
                         : (canActNow
                             ? '<td><div style="display:flex;gap:5px;align-items:center;"><button class="btn btn-sm btn-primary" title="Approve / Review Permit" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')" style="padding:4px 9px;font-size:11px;background:#16A34A;border-color:#15803D;white-space:nowrap;"><i class="fa-solid fa-check"></i> Approve</button><button class="btn btn-sm btn-ghost" title="View Detail" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')"><i class="fa-solid fa-arrow-right"></i></button></div></td>'
                             : '<td><button class="btn btn-sm btn-ghost" title="View Detail" onclick="event.stopPropagation();viewDetail(\'' + p.id + '\')"><i class="fa-solid fa-arrow-right"></i></button></td>')) +
@@ -20846,6 +20931,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     return;
                 }
             }
+            if (typeof autoSaveDraft === 'function' && draft && !correctionMode) autoSaveDraft();
             wizStep = targetStep;
             renderStepIndicator();
             renderWizStep();
@@ -20917,6 +21003,45 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 window.scrollTo({ top: 0, behavior: 'instant' });
             }
         }
+        let autoSaveTimer = null;
+        function autoSaveDraft() {
+            if (!draft || correctionMode) return;
+            if (draft.status && draft.status !== 'Draft') return;
+            draft.status = 'Draft';
+            draft.createdBy = draft.createdBy || (currentUser && currentUser.name) || 'Permittee';
+            draft.createdByEmail = draft.createdByEmail || (currentUser && currentUser.email) || '';
+            draft.creatorEmail = draft.creatorEmail || (currentUser && currentUser.email) || '';
+            draft.createdByUid = draft.createdByUid || (currentUser && currentUser.uid) || '';
+            draft.createdRoleKey = draft.createdRoleKey || (currentUser && currentUser.key) || 'site-supervisor';
+            draft.project = draft.project || (currentUser && (currentUser.projectName || currentUser.projectId)) || 'Sansa County';
+            const prjObj = projectByName(draft.project);
+            draft.projectId = draft.projectId || (prjObj ? prjObj.id : (currentUser && currentUser.projectId) || 'PRJ-SANSA');
+            draft.projectName = draft.projectName || (prjObj ? prjObj.name : draft.project);
+            draft.tower = draft.tower || (currentUser && !currentUser.campusWide ? currentUser.locationName : '') || '';
+            draft.location = draft.location || draft.tower || 'Draft Worksite';
+            draft.updatedAt = new Date().toISOString();
+            draft.lastSaved = nowTime();
+
+            const existingIdx = PERMITS.findIndex(p => p.id === draft.id);
+            if (existingIdx >= 0) {
+                PERMITS[existingIdx] = Object.assign({}, PERMITS[existingIdx], draft);
+            } else {
+                PERMITS.unshift(draft);
+            }
+            saveState();
+            if (typeof persistPermitToFirestore === 'function') {
+                persistPermitToFirestore(draft);
+            }
+        }
+
+        function triggerDebouncedAutoSave() {
+            if (!draft || correctionMode) return;
+            if (autoSaveTimer) clearTimeout(autoSaveTimer);
+            autoSaveTimer = setTimeout(() => {
+                autoSaveDraft();
+            }, 1000);
+        }
+
         function saveDraftAndExit() {
             if (!draft) return;
             draft.status = 'Draft';
@@ -23096,7 +23221,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Hot Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All 20 items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. A work-area site photo is mandatory before you can proceed.</div>'
                 : isGeneral
                 ? '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> General Work Safety Checklist — ' + pMeta(draft).form + ' &sect;II. All ' + total + ' items require a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. A work-area site photo is mandatory before you can proceed.</div>'
-                : '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Excavation Safety Checklist — ' + pMeta(draft).form + ' &sect;II. Every item requires a response — any mix of YES, NO and N/A is acceptable. NO requires a mandatory comment, evidence photo and GPS. N/A requires a mandatory comment. A work-area site photo is mandatory before you can proceed (drawing plan is optional).</div>';
+                : '<div class="section-banner"><i class="fa-solid fa-clipboard-check"></i> Excavation Safety Checklist — ' + pMeta(draft).form + ' &sect;II. Every item requires a response — YES, N/A, and NO are the three options. Selecting NO requires a mandatory comment AND a mandatory photo of the work site (Do not post irrelevant pictures). N/A requires a mandatory comment. Work-area site photo is mandatory.</div>';
             html += '<div class="checklist-progress"><span style="font-size:12px;font-weight:700;color:var(--navy);" id="ck2ProgressTxt">' + answered + ' / ' + total + ' complete</span><div class="bar"><div class="fill" id="ck2ProgressFill" style="width:' + Math.round((answered / total) * 100) + '%;"></div></div></div>';
             html += '<div class="ck2-summary pending" id="ck2Summary"></div>';
             if (isLifting) {
@@ -23227,7 +23352,16 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="ci-opt na ' + (c.ans === 'na' ? 'sel' : '') + '" onclick="setChecklistAns(' + i + ',\'na\')">N/A</div>' +
                     '</div>' +
                     '<div class="ci-extra ' + (c.ans === 'no' || c.ans === 'na' ? 'show' : '') + '" id="ciExtra' + i + '">' +
-                    '<textarea placeholder="' + (c.ans === 'no' ? 'Describe the site condition and the practical solution applied (mandatory)&hellip;' : 'Describe why this item is not applicable (optional)&hellip;') + '" oninput="draft.checklist[' + i + '].comment=this.value;updateNextButtonState();">' + (c.comment || '') + '</textarea>' +
+                    '<textarea placeholder="' + (c.ans === 'no' ? 'Describe the site condition and the practical solution applied (mandatory)&hellip;' : 'Describe why this item is not applicable (optional)&hellip;') + '" oninput="draft.checklist[' + i + '].comment=this.value;if(typeof triggerDebouncedAutoSave===\'function\')triggerDebouncedAutoSave();updateNextButtonState();">' + (c.comment || '') + '</textarea>' +
+                    (c.ans === 'no'
+                        ? ('<div style="margin-top:8px;padding:8px 12px;background:#FEF2F2;border:1px solid #FECACA;border-radius:6px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;">' +
+                           '<div><span style="font-size:11.5px;font-weight:700;color:#991B1B;"><i class="fa-solid fa-camera"></i> Mandatory Work Site Photo <span class="req">*</span></span>' +
+                           '<div style="font-size:10.5px;color:#B91C1C;">Evidence photo required &mdash; Do not post irrelevant pictures.</div></div>' +
+                           (c.photo
+                               ? '<div style="display:flex;align-items:center;gap:8px;"><img src="' + c.photo + '" style="width:48px;height:48px;object-fit:cover;border-radius:4px;border:1.5px solid #22C55E;"><button type="button" class="btn btn-sm btn-ghost" onclick="captureChecklistPhoto(' + i + ')"><i class="fa-solid fa-rotate"></i> Retake</button><span style="font-size:11px;color:#15803D;font-weight:700;"><i class="fa-solid fa-circle-check"></i> Attached</span></div>'
+                               : '<button type="button" class="btn btn-sm btn-danger" onclick="captureChecklistPhoto(' + i + ')"><i class="fa-solid fa-camera"></i> Capture Work Site Photo</button>') +
+                           '</div>')
+                        : '') +
                     '</div>' +
                     '</div>';
             });
@@ -24828,7 +24962,7 @@ function trackerHtml(p) {
     const isExc = pt === 'excavation';
     const shLabel = (pMeta(p) && pMeta(p).shLabel) || (isExc ? 'Excavation Head' : 'Tower Incharge');
     const a = p.approvals || newChain(pt);
-    const isEngAckDone = !!(p.siteEngineerAck && p.siteEngineerAck.acknowledged);
+    const isEngAckDone = !!(p.siteEngineerAck && p.siteEngineerAck.acknowledged) || !!(p.siteEngineerReAck && p.siteEngineerReAck.acknowledged) || !!(a.siteEngineer && a.siteEngineer.status === 'approved') || ['Pending Section Head', 'Pending MEP Clearance', 'Pending Parallel Approval', 'Pending MEP or P&M Approval', 'Pending Quality Engineer Approval', 'Pending EHS Approval', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)'].includes(p.status);
     const isWorkActive = ['Active', 'Extended', 'Extension Pending', 'Active – Observation Open', 'Observation Pending Site Engineer Acknowledgment', 'Observation Pending Section Head Review', 'Observation Pending Tower Incharge Review', 'Observation Pending Excavation Head Review', 'Observation Pending EHS Clearance', 'Closed', 'Auto-Closed', 'Closed – Pending Surrender', 'Completed (Surrendered)', 'Expired'].includes(p.status);
 
     function node(label, sub, state, onclickAttr, tooltip) {
@@ -24843,7 +24977,8 @@ function trackerHtml(p) {
             if (norm.includes('site supervisor') || norm.includes('electrician') || norm.includes('pre-fill') || norm.includes('blasting in-charge') || norm.includes('lift supervisor') || norm.includes('initiator') || norm.includes('applicant')) {
                 rec = { by: p.createdBy || (p.signature ? p.signature.by : ''), at: p.createdAt || (p.signature ? p.signature.at : null) };
             } else if (norm.includes('site engineer')) {
-                if (p.siteEngineerAck && p.siteEngineerAck.by) rec = { by: p.siteEngineerAck.by, at: p.siteEngineerAck.at };
+                if (p.siteEngineerReAck && p.siteEngineerReAck.acknowledged && p.siteEngineerReAck.by) rec = { by: p.siteEngineerReAck.by, at: p.siteEngineerReAck.at };
+                else if (p.siteEngineerAck && p.siteEngineerAck.by) rec = { by: p.siteEngineerAck.by, at: p.siteEngineerAck.at };
                 else if (a.siteEngineer && a.siteEngineer.by) rec = a.siteEngineer;
             } else if (norm.includes('mep')) {
                 rec = a.mep;
@@ -25150,16 +25285,17 @@ function trackerHtml(p) {
 
         // Step 2: Site Engineer
         const isPendingEng = (p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment');
-        const engState = (isEngAckDone && !isPendingEng) ? 'done' : (isPendingEng ? 'current' : '');
-        html += node('Site Engineer', (isEngAckDone && !isPendingEng) ? 'Step 2 · Trench Checked' : (isPendingEng ? 'Step 2 · Action Req.' : 'Step 2 · Field Ack'), engState, '', 'Site Engineer physical trench stability & soil inspection');
-        html += '<div class="tr-line ' + ((isEngAckDone && !isPendingEng) ? 'done' : '') + '"></div>';
+        const excEngDone = (isEngAckDone && !isPendingEng) || ['Pending Parallel Approval', 'Pending Section Head', 'Pending EHS Approval', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)'].includes(p.status);
+        const engState = excEngDone ? 'done' : (isPendingEng ? 'current' : '');
+        html += node('Site Engineer', excEngDone ? 'Step 2 · Trench Checked' : (isPendingEng ? 'Step 2 · Action Req.' : 'Step 2 · Field Ack'), engState, '', 'Site Engineer physical trench stability & soil inspection');
+        html += '<div class="tr-line ' + (excEngDone ? 'done' : '') + '"></div>';
 
         // Step 3: 3-Way Parallel Gate (MEP · P&M · IT Concurrency)
         const isParallelActive = p.status === 'Pending Parallel Approval';
         const isMepDone = !!(a.mep && a.mep.status === 'approved');
         const isPmDone = !!(a.pm && a.pm.status === 'approved');
         const isItDone = !!(a.it && a.it.status === 'approved');
-        const parallelDone = isMepDone && isPmDone && isItDone;
+        const parallelDone = (isMepDone && isPmDone && isItDone) || ['Pending Section Head', 'Pending EHS Approval', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)'].includes(p.status);
         html += '<div class="tr-parallel-wrap"><div class="tr-parallel-row">' +
             node('MEP', isMepDone ? 'Approved' : (a.mep && a.mep.status === 'rejected' ? 'Rejected' : (isParallelActive ? 'Action Req.' : 'Pending')), isMepDone ? 'done' : (a.mep && a.mep.status === 'rejected' ? 'rejected' : (isParallelActive ? 'current' : '')), '', 'Underground piping & utility clearance') +
             '<div class="tr-line ' + (isMepDone ? 'done' : '') + '" style="min-width:14px;max-width:24px;"></div>' +
@@ -25171,18 +25307,18 @@ function trackerHtml(p) {
 
         // Step 4: Excavation Head (NOT Tower Incharge!)
         const isSectionHeadActive = p.status === 'Pending Section Head';
-        const isSectionHeadDone = !!(a.sectionHead && a.sectionHead.status === 'approved');
-        const isSectionHeadRejected = !!(a.sectionHead && (a.sectionHead.status === 'rejected' || a.sectionHead.status === 'cancelled'));
-        const shState = isSectionHeadDone ? 'done' : (isSectionHeadRejected ? 'rejected' : (isSectionHeadActive ? 'current' : ''));
-        html += node('Excavation Head', isSectionHeadDone ? 'Step 4 · Shoring Approved' : (isSectionHeadRejected ? 'Cancelled' : (isSectionHeadActive ? 'Step 4 · Action Req.' : 'Step 4 · Review')), shState, '', 'Excavation Head shoring, slope stability & benching safety review');
+        const isSectionHeadDone = !!(a.sectionHead && a.sectionHead.status === 'approved') || ['Pending EHS Approval', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)'].includes(p.status);
+        const isSectionHeadRejected = !isSectionHeadDone && !isSectionHeadActive && !!(a.sectionHead && (a.sectionHead.status === 'rejected' || a.sectionHead.status === 'cancelled'));
+        const shState = isSectionHeadDone ? 'done' : (isSectionHeadActive ? 'current' : (isSectionHeadRejected ? 'rejected' : ''));
+        html += node('Excavation Head', isSectionHeadDone ? 'Step 4 · Shoring Approved' : (isSectionHeadActive ? 'Step 4 · Action Req.' : (isSectionHeadRejected ? 'Cancelled' : 'Step 4 · Review')), shState, '', 'Excavation Head shoring, slope stability & benching safety review');
         html += '<div class="tr-line ' + (isSectionHeadDone ? 'done' : '') + '"></div>';
 
         // Step 5: EHS Safety Endorsement
         const isEhsActive = p.status === 'Pending EHS Approval';
-        const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved'));
-        const isEhsRejected = !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
-        const ehsState = isEhsDone ? 'done' : (isEhsRejected ? 'rejected' : (isEhsActive ? 'current' : ''));
-        html += node('EHS Safety', isEhsDone ? 'Step 5 · Endorsed' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 5 · Action Req.' : 'Step 5 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement (First-Wins)');
+        const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved')) || isWorkActive;
+        const isEhsRejected = !isEhsDone && !isEhsActive && !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
+        const ehsState = isEhsDone ? 'done' : (isEhsActive ? 'current' : (isEhsRejected ? 'rejected' : ''));
+        html += node('EHS Safety', isEhsDone ? 'Step 5 · Endorsed' : (isEhsActive ? 'Step 5 · Action Req.' : (isEhsRejected ? 'Cancelled' : 'Step 5 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement (First-Wins)');
         html += '<div class="tr-line ' + (isEhsDone ? 'done' : '') + '"></div>';
 
         // Final: Active
@@ -25202,25 +25338,26 @@ function trackerHtml(p) {
 
         // Step 2: Site Engineer
         const isPendingEng = (p.status === 'Pending Site Engineer Acknowledgment' || p.status === 'Pending Site Engineer Re-Acknowledgment');
-        const engState = (isEngAckDone && !isPendingEng) ? 'done' : (isPendingEng ? 'current' : '');
-        const engSub = (isEngAckDone && !isPendingEng) ? 'Step 2 · Ground Checked' : (p.status === 'Pending Site Engineer Re-Acknowledgment' ? 'Step 2 · Re-Ack Req.' : (p.status === 'Pending Site Engineer Acknowledgment' ? 'Step 2 · Action Req.' : 'Step 2 · Field Ack'));
+        const engDone = (isEngAckDone && !isPendingEng) || ['Pending Section Head', 'Pending EHS Approval', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)'].includes(p.status);
+        const engState = engDone ? 'done' : (isPendingEng ? 'current' : '');
+        const engSub = engDone ? 'Step 2 · Ground Checked' : (p.status === 'Pending Site Engineer Re-Acknowledgment' ? 'Step 2 · Re-Ack Req.' : (p.status === 'Pending Site Engineer Acknowledgment' ? 'Step 2 · Action Req.' : 'Step 2 · Field Ack'));
         html += node('Site Engineer', engSub, engState, '', 'Site Engineer on-site technical inspection and acknowledgment');
-        html += '<div class="tr-line ' + ((isEngAckDone && !isPendingEng) ? 'done' : '') + '"></div>';
+        html += '<div class="tr-line ' + (engDone ? 'done' : '') + '"></div>';
 
         // Step 3: Tower Incharge / Section Head
         const isSectionHeadActive = p.status === 'Pending Section Head';
-        const isSectionHeadDone = !!(a.sectionHead && a.sectionHead.status === 'approved');
-        const isSectionHeadRejected = !!(a.sectionHead && (a.sectionHead.status === 'rejected' || a.sectionHead.status === 'cancelled'));
-        const shState = isSectionHeadDone ? 'done' : (isSectionHeadRejected ? 'rejected' : (isSectionHeadActive ? 'current' : ''));
-        html += node(shLabel, isSectionHeadDone ? 'Step 3 · Approved' : (isSectionHeadRejected ? 'Cancelled' : (isSectionHeadActive ? 'Step 3 · Action Req.' : 'Step 3 · Review')), shState, '', 'Tower Incharge holistic sectional approval');
+        const isSectionHeadDone = !!(a.sectionHead && a.sectionHead.status === 'approved') || ['Pending EHS Approval', 'Active', 'Extended', 'Closed', 'Completed (Surrendered)'].includes(p.status);
+        const isSectionHeadRejected = !isSectionHeadDone && !isSectionHeadActive && !!(a.sectionHead && (a.sectionHead.status === 'rejected' || a.sectionHead.status === 'cancelled'));
+        const shState = isSectionHeadDone ? 'done' : (isSectionHeadActive ? 'current' : (isSectionHeadRejected ? 'rejected' : ''));
+        html += node(shLabel, isSectionHeadDone ? 'Step 3 · Approved' : (isSectionHeadActive ? 'Step 3 · Action Req.' : (isSectionHeadRejected ? 'Cancelled' : 'Step 3 · Review')), shState, '', 'Tower Incharge holistic sectional approval');
         html += '<div class="tr-line ' + (isSectionHeadDone ? 'done' : '') + '"></div>';
 
         // Step 4: EHS Safety Endorsement
         const isEhsActive = p.status === 'Pending EHS Approval';
-        const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved'));
-        const isEhsRejected = !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
-        const ehsState = isEhsDone ? 'done' : (isEhsRejected ? 'rejected' : (isEhsActive ? 'current' : ''));
-        html += node('EHS Safety', isEhsDone ? 'Step 4 · Endorsed' : (isEhsRejected ? 'Cancelled' : (isEhsActive ? 'Step 4 · Action Req.' : 'Step 4 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement (First-Wins)');
+        const isEhsDone = !!((a.ehsManager && a.ehsManager.status === 'approved') || (a.ehsOfficer && a.ehsOfficer.status === 'approved')) || isWorkActive;
+        const isEhsRejected = !isEhsDone && !isEhsActive && !!((a.ehsManager && a.ehsManager.status === 'rejected') || (a.ehsOfficer && a.ehsOfficer.status === 'rejected'));
+        const ehsState = isEhsDone ? 'done' : (isEhsActive ? 'current' : (isEhsRejected ? 'rejected' : ''));
+        html += node('EHS Safety', isEhsDone ? 'Step 4 · Endorsed' : (isEhsActive ? 'Step 4 · Action Req.' : (isEhsRejected ? 'Cancelled' : 'Step 4 · Endorsement')), ehsState, '', 'EHS Safety statutory endorsement (First-Wins)');
         html += '<div class="tr-line ' + (isEhsDone ? 'done' : '') + '"></div>';
 
         // Final Step: Active / Operational
@@ -29303,7 +29440,7 @@ function trackerHtml(p) {
                         imgTag +
                         '</div>';
                 } else {
-                    statusCol = '<span style="font-size:11.5px;color:var(--text-muted);font-style:italic;"><i class="fa-regular fa-clock"></i> Not recorded yet for ' + p.id + ' (prompts on first action)</span>';
+                    statusCol = '<span style="font-size:11.5px;color:var(--text-muted);font-style:italic;"><i class="fa-regular fa-clock"></i> Not recorded yet for ' + p.id + '</span>';
                 }
 
                 rowsHtml += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border);flex-wrap:wrap;gap:8px;">' +
@@ -29388,7 +29525,11 @@ function trackerHtml(p) {
                     (p.createdBy && currentUser.name && p.createdBy.trim().toLowerCase() === currentUser.name.trim().toLowerCase()) ||
                     (p.createdByEmail && currentUser.email && p.createdByEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
                     (p.creatorEmail && currentUser.email && p.creatorEmail.trim().toLowerCase() === currentUser.email.trim().toLowerCase()) ||
-                    (p.createdByUid && currentUser.uid && p.createdByUid === currentUser.uid)
+                    (p.createdByUid && currentUser.uid && p.createdByUid === currentUser.uid) ||
+                    (!currentUser.uid && !currentUser.email && !currentUser.name && (
+                        (p.createdRoleKey && currentUser.key && p.createdRoleKey === currentUser.key) ||
+                        (p.createdByRole && currentUser.key && p.createdByRole === currentUser.key)
+                    ))
                 );
                 const isExcavationSpecialist = ptypeOf(p) === 'excavation' && currentUser && (
                     currentUser.key === 'section-head' ||

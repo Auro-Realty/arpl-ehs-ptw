@@ -222,13 +222,15 @@ assert.strictEqual(excChecklist.length, 12, "Excavation checklist must have exac
 console.log('  ✓ PASS: 12-item statutory checklist verified');
 
 // Test checklist item completeness rules
-const itemNoNoComment = { q: excChecklist[0], ans: 'no', comment: '' };
+const itemNoNoComment = { q: excChecklist[0], ans: 'no', comment: '', photo: null };
 assert.strictEqual(evalInVM("checklistItemComplete(" + JSON.stringify(itemNoNoComment) + ", 0, 'excavation')"), false, "Item NO without comment is incomplete");
-const itemNoWithComment = { q: excChecklist[0], ans: 'no', comment: 'Shoring boxes installed' };
-assert.strictEqual(evalInVM("checklistItemComplete(" + JSON.stringify(itemNoWithComment) + ", 0, 'excavation')"), true, "Item NO with comment is complete");
+const itemNoWithCommentNoPhoto = { q: excChecklist[0], ans: 'no', comment: 'Shoring boxes installed', photo: null };
+assert.strictEqual(evalInVM("checklistItemComplete(" + JSON.stringify(itemNoWithCommentNoPhoto) + ", 0, 'excavation')"), false, "Item NO without photo is incomplete");
+const itemNoWithComment = { q: excChecklist[0], ans: 'no', comment: 'Shoring boxes installed', photo: 'data:image/jpeg;base64,trench_photo' };
+assert.strictEqual(evalInVM("checklistItemComplete(" + JSON.stringify(itemNoWithComment) + ", 0, 'excavation')"), true, "Item NO with comment and photo is complete");
 const itemNa = { q: excChecklist[0], ans: 'na', comment: null };
 assert.strictEqual(evalInVM("checklistItemComplete(" + JSON.stringify(itemNa) + ", 0, 'excavation')"), true, "Item N/A without comment is complete");
-console.log('  ✓ PASS: Checklist NO comment mandate and N/A rules verified');
+console.log('  ✓ PASS: Checklist NO comment + photo mandate and N/A rules verified');
 
 // Populate complete checklist and site photo
 evalInVM("draft.checklist = CHECKLIST_ITEMS.map((q, i) => ({ q, ans: 'yes', comment: null, photo: null, gps: null }));");
