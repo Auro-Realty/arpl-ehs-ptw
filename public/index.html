@@ -13067,7 +13067,11 @@
                 p.resubmitComment = comment;
             }
             p.rectificationNotes = notes;
-            return resubmitReturnedPermit(p);
+            const res = resubmitReturnedPermit(p);
+            if (typeof viewDetail === 'function') {
+                viewDetail(p.id);
+            }
+            return res;
         }
 
         function acknowledgeReturnPermitEng(pOrId, payloadOrComment, maybeGps, maybeSig, maybeSignerName) {
@@ -16812,7 +16816,13 @@
             const vReg = document.getElementById('view-register');
             if (vReg && vReg.classList.contains('active')) buildRegisterTable();
             const vDet = document.getElementById('view-detail');
-            if (vDet && vDet.classList.contains('active') && currentDetailId) viewDetail(currentDetailId, true);
+            if (vDet && vDet.classList.contains('active') && currentDetailId) {
+                const activeEl = document.activeElement;
+                const isTyping = activeEl && vDet.contains(activeEl) && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+                if (!isTyping) {
+                    viewDetail(currentDetailId, true);
+                }
+            }
             saveState();
         }
         let escalationIntervalId = null;
@@ -25878,7 +25888,7 @@ function trackerHtml(p) {
                         '<div class="aa-title" style="color:#B45309;"><i class="fa-solid fa-pen-to-square"></i> Permit Returned for Correction</div>' +
                         '<div class="aa-desc"><b>Returned by ' + escapeHtml(retBy) + ':</b> "' + escapeHtml(retReason) + '"<br><span style="font-size:11.5px;color:var(--text);margin-top:4px;display:block;"><b>Correction Rule:</b> Master data stays locked. You can edit the safety checklist, comments, and photos before re-submitting. Unchanged approvals persist!</span></div>' +
                         '<div style="margin:12px 0 10px 0;"><button type="button" class="btn btn-secondary" style="font-size:12px;padding:6px 12px;background:#F97316;color:#fff;border-color:#EA580C;font-weight:700;" onclick="startRectifyPermit(\'' + p.id + '\')"><i class="fa-solid fa-pen-to-square"></i> ✏️ Edit &amp; Rectify Permit</button></div>' +
-                        '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">Supervisor Rectification Notes:</label><input type="text" id="rectifyNotesInput" class="input" placeholder="e.g. Added additional barricading and slope verified as requested" style="width:100%;max-width:550px;"></div>' +
+                        '<div style="margin-bottom:12px;"><label style="display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--text);">Supervisor Rectification Notes:</label><textarea id="rectifyNotesInput" class="input" rows="3" placeholder="e.g. Added additional barricading and slope verified as requested" style="width:100%;max-width:550px;min-height:72px;resize:vertical;padding:8px 10px;font-size:13px;line-height:1.4;" oninput="const curP = PERMITS.find(x => x.id === \'' + p.id + '\'); if (curP) curP.rectificationNotes = this.value;">' + escapeHtml(p.rectificationNotes || '') + '</textarea></div>' +
                         '<div style="display:flex;gap:10px;"><button type="button" class="btn btn-primary" onclick="' + (isExcavation ? 'resubmitExcavationCorrection(\'' + p.id + '\')' : 'resubmitPermit(\'' + p.id + '\', document.getElementById(\'rectifyNotesInput\') ? document.getElementById(\'rectifyNotesInput\').value : \'\')') + '"><i class="fa-solid fa-paper-plane"></i> ' + (isExcavation ? 'Re-Submit for Site Engineer Acknowledgment' : 'Re-Submit for Approval') + '</button></div>' +
                         '</div>';
                 } else {
@@ -29519,6 +29529,10 @@ function trackerHtml(p) {
             try {
                 const p = PERMITS.find(x => x.id === id);
                 if (!p) return;
+                const existingNotesEl = document.getElementById('rectifyNotesInput');
+                if (existingNotesEl && existingNotesEl.value) {
+                    p.rectificationNotes = existingNotesEl.value;
+                }
                 if (currentUser && currentUser.key === 'site-engineer' && p.status === 'Draft') return;
                 const scope = currentUser ? roleTypeScope(currentUser.key) : null;
                 const isCreator = currentUser && p && (
@@ -30263,7 +30277,12 @@ ptypeOf(p) === 'general' ?
                                     buildDashboard();
                                 }
                                 if (typeof currentDetailId !== 'undefined' && currentDetailId && typeof currentView !== 'undefined' && currentView === 'detail' && typeof viewDetail === 'function') {
-                                    viewDetail(currentDetailId, true, true);
+                                    const vDet = document.getElementById('view-detail');
+                                    const activeEl = document.activeElement;
+                                    const isTyping = activeEl && vDet && vDet.contains(activeEl) && (activeEl.tagName === 'INPUT' || activeEl.tagName === 'TEXTAREA' || activeEl.isContentEditable);
+                                    if (!isTyping) {
+                                        viewDetail(currentDetailId, true, true);
+                                    }
                                 }
                             }
                         }
