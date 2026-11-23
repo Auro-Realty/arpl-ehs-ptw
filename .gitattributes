@@ -1,0 +1,2 @@
+# Enforce LF for files that undergo exact-string multi-line test assertions
+functions/index.js text eol=lf
