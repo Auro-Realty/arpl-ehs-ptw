@@ -11989,6 +11989,7 @@
                 const isBlastingOp = p.dbOperationType === 'Blasting';
                 // Note: PTW-007 can only be initiated by Blasting / Drilling In-charge per INITIATOR_PERMIT_RULES
                 if (isBlastingOp) {
+                    p.signatories = p.signatories || {};
                     p.blastingStatutoryDecl = true;
                     p.signatories['blasting-incharge'] = { name: creator, sig: p.signature ? (p.signature.dataUrl || p.signature) : 'Signed', consent: true, at: nowTime() };
                     p.status = 'Pending Site Engineer Acknowledgment';
