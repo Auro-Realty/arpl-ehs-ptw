@@ -11640,6 +11640,7 @@
             const rk = normalizeRoleKey(rawRk);
             const isTiRole = (rk === 'tower-in-charge' || rk === 'hw-section-head' || rk === 'section-head');
             if (!rk) return false;
+            if (p && (p.status === 'Draft' || p.status === 'Returned for Correction' || p.status === 'Rejected' || ['Active', 'Extended', 'Closed', 'Completed (Surrendered)', 'Auto-Closed', 'Expired', 'Expired Before Activation', 'Cancelled'].includes(p.status))) return false;
             if (p && (p.status === 'Night Shift Approved – Awaiting Linked Permit')) return rk === normalizeRoleKey(targetInitiatorForNightLinked(p));
             if (p && (p.status === 'Approved – Pending Night Handover')) return rk === 'night-supervisor';
             if (p && p.status === 'Pending P&M Night Acknowledgment') return rk === 'pm';
