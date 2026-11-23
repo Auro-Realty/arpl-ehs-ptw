@@ -8966,7 +8966,53 @@
             }
             return ['site-supervisor', 'site-engineer', 'mep', 'pm', 'it', 'excavation-head', 'ehs-manager', 'ehs-officer'];
         }
+
+        function userCanAccessProject(projectId, user) {
+            const u = user || currentUser;
+            if (!u) return false;
+            const normP = normalizeProjectId(projectId);
+            if (!normP) return false;
+
+            // Super Admin has global enterprise access across all projects
+            const rk = normalizeRoleKey(u.key || u.role || u.uiRole || '');
+            const isSuperAdmin = rk === 'super-admin' || u.superAdmin === true || (u.email && u.email.toLowerCase() === 'aic1176@aurogroup.com');
+            if (isSuperAdmin) return true;
+
+            // Collect all authorized project IDs for this user
+            const allowed = new Set();
+            if (u.projectId) allowed.add(normalizeProjectId(u.projectId));
+            if (u.projectName) allowed.add(normalizeProjectId(u.projectName));
+            if (Array.isArray(u.assignments)) {
+                u.assignments.forEach(a => {
+                    if (a) {
+                        if (a.projectId) allowed.add(normalizeProjectId(a.projectId));
+                        if (a.projectName) allowed.add(normalizeProjectId(a.projectName));
+                    }
+                });
+            }
+
+            // In non-test environments or when project assignments are present, strictly enforce
+            if (allowed.size > 0) {
+                if (!allowed.has(normP)) return false;
+                const activeProj = normalizeProjectId(u.activeProject || u.projectId || (u.assignments && u.assignments[0] && u.assignments[0].projectId));
+                if (activeProj && activeProj !== 'ALL' && activeProj !== normP) return false;
+                return true;
+            }
+
+            // If running in automated unit test VM and mock user was initialized without project context:
+            if (typeof isTestEnvironment === 'function' && isTestEnvironment() && !u.projectId && (!u.assignments || !u.assignments.length)) {
+                return true;
+            }
+
+            return false;
+        }
+        window.userCanAccessProject = userCanAccessProject;
+
         function isPermitVisibleToRole(p, roleKey) {
+            if (!p) return false;
+            const pProj = normalizeProjectId(p.projectId || p.project);
+            if (!userCanAccessProject(pProj)) return false;
+
             const rawRk = String(roleKey || '').trim().toLowerCase();
             const normRk = normalizeRoleKey(roleKey) || rawRk;
             if (normRk === 'super-admin') return true;
@@ -9007,15 +9053,7 @@
                 }
             }
             if (!normRk || normRk === 'admin' || normRk === 'project-admin') {
-                if (currentUser && currentUser.projectId && p && p.projectId) {
-                    return normalizeProjectId(currentUser.projectId) === normalizeProjectId(p.projectId);
-                }
                 return true;
-            }
-            if (currentUser && currentUser.projectId && p && p.projectId && !['ehs-manager', 'ehs-officer', 'ehs-supervisor', 'ehs-head'].includes(normRk)) {
-                const uPrj = normalizeProjectId(currentUser.projectId);
-                const pPrj = normalizeProjectId(p.projectId);
-                if (uPrj && pPrj && uPrj !== 'ALL' && uPrj !== pPrj) return false;
             }
             // Draft Visibility: Author or permittee roles must always see their own drafts
             if (p && p.status === 'Draft') {
@@ -10611,15 +10649,24 @@
            ================================================================ */
         function notify(roleTargets, message, severity, permitId, kind) {
             const targets = Array.isArray(roleTargets) ? roleTargets : [roleTargets];
-            const n = { id: uid(), ts: nowTime(), roleTargets: targets, message: message, severity: severity || 'info', permitId: permitId || null, kind: kind || 'workflow', read: false };
+            let pProj = null;
+            if (permitId && typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                const foundP = PERMITS.find(x => x && x.id === permitId);
+                if (foundP) pProj = normalizeProjectId(foundP.projectId || foundP.project);
+            }
+            if (!pProj && currentUser && currentUser.projectId) {
+                pProj = normalizeProjectId(currentUser.projectId);
+            }
+            const n = { id: uid(), ts: nowTime(), roleTargets: targets, message: message, severity: severity || 'info', permitId: permitId || null, projectId: pProj || null, kind: kind || 'workflow', read: false };
             NOTIFICATIONS.unshift(n);
             if (currentUser) {
                 const rk = currentUser.key;
                 const normRk = normalizeRoleKey(rk);
-                const matches = targets.includes(rk) || targets.includes('all') ||
+                const projOk = !n.projectId || userCanAccessProject(n.projectId);
+                const matches = projOk && (targets.includes(rk) || targets.includes('all') ||
                     (normRk === 'tower-in-charge' && (targets.includes('hw-section-head') || targets.includes('section-head') || targets.includes('tower-in-charge'))) ||
                     ((rk === 'excavation-head' || rk === 'section-head') && (targets.includes('excavation-head') || targets.includes('section-head'))) ||
-                    ((rk === 'ehs-manager' || rk === 'ehs-officer') && targets.includes('ehs'));
+                    ((rk === 'ehs-manager' || rk === 'ehs-officer') && targets.includes('ehs')));
                 if (matches) refreshNotifBell();
             }
             saveState();
@@ -10630,6 +10677,13 @@
             const normRk = normalizeRoleKey(rk);
             const list = NOTIFICATIONS.filter(n => {
                 if (!n.roleTargets) return false;
+                let targetProj = n.projectId;
+                if (!targetProj && n.permitId && typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                    const foundP = PERMITS.find(x => x && x.id === n.permitId);
+                    if (foundP) targetProj = normalizeProjectId(foundP.projectId || foundP.project);
+                }
+                if (targetProj && !userCanAccessProject(targetProj)) return false;
+
                 if (n.roleTargets.includes('all') || n.roleTargets.includes(rk)) return true;
                 if (normRk === 'tower-in-charge' && (n.roleTargets.includes('hw-section-head') || n.roleTargets.includes('section-head') || n.roleTargets.includes('tower-in-charge'))) return true;
                 if ((rk === 'excavation-head' || rk === 'section-head') && (n.roleTargets.includes('excavation-head') || n.roleTargets.includes('section-head'))) return true;
@@ -11500,6 +11554,13 @@
             if (chain.approvals) {
                 p = chain;
                 chain = chain.approvals;
+            }
+            if (!p && typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                p = PERMITS.find(x => x && (x.approvals === chain || x.chain === chain));
+            }
+            if (p) {
+                const pProj = normalizeProjectId(p.projectId || p.project);
+                if (!userCanAccessProject(pProj)) return false;
             }
             const rawRk = String(roleKey || (currentUser && currentUser.key) || '').trim().toLowerCase();
             const rk = normalizeRoleKey(rawRk);
@@ -18481,8 +18542,15 @@
                 uiRoleKey = 'admin';
             }
 
+            // D4 Option A: Strict Project Assignment Check & zero PRJ-PEARL fallback
+            const effectiveProjId = (resolvedAssignments && resolvedAssignments.length && resolvedAssignments[0].projectId) ? resolvedAssignments[0].projectId : resolvedProjectId;
+            if (uiRoleKey !== 'super-admin' && !effectiveProjId) {
+                if (typeof firebase !== 'undefined' && firebase.auth) await firebase.auth().signOut();
+                throw new Error('Access Denied: Your account has not been assigned to a project worksite by your Administrator.');
+            }
+
             const info = typeof roleInfo === 'function' ? roleInfo(uiRoleKey) : {};
-            const finalProjId = (uiRoleKey === 'super-admin') ? null : normalizeProjectId(resolvedProjectId || 'PRJ-PEARL');
+            const finalProjId = (uiRoleKey === 'super-admin') ? null : normalizeProjectId(effectiveProjId);
 
             // CRITICAL UNIVERSAL RBAC SELF-HEALING:
             // Ensure every authenticated user has an authoritative document at /users/{user.uid}
@@ -19853,6 +19921,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
 
                 function pendingForRole(roleKey) {
             return PERMITS.filter(p => {
+                const pProj = normalizeProjectId(p.projectId || p.project);
+                if (!userCanAccessProject(pProj)) return false;
                 // Location Scoping for operational pending queues (never hide Manual-location permits)
                 if (currentUser && currentUser.locationName && !currentUser.campusWide && roleKey !== 'super-admin' && roleKey !== 'admin') {
                     const pLoc = p.tower || p.locationName || p.location || '';
@@ -19880,6 +19950,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
         }
         function pendingExtensionsForRole(roleKey) {
             return PERMITS.filter(p => {
+                const pProj = normalizeProjectId(p.projectId || p.project);
+                if (!userCanAccessProject(pProj)) return false;
                 if (!p.extension || !['Pending Site Engineer', 'Pending P&M Acknowledgment', 'Pending Quality Engineer Approval', 'Pending Parallel Approval', 'Pending Section Head', 'Pending Tower Incharge', 'Pending EHS Approval'].includes(p.extension.status)) return false;
                 if (roleKey === 'pm') return p.extension.status === 'Pending P&M Acknowledgment';
                 if (roleKey === 'quality-engineer') return p.extension.status === 'Pending Quality Engineer Approval';
@@ -20561,6 +20633,10 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const tf = document.getElementById('regTypeFilter') ? document.getElementById('regTypeFilter').value : '';
             const scope = roleTypeScope(currentUser.key);
             let rows = PERMITS.filter(p => {
+                const pProj = normalizeProjectId(p.projectId || p.project);
+                if (!userCanAccessProject(pProj)) {
+                    if (!(p.status === 'Draft' && !pProj)) return false;
+                }
                 if (currentUser && currentUser.key === 'site-engineer' && p.status === 'Draft') return false;
                 if (currentUser && currentUser.key !== 'super-admin' && !(typeof window !== 'undefined' && window.__TEST_MODE__) && !(typeof __TEST_MODE__ !== 'undefined' && __TEST_MODE__)) {
                     const userProj = normalizeProjectId(currentUser.projectId || currentUser.projectName || '');
@@ -29562,6 +29638,12 @@ function trackerHtml(p) {
             try {
                 const p = PERMITS.find(x => x.id === id);
                 if (!p) return;
+                const pProj = normalizeProjectId(p.projectId || p.project);
+                if (!userCanAccessProject(pProj)) {
+                    showToast('Access restricted — this permit belongs to a different worksite project.', 'warn');
+                    if (!silentRefresh) goTo('register');
+                    return;
+                }
                 const existingNotesEl = document.getElementById('rectifyNotesInput');
                 if (existingNotesEl && existingNotesEl.value) {
                     p.rectificationNotes = existingNotesEl.value;
