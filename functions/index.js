@@ -77,9 +77,9 @@ function normalizeProjectId(id) {
   if (!raw) return "";
   const up = raw.toUpperCase();
   if (up === "ALL" || up === "PRJ-MASTER" || up === "ENTERPRISE-GLOBAL") return up;
-  if (up === "PRJ-PRL" || up === "PRJ-PEARL" || up === "THE PEARL" || up === "PEARL" || up === "THE PEARL (PRJ-PEARL)") return "PRJ-PEARL";
-  if (up === "PRJ-RGT" || up === "PRJ-REGENT" || up === "THE REGENT" || up === "REGENT" || up === "THE REGENT (PRJ-REGENT)") return "PRJ-REGENT";
-  if (up === "PRJ-SNC" || up === "PRJ-SANSA" || up === "PRJ-SA" || up === "SANSA COUNTY" || up === "SANSA" || up === "SANSA COUNTY (PRJ-SANSA)") return "PRJ-SANSA";
+  if (up === "PRJ-PRL" || up === "PRJ-PEARL" || up === "THE PEARL" || up === "PEARL" || up === "THE PEARL (PRJ-PEARL)" || up === "THE PEARL BY AURO REALTY" || up === "THE PEARL BY AURO") return "PRJ-PEARL";
+  if (up === "PRJ-RGT" || up === "PRJ-REGENT" || up === "THE REGENT" || up === "REGENT" || up === "THE REGENT (PRJ-REGENT)" || up === "THE REGENT BY AURO REALTY" || up === "THE REGENT BY AURO") return "PRJ-REGENT";
+  if (up === "PRJ-SNC" || up === "PRJ-SANSA" || up === "PRJ-SA" || up === "SANSA COUNTY" || up === "SANSA" || up === "SANSA COUNTY (PRJ-SANSA)" || up === "SANSA COUNTY BY AURO REALTY" || up === "SANSA COUNTY BY AURO") return "PRJ-SANSA";
   return up;
 }
 
