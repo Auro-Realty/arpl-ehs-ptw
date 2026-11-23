@@ -9946,7 +9946,7 @@
             if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
                 PERMITS.forEach(p => {
                     if (p && p.id) {
-                        const m = String(p.id).match(/-(d{4,6})$/);
+                        const m = String(p.id).match(/-(\d{4,6})$/);
                         if (m) {
                             const val = parseInt(m[1], 10);
                             if (!isNaN(val) && val > maxSeq) maxSeq = val;
@@ -9980,16 +9980,27 @@
                     console.warn('Atomic counter transaction fallback:', e);
                 }
             }
-            const localSeq = Math.max(permitSeq++, highestLocal + 1);
+            let localSeq = Math.max(permitSeq, highestLocal + 1);
+            if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                while (PERMITS.some(p => p && (p.id === pfx + String(localSeq).padStart(6, '0') || String(p.id).endsWith('-' + String(localSeq).padStart(6, '0'))))) {
+                    localSeq++;
+                }
+            }
             permitSeq = localSeq + 1;
             return pfx + String(localSeq).padStart(6, '0');
         }
 
         function genPermitNumber(type) {
+            const pfx = (PTYPE_META[type || 'excavation'] ? PTYPE_META[type || 'excavation'].prefix : 'PTW-001') + '-2026-';
             const highestLocal = getHighestExistingPermitSeq();
-            const seq = Math.max(permitSeq++, highestLocal + 1);
+            let seq = Math.max(permitSeq, highestLocal + 1);
+            if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                while (PERMITS.some(p => p && (p.id === pfx + String(seq).padStart(6, '0') || String(p.id).endsWith('-' + String(seq).padStart(6, '0'))))) {
+                    seq++;
+                }
+            }
             permitSeq = seq + 1;
-            return (PTYPE_META[type || 'excavation'].prefix) + '-2026-' + String(seq).padStart(6, '0');
+            return pfx + String(seq).padStart(6, '0');
         }
         function projectByName(nameOrId) {
             if (!nameOrId) return null;
@@ -20768,7 +20779,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             const defWeather = WEATHER_OPTIONS[Math.floor(Math.random() * WEATHER_OPTIONS.length)];
             const isSundayPermit = !!sundayWorkContext;
             const targetWorkDate = isSundayPermit ? getNextSundayDateStr() : istDateStr();
-            const defProjName = (t === 'nightshift') ? 'ARPL' : ((currentUser && currentUser.key !== 'super-admin' && currentUser.projectName) ? currentUser.projectName : '');
+            const userPrjNorm = (currentUser && currentUser.key !== 'super-admin') ? normalizeProjectId(currentUser.projectId || currentUser.projectName) : null;
+            const defProjName = (t === 'nightshift') ? 'ARPL' : (userPrjNorm ? (resolveProjectName(userPrjNorm) || currentUser.projectName || '') : ((currentUser && currentUser.key !== 'super-admin' && currentUser.projectName) ? currentUser.projectName : ''));
             const defTowerName = (currentUser && !currentUser.campusWide && currentUser.locationName) ? currentUser.locationName : '';
             draft = {
                 id: genPermitNumber(t), ptype: t, activity: meta.name + ' (' + meta.code + ')',
@@ -20781,7 +20793,7 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                 signerConsent: false,
                 signerVerified: false,
                 weather: defWeather,
-                project: defProjName, tower: defTowerName, location: defTowerName, gps: null,
+                project: defProjName, projectId: userPrjNorm || null, tower: defTowerName, location: defTowerName, gps: null,
                 organization: 'ARPL', contractor: '',
                 locationStructure: defLocMode,
                 locFloor: '', locUnit: '', locBasementPodium: '', locArea: '',
@@ -21394,11 +21406,12 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     '<div class="form-hint" style="font-size:11.5px;color:var(--text-muted);margin-top:4px;"><i class="fa-solid fa-circle-info" style="color:var(--orange);"></i> Project selection is only available when scope of work is <b>Site</b>. Batching Plant operates as an independent dedicated workplace.</div>' +
                     '</div>';
             } else {
-                const userHasAssignedPrj = currentUser && currentUser.key !== 'super-admin' && (currentUser.projectId || currentUser.projectName);
-                const assignedPrj = userHasAssignedPrj ? (PROJECTS.find(p => p.id === currentUser.projectId || p.name === currentUser.projectName) || null) : null;
-                if (assignedPrj && !draft.project) {
-                    draft.project = assignedPrj.name;
-                    draft.projectId = assignedPrj.id;
+                const userPrjNorm = (currentUser && currentUser.key !== 'super-admin') ? normalizeProjectId(currentUser.projectId || currentUser.projectName) : null;
+                const userHasAssignedPrj = !!userPrjNorm;
+                const assignedPrj = userHasAssignedPrj ? (PROJECTS.find(p => normalizeProjectId(p.id) === userPrjNorm || p.name === currentUser.projectName || normalizeProjectId(p.name) === userPrjNorm) || null) : null;
+                if (assignedPrj) {
+                    if (!draft.project) draft.project = assignedPrj.name;
+                    if (!draft.projectId) draft.projectId = assignedPrj.id;
                 }
                 const isLockedToProject = !!assignedPrj;
                 html += '<div class="form-field" id="ff-project"><label>Project <span class="req">*</span>' + (isLockedToProject ? ' <span class="badge badge-info" style="font-size:10px;padding:2px 6px;margin-left:6px;"><i class="fa-solid fa-lock"></i> Locked to Assigned Worksite</span>' : '') + '</label><select id="inProject" onchange="onProjectChange()"' + (isLockedToProject ? ' disabled style="background:#F1F5F9;cursor:not-allowed;"' : '') + '><option value="">Select project&hellip;</option>' +
@@ -25031,8 +25044,9 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     }
 
                     // Populate distinct project vs location geotagging schema fields
-                    p.projectId = p.projectId || (projObj ? projObj.id : (p.project === 'Sansa County' ? 'PRJ-SANSA' : (p.project === 'The Regent' ? 'PRJ-REGENT' : 'PRJ-PEARL')));
-                    p.projectName = p.projectName || (projObj ? projObj.name : (p.project || 'The Pearl'));
+                    const resProjId = normalizeProjectId(p.projectId || p.project || (currentUser && currentUser.projectId));
+                    p.projectId = resProjId || (projObj ? projObj.id : (p.project === 'Sansa County' ? 'PRJ-SANSA' : (p.project === 'The Regent' ? 'PRJ-REGENT' : 'PRJ-PEARL')));
+                    p.projectName = (projObj ? projObj.name : null) || resolveProjectName(p.projectId) || p.project || 'The Pearl';
                     p.locationName = p.locationName || p.tower || (p.locationStructure && p.locationStructure.tower) || p.location || 'Site';
                     p.locationId = p.locationId || (p.tower ? ('LOC-' + p.projectId.replace('PRJ-', '') + '-' + p.tower.replace(/[^A-Za-z0-9]/g, '')) : 'CAMPUS-WIDE');
                     p.latitude = p.gps.lat;
