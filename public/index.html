@@ -8290,13 +8290,13 @@
                 name: 'The Regent',
                 towers: ['Tower 4', 'Tower 5', 'NTA', 'Stores', 'FormWork', 'Precast', 'Phase-1'],
                 locations: [
-                    { id: 'LOC-REGENT-T4', name: 'Tower 4', code: 'T4', category: 'Tower', site: { lat: null, lng: null, address: 'Tower 4, The Regent, Financial District' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
-                    { id: 'LOC-REGENT-T5', name: 'Tower 5', code: 'T5', category: 'Tower', site: { lat: null, lng: null, address: 'Tower 5, The Regent, Financial District' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
-                    { id: 'LOC-REGENT-NTA', name: 'NTA', code: 'NTA', category: 'Non-Tower Area', site: { lat: null, lng: null, address: 'NTA Common Utilities, The Regent' }, radius: 75, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
-                    { id: 'LOC-REGENT-STR', name: 'Stores', code: 'STR', category: 'Support Facility', site: { lat: null, lng: null, address: 'Central Material Stores, The Regent' }, radius: 60, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
-                    { id: 'LOC-REGENT-FW', name: 'FormWork', code: 'FW', category: 'Fabrication Yard', site: { lat: null, lng: null, address: 'FormWork Yard & Storage, The Regent' }, radius: 60, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
-                    { id: 'LOC-REGENT-PC', name: 'Precast', code: 'PC', category: 'Fabrication Yard', site: { lat: null, lng: null, address: 'Precast Casting Yard, The Regent' }, radius: 80, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
-                    { id: 'LOC-REGENT-P1', name: 'Phase-1', code: 'P1', category: 'Infrastructure', site: { lat: null, lng: null, address: 'Phase 1 Works, The Regent' }, radius: 100, configured: false, configuredAt: null, configuredBy: null, tagMethod: null, allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() }
+                    { id: 'LOC-REGENT-T4', name: 'Tower 4', code: 'T4', category: 'Tower', site: { lat: 17.4371, lng: 78.3612, address: 'Tower 4, The Regent, Financial District' }, radius: 75, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
+                    { id: 'LOC-REGENT-T5', name: 'Tower 5', code: 'T5', category: 'Tower', site: { lat: 17.4371, lng: 78.3612, address: 'Tower 5, The Regent, Financial District' }, radius: 75, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
+                    { id: 'LOC-REGENT-NTA', name: 'NTA', code: 'NTA', category: 'Non-Tower Area', site: { lat: 17.4371, lng: 78.3612, address: 'NTA Common Utilities, The Regent' }, radius: 75, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
+                    { id: 'LOC-REGENT-STR', name: 'Stores', code: 'STR', category: 'Support Facility', site: { lat: 17.4371, lng: 78.3612, address: 'Central Material Stores, The Regent' }, radius: 60, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
+                    { id: 'LOC-REGENT-FW', name: 'FormWork', code: 'FW', category: 'Fabrication Yard', site: { lat: 17.4371, lng: 78.3612, address: 'FormWork Yard & Storage, The Regent' }, radius: 60, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
+                    { id: 'LOC-REGENT-PC', name: 'Precast', code: 'PC', category: 'Fabrication Yard', site: { lat: 17.4371, lng: 78.3612, address: 'Precast Casting Yard, The Regent' }, radius: 80, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() },
+                    { id: 'LOC-REGENT-P1', name: 'Phase-1', code: 'P1', category: 'Infrastructure', site: { lat: 17.4371, lng: 78.3612, address: 'Phase 1 Works, The Regent' }, radius: 100, configured: true, configuredAt: '2026-01-01T00:00:00Z', configuredBy: 'SYSTEM', tagMethod: 'GPS_FIX', allowedWorkflows: DEFAULT_ALL_WORKFLOWS.slice() }
                 ],
                 basements: ['Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Podium Level 1'],
                 floors: ['Basement 2 (B2)', 'Basement 1 (B1)', 'Ground Floor (GF)', 'Floor 1', 'Floor 2', 'Floor 3', 'Floor 4', 'Floor 5', 'Floor 6', 'Floor 7', 'Floor 8', 'Floor 9', 'Floor 10', 'Floor 11', 'Floor 12', 'Floor 14', 'Floor 15', 'Terrace Level'],
@@ -14371,7 +14371,7 @@
             saveState();
 
             if (typeof firebase !== 'undefined' && firebase.firestore) {
-                firebase.firestore().collection('projects').doc(prj.id).set({
+                firebase.firestore().collection('projects').doc(normalizeProjectId(prj.id)).set({
                     locations: locs,
                     towers: prj.towers || [],
                     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -14402,7 +14402,7 @@
             }
             saveState();
             if (typeof firebase !== 'undefined' && firebase.firestore) {
-                firebase.firestore().collection('projects').doc(prj.id).set({
+                firebase.firestore().collection('projects').doc(normalizeProjectId(prj.id)).set({
                     locations: locs,
                     towers: prj.towers || [],
                     configured: prj.configured,
@@ -14417,7 +14417,7 @@
             const sel = document.getElementById('adminProjectSelect');
             if (!sel) return;
             if (currentUser && currentUser.key === 'admin' && (currentUser.projectId || currentUser.projectName)) {
-                const assignedIdx = PROJECTS.findIndex(p => p.id === currentUser.projectId || p.name === currentUser.projectName);
+                const assignedIdx = PROJECTS.findIndex(p => normalizeProjectId(p.id) === normalizeProjectId(currentUser.projectId) || p.name === currentUser.projectName);
                 if (assignedIdx >= 0) {
                     adminConfigState.selectedProjectIndex = assignedIdx;
                 }
@@ -14935,7 +14935,7 @@
 
             // Background Firestore synchronization
             if (typeof firebase !== 'undefined' && firebase.firestore) {
-                firebase.firestore().collection('projects').doc(prj.id).set({
+                firebase.firestore().collection('projects').doc(normalizeProjectId(prj.id)).set({
                     locations: locs,
                     configured: prj.configured,
                     lat: ctx.lat,
@@ -30169,7 +30169,7 @@ ptypeOf(p) === 'general' ?
                     prjSnap.forEach(doc => {
                         const pData = doc.data() || {};
                         const docId = pData.id || doc.id;
-                        const wasDemo = DEMO_SYNTHETIC_NAMES.includes(pData.configuredBy) || DEMO_SYNTHETIC_NAMES.includes(pData.adminName) || ['prasanna.j@aurorealty.com', 'ehs.regent@aurorealty.com', 'ehs.sansa@aurorealty.com'].includes((pData.adminEmail || '').toLowerCase());
+                        const wasDemo = DEMO_SYNTHETIC_NAMES.includes(pData.configuredBy) || DEMO_SYNTHETIC_NAMES.includes(pData.adminName);
                         const authExpected = getAuthoritativeTowers(docId);
                         const missingTowers = !Array.isArray(pData.towers) || pData.towers.length === 0 || (authExpected.length > 0 && pData.towers.length !== authExpected.length) || !Array.isArray(pData.locations) || pData.locations.length === 0;
                         if (wasDemo) {
@@ -30218,6 +30218,29 @@ ptypeOf(p) === 'general' ?
                         if (typeof renderAdminProjectsTab === 'function' && document.getElementById('view-projects') && document.getElementById('view-projects').classList.contains('active')) {
                             renderAdminProjectsTab();
                         }
+                    }
+
+                    if (!window.__PROJECTS_LISTENER_ATTACHED__) {
+                        window.__PROJECTS_LISTENER_ATTACHED__ = true;
+                        db.collection('projects').onSnapshot(snapshot => {
+                            if (!snapshot || snapshot.empty) return;
+                            snapshot.docChanges().forEach(change => {
+                                const pData = change.doc.data() || {};
+                                const docId = normalizeProjectId(pData.id || change.doc.id);
+                                if (!docId) return;
+                                const existingIdx = PROJECTS.findIndex(x => normalizeProjectId(x.id) === docId);
+                                if (existingIdx >= 0) {
+                                    PROJECTS[existingIdx] = normalizeProjectWithBaseline(pData, docId);
+                                    ensureProjectLocations(PROJECTS[existingIdx]);
+                                } else {
+                                    const newP = normalizeProjectWithBaseline(pData, docId);
+                                    ensureProjectLocations(newP);
+                                    PROJECTS.push(newP);
+                                }
+                            });
+                            window.PROJECTS = PROJECTS;
+                            window.PROJECT_MASTER = PROJECTS;
+                        }, err => console.warn('[Firestore Sync] Projects listener error:', err));
                     }
                 } else if (currentUser && currentUser.key === 'super-admin') {
                     // Seed initial clean project structures to Firestore
