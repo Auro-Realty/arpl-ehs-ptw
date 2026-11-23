@@ -8369,13 +8369,14 @@
 
         function normalizeProjectId(id) {
             if (!id) return '';
-            const raw = String(id).trim();
+            const raw = (typeof id === 'object' && id !== null) ? String(id.id || id.projectId || id.name || '').trim() : String(id).trim();
+            if (!raw) return '';
             const up = raw.toUpperCase();
             if (up === 'ALL' || up === 'PRJ-MASTER' || up === 'ENTERPRISE-GLOBAL') return up;
             if (up === 'PRJ-PRL' || up === 'PRJ-PEARL' || up === 'THE PEARL' || up === 'PEARL' || up === 'THE PEARL (PRJ-PEARL)') return 'PRJ-PEARL';
             if (up === 'PRJ-RGT' || up === 'PRJ-REGENT' || up === 'THE REGENT' || up === 'REGENT' || up === 'THE REGENT (PRJ-REGENT)') return 'PRJ-REGENT';
             if (up === 'PRJ-SNC' || up === 'PRJ-SANSA' || up === 'PRJ-SA' || up === 'SANSA COUNTY' || up === 'SANSA' || up === 'SANSA COUNTY (PRJ-SANSA)') return 'PRJ-SANSA';
-            return raw;
+            return up;
         }
         window.normalizeProjectId = normalizeProjectId;
 
@@ -8398,8 +8399,9 @@
 
         function normalizeProjectWithBaseline(pData, fallbackId) {
             if (!pData || typeof pData !== 'object') return null;
-            const pid = pData.id || fallbackId || '';
-            const base = BASELINE_PROJECTS.find(b => b.id === pid || (pData.name && b.name.toLowerCase() === String(pData.name).toLowerCase()));
+            const rawPid = pData.id || fallbackId || (pData.name && pData.name) || '';
+            const pid = normalizeProjectId(rawPid);
+            const base = BASELINE_PROJECTS.find(b => b.id === pid || (pData.name && b.name.toLowerCase() === String(pData.name).toLowerCase()) || (pData.id && normalizeProjectId(b.id) === pid));
             const merged = base ? Object.assign(JSON.parse(JSON.stringify(base)), pData) : Object.assign({}, pData);
             if (pid) merged.id = pid;
             if (!merged.name && base) merged.name = base.name;
@@ -10447,8 +10449,8 @@
                 return v;
             }));
             const resolvedPrj = projectByName(copy.project) || projectByName(copy.projectId);
-            copy.projectId = copy.projectId || (resolvedPrj ? resolvedPrj.id : (copy.project === 'Sansa County' ? 'PRJ-SANSA' : (copy.project === 'The Regent' ? 'PRJ-REGENT' : 'PRJ-PEARL')));
-            copy.projectName = copy.projectName || (resolvedPrj ? resolvedPrj.name : (copy.project || 'Sansa County'));
+            copy.projectId = normalizeProjectId(copy.projectId || (resolvedPrj ? resolvedPrj.id : copy.project));
+            copy.projectName = copy.projectName || (resolvedPrj ? resolvedPrj.name : resolveProjectName(copy.projectId));
             copy.updatedAt = new Date().toISOString();
 
             return copy;
@@ -10503,12 +10505,14 @@
                     const loadedById = new Map();
                     s.projects.forEach(p => {
                         if (p && p.id) {
-                            loadedById.set(p.id, normalizeProjectWithBaseline(p, p.id));
+                            const normId = normalizeProjectId(p.id);
+                            loadedById.set(normId, normalizeProjectWithBaseline(p, normId));
                         }
                     });
                     BASELINE_PROJECTS.forEach(bp => {
-                        if (!loadedById.has(bp.id)) {
-                            loadedById.set(bp.id, normalizeProjectWithBaseline(bp, bp.id));
+                        const normBpId = normalizeProjectId(bp.id);
+                        if (!loadedById.has(normBpId)) {
+                            loadedById.set(normBpId, normalizeProjectWithBaseline(bp, normBpId));
                         }
                     });
                     PROJECTS = Array.from(loadedById.values());

@@ -72,13 +72,15 @@ function validatePermitId(id) {
 }
 
 function normalizeProjectId(id) {
-  if (!id || typeof id !== "string") return "";
-  const raw = id.trim();
+  if (!id) return "";
+  const raw = (typeof id === "object" && id !== null) ? String(id.id || id.projectId || id.name || "").trim() : String(id).trim();
+  if (!raw) return "";
   const up = raw.toUpperCase();
-  if (up === "PRJ-PRL" || up === "PRJ-PEARL" || up === "THE PEARL" || up === "PEARL") return "PRJ-PEARL";
-  if (up === "PRJ-RGT" || up === "PRJ-REGENT" || up === "THE REGENT" || up === "REGENT") return "PRJ-REGENT";
-  if (up === "PRJ-SNC" || up === "PRJ-SANSA" || up === "PRJ-SA" || up === "SANSA COUNTY" || up === "SANSA") return "PRJ-SANSA";
-  return raw;
+  if (up === "ALL" || up === "PRJ-MASTER" || up === "ENTERPRISE-GLOBAL") return up;
+  if (up === "PRJ-PRL" || up === "PRJ-PEARL" || up === "THE PEARL" || up === "PEARL" || up === "THE PEARL (PRJ-PEARL)") return "PRJ-PEARL";
+  if (up === "PRJ-RGT" || up === "PRJ-REGENT" || up === "THE REGENT" || up === "REGENT" || up === "THE REGENT (PRJ-REGENT)") return "PRJ-REGENT";
+  if (up === "PRJ-SNC" || up === "PRJ-SANSA" || up === "PRJ-SA" || up === "SANSA COUNTY" || up === "SANSA" || up === "SANSA COUNTY (PRJ-SANSA)") return "PRJ-SANSA";
+  return up;
 }
 
 /**
