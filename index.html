@@ -9960,17 +9960,28 @@
         async function allocateUniquePermitNumber(type) {
             const pfx = (PTYPE_META[type || 'excavation'] ? PTYPE_META[type || 'excavation'].prefix : 'PTW-001') + '-2026-';
             const highestLocal = getHighestExistingPermitSeq();
+            const safeFloor = 50;
             if (typeof firebase !== 'undefined' && firebase.firestore) {
                 try {
                     const db = firebase.firestore();
-                    const counterRef = db.collection('system_counters').doc('permits');
+                    const counterRef = db.collection('_rate_limits').doc('permit_seq_counter');
                     const nextSeq = await db.runTransaction(async (transaction) => {
-                        const counterDoc = await transaction.get(counterRef);
+                        let counterDoc = null;
+                        try {
+                            counterDoc = await transaction.get(counterRef);
+                        } catch (_ge) {
+                            counterDoc = null;
+                        }
                         let curSeq = 0;
-                        if (counterDoc.exists) {
+                        if (counterDoc && counterDoc.exists) {
                             curSeq = counterDoc.data().currentSeq || 0;
                         }
-                        const candidate = Math.max(curSeq, highestLocal) + 1;
+                        let candidate = Math.max(curSeq, highestLocal, safeFloor) + 1;
+                        if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
+                            while (PERMITS.some(p => p && (p.id === pfx + String(candidate).padStart(6, '0') || String(p.id).endsWith('-' + String(candidate).padStart(6, '0'))))) {
+                                candidate++;
+                            }
+                        }
                         transaction.set(counterRef, { currentSeq: candidate, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
                         return candidate;
                     });
@@ -9980,7 +9991,7 @@
                     console.warn('Atomic counter transaction fallback:', e);
                 }
             }
-            let localSeq = Math.max(permitSeq, highestLocal + 1);
+            let localSeq = Math.max(permitSeq, highestLocal, safeFloor) + 1;
             if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
                 while (PERMITS.some(p => p && (p.id === pfx + String(localSeq).padStart(6, '0') || String(p.id).endsWith('-' + String(localSeq).padStart(6, '0'))))) {
                     localSeq++;
@@ -9993,7 +10004,8 @@
         function genPermitNumber(type) {
             const pfx = (PTYPE_META[type || 'excavation'] ? PTYPE_META[type || 'excavation'].prefix : 'PTW-001') + '-2026-';
             const highestLocal = getHighestExistingPermitSeq();
-            let seq = Math.max(permitSeq, highestLocal + 1);
+            const safeFloor = 50;
+            let seq = Math.max(permitSeq, highestLocal + 1, safeFloor + 1);
             if (typeof PERMITS !== 'undefined' && Array.isArray(PERMITS)) {
                 while (PERMITS.some(p => p && (p.id === pfx + String(seq).padStart(6, '0') || String(p.id).endsWith('-' + String(seq).padStart(6, '0'))))) {
                     seq++;
@@ -10509,10 +10521,52 @@
             copy.projectName = copy.projectName || (resolvedPrj ? resolvedPrj.name : resolveProjectName(copy.projectId));
             copy.updatedAt = new Date().toISOString();
 
+            if (copy && copy.signatories) {
+                if (!copy.siteEngineerAck || !copy.siteEngineerAck.acknowledged) {
+                    delete copy.signatories['site-engineer'];
+                }
+                if (!copy.approvals || !copy.approvals.sectionHead || copy.approvals.sectionHead.status !== 'approved') {
+                    delete copy.signatories['section-head'];
+                    delete copy.signatories['hw-section-head'];
+                    delete copy.signatories['excavation-head'];
+                }
+                if (!copy.approvals || ((!copy.approvals.ehsManager || copy.approvals.ehsManager.status !== 'approved') && (!copy.approvals.ehsOfficer || copy.approvals.ehsOfficer.status !== 'approved'))) {
+                    delete copy.signatories['ehs-manager'];
+                    delete copy.signatories['ehs-officer'];
+                }
+                if (!copy.approvals || !copy.approvals.mep || copy.approvals.mep.status !== 'approved') {
+                    delete copy.signatories['mep'];
+                }
+                if (!copy.approvals || !copy.approvals.it || copy.approvals.it.status !== 'approved') {
+                    delete copy.signatories['it'];
+                }
+                if (!copy.approvals || !copy.approvals.qualityEngineer || copy.approvals.qualityEngineer.status !== 'approved') {
+                    delete copy.signatories['quality-engineer'];
+                }
+                if ((!copy.pmAck || !copy.pmAck.acknowledged) && (!copy.pmNightAck || !copy.pmNightAck.acknowledged) && (!copy.approvals || !copy.approvals.pm || copy.approvals.pm.status !== 'approved')) {
+                    delete copy.signatories['pm'];
+                }
+                if ((!copy.projectManagerAck || !copy.projectManagerAck.acknowledged) && (!copy.approvals || !copy.approvals.projectManager || copy.approvals.projectManager.status !== 'approved')) {
+                    delete copy.signatories['project-manager'];
+                }
+                if (!copy.nightHandover || !copy.nightHandover.sig) {
+                    delete copy.signatories['night-supervisor'];
+                }
+                const pt = ptypeOf(copy);
+                const isBlasterCreator = (copy.createdByRole === 'blasting-incharge' || copy.createdRoleKey === 'blasting-incharge' || (typeof currentUser !== 'undefined' && currentUser && currentUser.key === 'blasting-incharge'));
+                if (pt === 'blasting') {
+                    if (!isBlasterCreator && (!copy.blastingInchargeAck || !copy.blastingInchargeAck.acknowledged)) {
+                        delete copy.signatories['blasting-incharge'];
+                    }
+                } else {
+                    delete copy.signatories['blasting-incharge'];
+                }
+            }
+
             return copy;
         }
 
-        function persistPermitToFirestore(p) {
+        function persistPermitToFirestore(p, isNew) {
             if (!p || !p.id) return Promise.resolve();
             if (typeof firebase === 'undefined' || !firebase.firestore) return Promise.resolve();
             try {
@@ -10530,7 +10584,9 @@
                     return Promise.reject(new Error('Permit payload exceeds 900 KB Firestore storage limit'));
                 }
 
-                return firebase.firestore().collection('permits').doc(p.id).set(clean, { merge: true })
+                const docRef = firebase.firestore().collection('permits').doc(p.id);
+                const writePromise = isNew ? docRef.set(clean) : docRef.set(clean, { merge: true });
+                return writePromise
                     .then(() => {
                         console.log('[Firestore] Permit synced successfully:', p.id);
                     })
@@ -11841,7 +11897,7 @@
             if (!p.originalValidTillMs && vtMs) p.originalValidTillMs = vtMs;
         }
 
-        function submitPermit(p) {
+        function submitPermit(p, isNew) {
             p.submittedAt = nowTime();
             p.stageEnteredAt = nowTime();
             p.escalation = { stage1: false, stage2: false };
@@ -11852,7 +11908,7 @@
             if (isBatchingElecEarly && !p.approvals) {
                 p.approvals = newChain('electrical-batching');
             }
-            persistPermitToFirestore(p);
+            persistPermitToFirestore(p, !!isNew);
             if (p.parentNightShiftId) {
                 const parent = PERMITS.find(x => x.id === p.parentNightShiftId);
                 if (parent) {
@@ -25055,7 +25111,8 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                     p.geotaggedAt = p.geotaggedAt || new Date().toISOString();
 
                     p.signatories = p.signatories || {};
-                    const creatorRole = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (ptypeOf(p) === 'blasting' && p.createdByRole === 'blasting-incharge' ? 'blasting-incharge' : 'site-supervisor'));
+                    const isBlaster = ptypeOf(p) === 'blasting' && (p.createdByRole === 'blasting-incharge' || p.createdRoleKey === 'blasting-incharge' || (currentUser && currentUser.key === 'blasting-incharge'));
+                    const creatorRole = ptypeOf(p) === 'electrical' ? 'electrician' : ((ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') ? 'lift-supervisor' : (isBlaster ? 'blasting-incharge' : 'site-supervisor'));
                     const defaultName = roleInfo(creatorRole) ? roleInfo(creatorRole).label : 'Permittee';
                     const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || (currentUser && currentUser.name) || defaultName;
                     const sSig = (p.signature && p.signature.dataUrl) || p.signature || makeSimSignature(sName);
@@ -25074,8 +25131,11 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
                         } else if (ptypeOf(p) !== 'confined') {
                             p.status = 'Pending Site Engineer Acknowledgment';
                         }
+                        if (!p.id || p.id === 'auto' || PERMITS.some(x => x.id === p.id)) {
+                            p.id = genPermitNumber(ptypeOf(p));
+                        }
                         if (!PERMITS.find(x => x.id === p.id)) PERMITS.push(p);
-                        submitPermit(p);
+                        submitPermit(p, true);
                     }
                     const targetId = p.id;
                     correctionMode = false;
@@ -26736,33 +26796,46 @@ function trackerHtml(p) {
             if (!p) return null;
             p.signatories = p.signatories || {};
 
-            // 1. Direct match on this specific permit
-            let sigObj = p.signatories[roleKey];
-            if (sigObj && sigObj.name && sigObj.sig) return sigObj;
+            let sigObj = null;
 
-            // 2. Strict Role Isolation:
+            // Strict Role Isolation & Verification:
             if (roleKey === 'site-supervisor') {
-                if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
-                    const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Permittee';
-                    sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
-                    p.signatories['site-supervisor'] = sigObj;
-                    return sigObj;
+                const isCreator = !['electrical', 'lifting', 'liftplan'].includes(ptypeOf(p)) && !(ptypeOf(p) === 'blasting' && p.createdByRole === 'blasting-incharge');
+                if (isCreator) {
+                    if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
+                        const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Permittee';
+                        sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
+                        p.signatories['site-supervisor'] = sigObj;
+                        return sigObj;
+                    }
+                    if (p.signatories && p.signatories['site-supervisor'] && p.signatories['site-supervisor'].name && p.signatories['site-supervisor'].sig) {
+                        return p.signatories['site-supervisor'];
+                    }
                 }
             } else if (roleKey === 'electrician') {
-                if (p.signatories && p.signatories['electrician']) return p.signatories['electrician'];
-                if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
-                    const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Permittee Electrician';
-                    sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
-                    p.signatories['electrician'] = sigObj;
-                    return sigObj;
+                if (ptypeOf(p) === 'electrical') {
+                    if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
+                        const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Permittee Electrician';
+                        sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
+                        p.signatories['electrician'] = sigObj;
+                        return sigObj;
+                    }
+                    if (p.signatories && p.signatories['electrician'] && p.signatories['electrician'].name && p.signatories['electrician'].sig) {
+                        return p.signatories['electrician'];
+                    }
                 }
             } else if (roleKey === 'blasting-incharge') {
-                if (p.signatories && p.signatories['blasting-incharge']) return p.signatories['blasting-incharge'];
-                if (p.createdByRole === 'blasting-incharge' && p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
-                    const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Blasting In-charge';
-                    sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
-                    p.signatories['blasting-incharge'] = sigObj;
-                    return sigObj;
+                const isBlasterCreator = p.createdByRole === 'blasting-incharge' || p.createdRoleKey === 'blasting-incharge' || (typeof currentUser !== 'undefined' && currentUser && currentUser.key === 'blasting-incharge');
+                if (isBlasterCreator) {
+                    if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
+                        const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Blasting In-charge';
+                        sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
+                        p.signatories['blasting-incharge'] = sigObj;
+                        return sigObj;
+                    }
+                    if (p.signatories && p.signatories['blasting-incharge'] && p.signatories['blasting-incharge'].name && p.signatories['blasting-incharge'].sig) {
+                        return p.signatories['blasting-incharge'];
+                    }
                 }
                 if (p.blastingInchargeAck && p.blastingInchargeAck.acknowledged && p.blastingInchargeAck.by && p.blastingInchargeAck.sig) {
                     sigObj = { name: p.blastingInchargeAck.by, sig: p.blastingInchargeAck.sig, consent: true, at: p.blastingInchargeAck.at || nowTime() };
@@ -26770,15 +26843,18 @@ function trackerHtml(p) {
                     return sigObj;
                 }
             } else if (roleKey === 'lift-supervisor') {
-                if (p.signatories && p.signatories['lift-supervisor']) return p.signatories['lift-supervisor'];
-                if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
-                    const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Lifting Supervisor';
-                    sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
-                    p.signatories['lift-supervisor'] = sigObj;
-                    return sigObj;
+                if (ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') {
+                    if (p.signature && (p.signature.dataUrl || typeof p.signature === 'string')) {
+                        const sName = p.signerName || p.createdBy || (p.signature && p.signature.by) || 'Lifting Supervisor';
+                        sigObj = { name: sName, sig: p.signature.dataUrl || p.signature, consent: true, at: (p.signature && p.signature.at) || p.createdAt };
+                        p.signatories['lift-supervisor'] = sigObj;
+                        return sigObj;
+                    }
+                    if (p.signatories && p.signatories['lift-supervisor'] && p.signatories['lift-supervisor'].name && p.signatories['lift-supervisor'].sig) {
+                        return p.signatories['lift-supervisor'];
+                    }
                 }
             } else if (roleKey === 'crane-operator') {
-                if (p.signatories && p.signatories['crane-operator']) return p.signatories['crane-operator'];
                 if (p.craneOperatorSig && p.craneOperatorSig.name) {
                     sigObj = { name: p.craneOperatorSig.name, sig: p.craneOperatorSig.sig, consent: true, at: p.craneOperatorSig.at || p.createdAt, license: p.craneOperatorSig.license };
                     p.signatories['crane-operator'] = sigObj;
@@ -26789,8 +26865,10 @@ function trackerHtml(p) {
                     p.signatories['crane-operator'] = sigObj;
                     return sigObj;
                 }
+                if (p.signatories && p.signatories['crane-operator'] && p.signatories['crane-operator'].name && p.signatories['crane-operator'].sig) {
+                    return p.signatories['crane-operator'];
+                }
             } else if (roleKey === 'rigger') {
-                if (p.signatories && p.signatories['rigger']) return p.signatories['rigger'];
                 if (p.riggerSig && p.riggerSig.name) {
                     sigObj = { name: p.riggerSig.name, sig: p.riggerSig.sig, consent: true, at: p.riggerSig.at || p.createdAt, license: p.riggerSig.license };
                     p.signatories['rigger'] = sigObj;
@@ -26801,8 +26879,10 @@ function trackerHtml(p) {
                     p.signatories['rigger'] = sigObj;
                     return sigObj;
                 }
+                if (p.signatories && p.signatories['rigger'] && p.signatories['rigger'].name && p.signatories['rigger'].sig) {
+                    return p.signatories['rigger'];
+                }
             } else if (roleKey === 'project-manager') {
-                if (p.signatories && p.signatories['project-manager']) return p.signatories['project-manager'];
                 if (p.projectManagerAck && p.projectManagerAck.acknowledged && p.projectManagerAck.by && p.projectManagerAck.sig) {
                     sigObj = { name: p.projectManagerAck.by, sig: p.projectManagerAck.sig, consent: true, at: p.projectManagerAck.at || nowTime() };
                     p.signatories['project-manager'] = sigObj;
@@ -26817,6 +26897,16 @@ function trackerHtml(p) {
                 // Site Engineer NEVER inherits or reads from site-supervisor
                 if (p.siteEngineerAck && p.siteEngineerAck.acknowledged && p.siteEngineerAck.by && p.siteEngineerAck.sig) {
                     sigObj = { name: p.siteEngineerAck.by, sig: p.siteEngineerAck.sig, consent: true, at: p.siteEngineerAck.at || nowTime() };
+                    p.signatories['site-engineer'] = sigObj;
+                    return sigObj;
+                }
+                if (p.siteEngineerReAck && p.siteEngineerReAck.acknowledged && p.siteEngineerReAck.by && p.siteEngineerReAck.sig) {
+                    sigObj = { name: p.siteEngineerReAck.by, sig: p.siteEngineerReAck.sig, consent: true, at: p.siteEngineerReAck.at || nowTime() };
+                    p.signatories['site-engineer'] = sigObj;
+                    return sigObj;
+                }
+                if (p.approvals && p.approvals.siteEngineer && p.approvals.siteEngineer.by && p.approvals.siteEngineer.sig && p.approvals.siteEngineer.status !== 'pending') {
+                    sigObj = { name: p.approvals.siteEngineer.by, sig: p.approvals.siteEngineer.sig, consent: true, at: p.approvals.siteEngineer.at || nowTime() };
                     p.signatories['site-engineer'] = sigObj;
                     return sigObj;
                 }
@@ -26837,6 +26927,11 @@ function trackerHtml(p) {
                     p.signatories['pm'] = sigObj;
                     return sigObj;
                 }
+                if (p.approvals && p.approvals.pm && p.approvals.pm.by && p.approvals.pm.sig && p.approvals.pm.status !== 'pending') {
+                    sigObj = { name: p.approvals.pm.by, sig: p.approvals.pm.sig, consent: true, at: p.approvals.pm.at || nowTime() };
+                    p.signatories['pm'] = sigObj;
+                    return sigObj;
+                }
             } else if (p.approvals) {
                 // Approvers: only return if an action was actually completed on this permit
                 const rkMap = { mep: 'mep', pm: 'pm', it: 'it', 'project-manager': 'projectManager', 'quality-engineer': 'qualityEngineer', 'section-head': 'sectionHead', 'hw-section-head': 'sectionHead', 'excavation-head': 'sectionHead', 'ehs-manager': 'ehsManager', 'ehs-officer': 'ehsOfficer', 'night-supervisor': 'nightHandover', 'pm-night': 'pmNight' };
@@ -26844,6 +26939,16 @@ function trackerHtml(p) {
                 const e = p.approvals[chKey];
                 if (e && e.by && e.sig && e.status !== 'pending') {
                     sigObj = { name: e.by, sig: e.sig, consent: true, at: e.at || nowTime() };
+                    p.signatories[roleKey] = sigObj;
+                    return sigObj;
+                }
+                if ((roleKey === 'ehs-manager' || roleKey === 'ehs-officer') && p.approvals.ehsManager && p.approvals.ehsManager.by && p.approvals.ehsManager.sig && p.approvals.ehsManager.status !== 'pending') {
+                    sigObj = { name: p.approvals.ehsManager.by, sig: p.approvals.ehsManager.sig, consent: true, at: p.approvals.ehsManager.at || nowTime() };
+                    p.signatories[roleKey] = sigObj;
+                    return sigObj;
+                }
+                if ((roleKey === 'ehs-manager' || roleKey === 'ehs-officer') && p.approvals.ehsOfficer && p.approvals.ehsOfficer.by && p.approvals.ehsOfficer.sig && p.approvals.ehsOfficer.status !== 'pending') {
+                    sigObj = { name: p.approvals.ehsOfficer.by, sig: p.approvals.ehsOfficer.sig, consent: true, at: p.approvals.ehsOfficer.at || nowTime() };
                     p.signatories[roleKey] = sigObj;
                     return sigObj;
                 }
@@ -28921,10 +29026,7 @@ function trackerHtml(p) {
                 };
 
                 signatoriesFlow.forEach(function (r, idx) {
-                    let sigObj = (p.signatories && (p.signatories[r.key] || (r.altKey ? p.signatories[r.altKey] : null))) || null;
-                    if (!sigObj && typeof getPermitSignatory === 'function') {
-                        sigObj = getPermitSignatory(p, r.key) || (r.altKey ? getPermitSignatory(p, r.altKey) : null);
-                    }
+                    let sigObj = (typeof getPermitSignatory === 'function') ? (getPermitSignatory(p, r.key) || (r.altKey ? getPermitSignatory(p, r.altKey) : null)) : ((p.signatories && (p.signatories[r.key] || (r.altKey ? p.signatories[r.altKey] : null))) || null);
 
                     // Check rejection & approval in approvals chain & specialized acks
                     let isRej = false;
@@ -29562,12 +29664,53 @@ function trackerHtml(p) {
                 delete p.signatories['project-manager'];
             }
 
+            // Clean up any stale or unapproved signatures from p.signatories so corrupted permits are cleansed
+            if (p.signatories) {
+                if (!p.siteEngineerAck || !p.siteEngineerAck.acknowledged) {
+                    delete p.signatories['site-engineer'];
+                }
+                if (!p.approvals || !p.approvals.sectionHead || p.approvals.sectionHead.status !== 'approved') {
+                    delete p.signatories['section-head'];
+                    delete p.signatories['hw-section-head'];
+                    delete p.signatories['excavation-head'];
+                }
+                if (!p.approvals || ((!p.approvals.ehsManager || p.approvals.ehsManager.status !== 'approved') && (!p.approvals.ehsOfficer || p.approvals.ehsOfficer.status !== 'approved'))) {
+                    delete p.signatories['ehs-manager'];
+                    delete p.signatories['ehs-officer'];
+                }
+                if (!p.approvals || !p.approvals.mep || p.approvals.mep.status !== 'approved') {
+                    delete p.signatories['mep'];
+                }
+                if (!p.approvals || !p.approvals.it || p.approvals.it.status !== 'approved') {
+                    delete p.signatories['it'];
+                }
+                if (!p.approvals || !p.approvals.qualityEngineer || p.approvals.qualityEngineer.status !== 'approved') {
+                    delete p.signatories['quality-engineer'];
+                }
+                if ((!p.pmAck || !p.pmAck.acknowledged) && (!p.pmNightAck || !p.pmNightAck.acknowledged) && (!p.approvals || !p.approvals.pm || p.approvals.pm.status !== 'approved')) {
+                    delete p.signatories['pm'];
+                }
+                if ((!p.projectManagerAck || !p.projectManagerAck.acknowledged) && (!p.approvals || !p.approvals.projectManager || p.approvals.projectManager.status !== 'approved')) {
+                    delete p.signatories['project-manager'];
+                }
+                if (!p.nightHandover || !p.nightHandover.sig) {
+                    delete p.signatories['night-supervisor'];
+                }
+                const isBlasterCreator = (p.createdByRole === 'blasting-incharge' || p.createdRoleKey === 'blasting-incharge' || (typeof currentUser !== 'undefined' && currentUser && currentUser.key === 'blasting-incharge'));
+                if (pt === 'blasting') {
+                    if (!isBlasterCreator && (!p.blastingInchargeAck || !p.blastingInchargeAck.acknowledged)) {
+                        delete p.signatories['blasting-incharge'];
+                    }
+                } else {
+                    delete p.signatories['blasting-incharge'];
+                }
+            }
+
             const rolesList = getPermitSignatoriesFlow(p);
 
             let rowsHtml = '';
             rolesList.forEach(r => {
-                let sigObj = p.signatories[r.key] || (r.altKey ? p.signatories[r.altKey] : null);
-                if (!sigObj) sigObj = getPermitSignatory(p, r.key) || (r.altKey ? getPermitSignatory(p, r.altKey) : null);
+                let sigObj = getPermitSignatory(p, r.key) || (r.altKey ? getPermitSignatory(p, r.altKey) : null);
 
                 let statusCol = '';
                 if (sigObj && sigObj.name && sigObj.sig) {
