@@ -13771,12 +13771,17 @@
             let reason, minutes, gps, photo, sig, signerName;
             if (typeof optsOrMins === 'object' && optsOrMins !== null) {
                 ({ reason, minutes, gps, photo, sig, signerName } = optsOrMins);
+                if (minutes === undefined && optsOrMins.mins !== undefined) minutes = optsOrMins.mins;
             } else {
                 minutes = optsOrMins;
                 reason = maybeReason;
             }
             if (!p || ['Auto-Closed', 'Expired', 'Expired Before Activation', 'Closed', 'Completed (Surrendered)', 'Cancelled', 'Rejected'].includes(p.status)) {
                 showToast('Extensions are strictly prohibited after permit expiry, auto-closure, or termination.', 'err');
+                return false;
+            }
+            if (ptypeOf(p) === 'blasting') {
+                showToast('Statutory Rule: Extensions are strictly prohibited for Drilling & Blasting (PTW-007). Close and surrender this permit and initiate a fresh PTW-007 permit.', 'err');
                 return false;
             }
             if (hasOpenObservation(p)) {
@@ -13802,71 +13807,118 @@
                 return;
             }
             const mins = Math.min(Math.max(EXTENSION_STEP_MIN, minutes || EXTENSION_STEP_MIN), cap);
-            const isLifting = ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan';
-            const reqBy = signerName || (currentUser && currentUser.name) || p.createdBy || (ptypeOf(p) === 'electrical' ? 'Permittee Electrician' : (ptypeOf(p) === 'blasting' ? 'Blasting In-charge' : (isLifting ? 'Lifting Supervisor' : 'Site Supervisor')));
-            
-            if (isLifting) {
-                p.extension = {
-                    id: uid(), reason, minutes: mins, hours: mins / 60, gps, photo, sig,
-                    requestedAt: nowTime(), requestedBy: reqBy,
-                    approvals: {
-                        kind: 'ext-lifting',
-                        siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
-                        sectionHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
-                        ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
-                        ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
-                    },
-                    stageEnteredAt: nowTime(), escalation: { stage1: false, stage2: false },
-                    status: 'Pending Site Engineer'
-                };
-                logActivity(p, 'Extension of ' + fmtDur(mins) + ' requested by Lifting Supervisor (' + reqBy + '). Reason: ' + reason + ' — awaiting Site Engineer acknowledgment.');
-                notify(['site-engineer'], pLabel(p) + ' — lifting extension request (' + fmtDur(mins) + ') requires Site Engineer acknowledgment.', 'info', p.id);
-                notify(stakeholdersFor(p), 'Extension request for ' + pLabel(p) + ' submitted for approval.', 'info', p.id);
-                showToast('Extension request submitted. Awaiting Site Engineer acknowledgment.', 'ok');
-                saveState();
-                return;
-            }
+            const pt = ptypeOf(p);
+            const isLifting = pt === 'lifting' || pt === 'liftplan';
+            const isCriticalLift = isLifting && (p.liftingClassification === 'critical' || p.ptwCode === 'PTW-009B' || Number(p.loadWeight || p.loadWeightMT || p.weight || 0) > 5.0 || Boolean(p.tandemLift || p.isTandem));
+            const isBatchingPlantElec = pt === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant' || p.electricalFacilityScope === 'batching_plant');
+            const isSiteElec = pt === 'electrical' && !isBatchingPlantElec;
+            const isExc = pt === 'excavation';
+            const isShaft = pt === 'shaft';
+            const isNight = pt === 'nightshift';
+            const reqBy = signerName || (currentUser && currentUser.name) || p.createdBy || (pt === 'electrical' ? 'Permittee Electrician' : (pt === 'blasting' ? 'Blasting In-charge' : (isLifting ? 'Lifting Supervisor' : (isNight ? 'Night Site Supervisor' : 'Site Supervisor'))));
 
-            const isBatchingPlantElec = ptypeOf(p) === 'electrical' && (p.electricalSiteType === 'batching_plant' || p.facilityScope === 'batching_plant');
-            if (isBatchingPlantElec) {
-                p.extension = {
-                    id: uid(), reason, minutes: mins, hours: mins / 60, gps, photo, sig,
-                    requestedAt: nowTime(), requestedBy: reqBy,
-                    approvals: {
-                        kind: 'ext-batching-elec',
-                        pm: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
-                        qualityEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
-                        ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
-                        ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
-                    },
-                    stageEnteredAt: nowTime(), escalation: { stage1: false, stage2: false },
-                    status: 'Pending P&M Acknowledgment'
-                };
-                logActivity(p, 'Extension of ' + fmtDur(mins) + ' requested by ' + reqBy + '. Reason: ' + reason + ' — awaiting P&M Engineer Step 2 acknowledgment.');
-                notify(['pm'], pLabel(p) + ' — extension request (' + fmtDur(mins) + ') requires P&M Engineer Step 2 acknowledgment.', 'info', p.id);
-                notify(stakeholdersFor(p), 'Extension request for ' + pLabel(p) + ' submitted for approval.', 'info', p.id);
-                showToast('Extension request submitted. Awaiting P&M Engineer Step 2 acknowledgment.', 'ok');
-                saveState();
-                return;
-            }
+            let approvals = {};
+            let initialStatus = 'Pending Site Engineer';
+            let initialRoleTarget = ['site-engineer'];
+            let initialRoleLabel = 'Site Engineer';
 
-            p.extension = {
-                id: uid(), reason, minutes: mins, hours: mins / 60, gps, photo, sig,
-                requestedAt: nowTime(), requestedBy: reqBy,
-                approvals: {
+            if (isExc) {
+                approvals = {
+                    kind: 'ext-excavation',
+                    siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    excavationHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    sectionHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
+                };
+                initialStatus = 'Pending Site Engineer';
+                initialRoleTarget = ['site-engineer'];
+                initialRoleLabel = 'Site Engineer';
+            } else if (isBatchingPlantElec) {
+                approvals = {
+                    kind: 'ext-batching-elec',
+                    pm: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    qualityEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
+                };
+                initialStatus = 'Pending P&M Acknowledgment';
+                initialRoleTarget = ['pm'];
+                initialRoleLabel = 'P&M Engineer';
+            } else if (isSiteElec) {
+                approvals = {
+                    kind: 'ext-electrical-site',
+                    siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    mep: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
+                };
+                initialStatus = 'Pending Site Engineer';
+                initialRoleTarget = ['site-engineer'];
+                initialRoleLabel = 'Site Engineer';
+            } else if (isCriticalLift) {
+                approvals = {
+                    kind: 'ext-lifting-critical',
+                    siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    sectionHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    pm: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    projectManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
+                };
+                initialStatus = 'Pending Site Engineer';
+                initialRoleTarget = ['site-engineer'];
+                initialRoleLabel = 'Site Engineer';
+            } else if (isNight) {
+                approvals = {
+                    kind: 'ext-nightshift',
+                    siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    sectionHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    nightSupervisor: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
+                };
+                initialStatus = 'Pending Site Engineer';
+                initialRoleTarget = ['site-engineer'];
+                initialRoleLabel = 'Site Engineer';
+            } else if (isLifting) {
+                approvals = {
+                    kind: 'ext-lifting',
+                    siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    sectionHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
+                    ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
+                };
+                initialStatus = 'Pending Site Engineer';
+                initialRoleTarget = ['site-engineer'];
+                initialRoleLabel = 'Site Engineer';
+            } else {
+                approvals = {
                     kind: 'ext-flow',
                     siteEngineer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
                     sectionHead: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
                     ehsManager: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null },
                     ehsOfficer: { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null }
-                },
+                };
+                initialStatus = 'Pending Site Engineer';
+                initialRoleTarget = ['site-engineer'];
+                initialRoleLabel = 'Site Engineer';
+            }
+
+            p.extension = {
+                id: uid(), reason, minutes: mins, hours: mins / 60, gps, photo, sig,
+                requestedAt: nowTime(), requestedBy: reqBy,
+                approvals,
                 stageEnteredAt: nowTime(), escalation: { stage1: false, stage2: false },
-                status: 'Pending Site Engineer'
+                status: initialStatus
             };
-            logActivity(p, 'Extension of ' + fmtDur(mins) + ' requested by ' + reqBy + '. Reason: ' + reason + ' — awaiting Site Engineer re-acknowledgment.');
-            notify(['site-engineer'], pLabel(p) + ' — extension request (' + fmtDur(mins) + ') requires Site Engineer re-acknowledgment.', 'info', p.id);
+
+            logActivity(p, 'Extension of ' + fmtDur(mins) + ' requested by ' + reqBy + '. Reason: ' + reason + ' — awaiting ' + initialRoleLabel + ' review.');
+            notify(initialRoleTarget, pLabel(p) + ' — extension request (' + fmtDur(mins) + ') requires ' + initialRoleLabel + ' review.', 'info', p.id);
             notify(stakeholdersFor(p), 'Extension request for ' + pLabel(p) + ' submitted for approval.', 'info', p.id);
-            showToast('Extension request submitted. Awaiting Site Engineer re-acknowledgment.', 'ok');
+            showToast('Extension request submitted. Awaiting ' + initialRoleLabel + ' review.', 'ok');
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+            executeServerTransition(p, { action: 'EXT_REQUESTED', targetStatus: p.status, comments: reason, extensionMinutes: mins, gps });
             saveState();
         }
 
@@ -13902,19 +13954,19 @@
                 notify(['pm'], pLabel(p) + ' — extension request revised by Electrician. P&M Engineer acknowledgment required.', 'info', p.id);
                 notify(stakeholdersFor(p), pLabel(p) + ' extension request revised and resubmitted by Electrician.', 'info', p.id);
                 showToast('Extension revised & resubmitted. Awaiting P&M Engineer acknowledgment.', 'ok');
+                if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+                executeServerTransition(p, { action: 'EXT_RESUBMIT', targetStatus: p.status, comments: reason, extensionMinutes: mins, gps });
                 saveState();
                 return;
             }
 
             if (origRole === 'site-engineer') {
-                // If Site Engineer rejected, normal re-review
                 ext.status = 'Pending Site Engineer';
                 ext.approvals.siteEngineer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
                 ext.isReAck = false;
                 logActivity(p, 'Extension request revised by Permittee (' + reqBy + ') and resubmitted to Site Engineer.');
                 notify(['site-engineer'], pLabel(p) + ' — extension request revised by Permittee. Site Engineer acknowledgment required.', 'info', p.id);
             } else {
-                // Unified rule: Routes to Site Engineer for re-acknowledgment first, flagged with isReAck
                 ext.status = 'Pending Site Engineer';
                 ext.approvals.siteEngineer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
                 ext.isReAck = true;
@@ -13924,6 +13976,8 @@
 
             notify(stakeholdersFor(p), pLabel(p) + ' extension request revised and resubmitted by Permittee.', 'info', p.id);
             showToast('Extension revised & resubmitted.', 'ok');
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+            executeServerTransition(p, { action: 'EXT_RESUBMIT', targetStatus: p.status, comments: reason, extensionMinutes: mins, gps });
             saveState();
         }
 
@@ -13948,13 +14002,7 @@
 
             if (roleKey === 'site-engineer') {
                 ext.approvals.siteEngineer = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
-                if (ptypeOf(p) === 'blasting') {
-                    ext.status = 'Pending EHS Approval';
-                    ext.approvals.ehsManager = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
-                    ext.approvals.ehsOfficer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
-                    logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & forwarded directly to EHS Safety.');
-                    notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension re-acknowledged by Site Engineer — awaiting EHS verification.', 'info', p.id);
-                } else if (ext.isReAck && ext.rejectionOrigin) {
+                if (ext.isReAck && ext.rejectionOrigin) {
                     const origRole = ext.rejectionOrigin.roleKey;
                     const origLabel = ext.rejectionOrigin.roleLabel;
                     if (origRole === 'ehs-manager' || origRole === 'ehs-officer' || origRole === 'ehs') {
@@ -13963,8 +14011,27 @@
                         ext.approvals.ehsOfficer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
                         logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & returned directly to EHS Safety.');
                         notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension re-acknowledged by Site Engineer — returned to EHS for verification.', 'info', p.id);
+                    } else if (origRole === 'mep') {
+                        ext.status = 'Pending MEP Acknowledgment';
+                        ext.approvals.mep = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                        logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & returned directly to MEP.');
+                        notify(['mep'], pLabel(p) + ' extension re-acknowledged by Site Engineer — returned to MEP for review.', 'info', p.id);
+                    } else if (origRole === 'pm') {
+                        ext.status = 'Pending P&M Acknowledgment';
+                        ext.approvals.pm = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                        logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & returned directly to P&M.');
+                        notify(['pm'], pLabel(p) + ' extension re-acknowledged by Site Engineer — returned to P&M for review.', 'info', p.id);
+                    } else if (origRole === 'project-manager') {
+                        ext.status = 'Pending Project Manager Acknowledgment';
+                        ext.approvals.projectManager = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                        logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & returned directly to Project Manager.');
+                        notify(['project-manager'], pLabel(p) + ' extension re-acknowledged by Site Engineer — returned to Project Manager for review.', 'info', p.id);
+                    } else if (origRole === 'night-supervisor') {
+                        ext.status = 'Pending Night Handover';
+                        ext.approvals.nightSupervisor = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
+                        logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & returned directly to Night Site Supervisor.');
+                        notify(['night-supervisor'], pLabel(p) + ' extension re-acknowledged by Site Engineer — returned to Night Site Supervisor for handover.', 'info', p.id);
                     } else {
-                        // Section head
                         ext.status = 'Pending Section Head';
                         ext.approvals.sectionHead = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
                         logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & returned directly to ' + approverLabel + '.');
@@ -13972,38 +14039,88 @@
                     }
                     ext.isReAck = false;
                     ext.rejectionOrigin = null;
+                } else if (ext.approvals && ext.approvals.kind === 'ext-electrical-site') {
+                    ext.status = 'Pending MEP Acknowledgment';
+                    logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') acknowledged & forwarded to MEP Engineer.');
+                    notify(['mep'], pLabel(p) + ' extension acknowledged by Site Engineer — awaiting MEP Engineer review.', 'info', p.id);
                 } else {
                     ext.status = 'Pending Section Head';
                     logActivity(p, 'Extension — Site Engineer (' + effectiveSigner + ') re-acknowledged & forwarded to ' + approverLabel + '.');
                     notify([shRoleFor(p)], pLabel(p) + ' extension re-acknowledged by Site Engineer — awaiting ' + approverLabel + ' review.', 'info', p.id);
                 }
                 ext.stageEnteredAt = nowTime();
-            } else if (roleKey === 'pm' && ext.approvals && ext.approvals.kind === 'ext-batching-elec') {
-                ext.approvals.pm = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
-                if (ext.isReAck && ext.rejectionOrigin) {
-                    const origRole = ext.rejectionOrigin.roleKey;
-                    const origLabel = ext.rejectionOrigin.roleLabel;
-                    if (origRole === 'ehs-manager' || origRole === 'ehs-officer' || origRole === 'ehs') {
-                        ext.status = 'Pending EHS Approval';
-                        ext.approvals.ehsManager = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
-                        ext.approvals.ehsOfficer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
-                        logActivity(p, 'Extension — P&M Engineer (' + effectiveSigner + ') Step 2 re-acknowledged & returned directly to EHS Safety.');
-                        notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension re-acknowledged by P&M Engineer — returned to EHS for verification.', 'info', p.id);
+            } else if (roleKey === 'mep') {
+                if (ext.approvals) ext.approvals.mep = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                if (ext.approvals && ext.approvals.kind === 'ext-excavation') {
+                    logActivity(p, 'Extension — MEP Engineer (' + effectiveSigner + ') cleared parallel excavation gate.');
+                    const pmDone = ext.approvals.pm && ext.approvals.pm.status === 'approved';
+                    const itDone = ext.approvals.it && ext.approvals.it.status === 'approved';
+                    if (pmDone && itDone) {
+                        ext.status = 'Pending Section Head';
+                        ext.stageEnteredAt = nowTime();
+                        logActivity(p, 'Extension — All 3 parallel disciplines (MEP · P&M · IT) cleared. Forwarded to Excavation Head.');
+                        notify(['excavation-head'], pLabel(p) + ' extension parallel clearances complete — awaiting Excavation Head review.', 'info', p.id);
                     } else {
-                        // Quality Engineer (Section Head)
-                        ext.status = 'Pending Quality Engineer Approval';
-                        ext.approvals.qualityEngineer = { status: 'pending', by: null, at: null, gps: null, comment: null, sig: null };
-                        logActivity(p, 'Extension — P&M Engineer (' + effectiveSigner + ') Step 2 re-acknowledged & returned directly to Quality Engineer (Section Head).');
-                        notify(['quality-engineer'], pLabel(p) + ' extension re-acknowledged by P&M Engineer — returned to Quality Engineer for review.', 'info', p.id);
+                        notify(['excavation-head', 'pm', 'it'], pLabel(p) + ' extension cleared by MEP. Remaining parallel clearances pending.', 'info', p.id);
                     }
-                    ext.isReAck = false;
-                    ext.rejectionOrigin = null;
-                } else {
+                } else if (ext.approvals && ext.approvals.kind === 'ext-electrical-site') {
+                    ext.status = 'Pending EHS Approval';
+                    ext.stageEnteredAt = nowTime();
+                    logActivity(p, 'Extension — MEP Engineer (' + effectiveSigner + ') approved & forwarded to EHS Safety.');
+                    notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension approved by MEP — awaiting EHS verification.', 'info', p.id);
+                }
+            } else if (roleKey === 'pm') {
+                if (ext.approvals) ext.approvals.pm = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                if (ext.approvals && ext.approvals.kind === 'ext-excavation') {
+                    logActivity(p, 'Extension — P&M Engineer (' + effectiveSigner + ') cleared parallel excavation gate.');
+                    const mepDone = ext.approvals.mep && ext.approvals.mep.status === 'approved';
+                    const itDone = ext.approvals.it && ext.approvals.it.status === 'approved';
+                    if (mepDone && itDone) {
+                        ext.status = 'Pending Section Head';
+                        ext.stageEnteredAt = nowTime();
+                        logActivity(p, 'Extension — All 3 parallel disciplines (MEP · P&M · IT) cleared. Forwarded to Excavation Head.');
+                        notify(['excavation-head'], pLabel(p) + ' extension parallel clearances complete — awaiting Excavation Head review.', 'info', p.id);
+                    } else {
+                        notify(['excavation-head', 'mep', 'it'], pLabel(p) + ' extension cleared by P&M. Remaining parallel clearances pending.', 'info', p.id);
+                    }
+                } else if (ext.approvals && ext.approvals.kind === 'ext-lifting-critical') {
+                    ext.status = 'Pending Project Manager Acknowledgment';
+                    ext.stageEnteredAt = nowTime();
+                    logActivity(p, 'Extension — P&M Engineer (' + effectiveSigner + ') verified heavy crane & rigging capacity. Forwarded to Project Manager.');
+                    notify(['project-manager'], pLabel(p) + ' critical lift extension verified by P&M — awaiting Project Manager review.', 'info', p.id);
+                } else if (ext.approvals && ext.approvals.kind === 'ext-batching-elec') {
                     ext.status = 'Pending Quality Engineer Approval';
+                    ext.stageEnteredAt = nowTime();
                     logActivity(p, 'Extension — P&M Engineer (' + effectiveSigner + ') Step 2 acknowledged & forwarded to Quality Engineer (Section Head).');
                     notify(['quality-engineer'], pLabel(p) + ' extension acknowledged by P&M Engineer — awaiting Quality Engineer review & approval.', 'info', p.id);
                 }
+            } else if (roleKey === 'it' || roleKey === 'it-in-charge') {
+                if (ext.approvals) ext.approvals.it = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                if (ext.approvals && ext.approvals.kind === 'ext-excavation') {
+                    logActivity(p, 'Extension — IT In-Charge (' + effectiveSigner + ') cleared underground fiber/telecom lines.');
+                    const mepDone = ext.approvals.mep && ext.approvals.mep.status === 'approved';
+                    const pmDone = ext.approvals.pm && ext.approvals.pm.status === 'approved';
+                    if (mepDone && pmDone) {
+                        ext.status = 'Pending Section Head';
+                        ext.stageEnteredAt = nowTime();
+                        logActivity(p, 'Extension — All 3 parallel disciplines (MEP · P&M · IT) cleared. Forwarded to Excavation Head.');
+                        notify(['excavation-head'], pLabel(p) + ' extension parallel clearances complete — awaiting Excavation Head review.', 'info', p.id);
+                    } else {
+                        notify(['excavation-head', 'mep', 'pm'], pLabel(p) + ' extension cleared by IT. Remaining parallel clearances pending.', 'info', p.id);
+                    }
+                }
+            } else if (roleKey === 'project-manager') {
+                if (ext.approvals) ext.approvals.projectManager = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                ext.status = 'Pending EHS Approval';
                 ext.stageEnteredAt = nowTime();
+                logActivity(p, 'Extension — Project Manager (' + effectiveSigner + ') approved critical lift extension & forwarded to EHS Safety.');
+                notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' critical lift extension approved by Project Manager — awaiting EHS verification.', 'info', p.id);
+            } else if (roleKey === 'night-supervisor') {
+                if (ext.approvals) ext.approvals.nightSupervisor = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                ext.status = 'Pending EHS Approval';
+                ext.stageEnteredAt = nowTime();
+                logActivity(p, 'Extension — Night Site Supervisor (' + effectiveSigner + ') confirmed night shift handover & forwarded to EHS Safety.');
+                notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' night extension handover confirmed — awaiting EHS verification.', 'info', p.id);
             } else if (roleKey === 'quality-engineer' && ext.approvals && ext.approvals.kind === 'ext-batching-elec') {
                 ext.approvals.qualityEngineer = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
                 ext.status = 'Pending EHS Approval';
@@ -14011,11 +14128,34 @@
                 logActivity(p, 'Extension — Quality Engineer (Section Head) (' + effectiveSigner + ') approved & forwarded to EHS Safety.');
                 notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension approved by Quality Engineer — awaiting EHS verification.', 'info', p.id);
             } else if (roleKey === 'section-head' || roleKey === 'hw-section-head' || roleKey === 'excavation-head') {
-                ext.approvals.sectionHead = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
-                ext.status = 'Pending EHS Approval';
-                ext.stageEnteredAt = nowTime();
-                logActivity(p, 'Extension — ' + approverLabel + ' (' + effectiveSigner + ') approved.');
-                notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension approved by ' + approverLabel + ' — awaiting EHS verification.', 'info', p.id);
+                if (ext.approvals && ext.approvals.kind === 'ext-lifting-critical') {
+                    ext.approvals.sectionHead = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                    ext.status = 'Pending P&M Acknowledgment';
+                    ext.stageEnteredAt = nowTime();
+                    logActivity(p, 'Extension — Tower Incharge (' + effectiveSigner + ') approved critical lift & forwarded to P&M Engineer.');
+                    notify(['pm'], pLabel(p) + ' critical lift extension approved by Tower Incharge — awaiting P&M review.', 'info', p.id);
+                } else if (ext.approvals && ext.approvals.kind === 'ext-nightshift') {
+                    ext.approvals.sectionHead = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                    ext.status = 'Pending Night Handover';
+                    ext.stageEnteredAt = nowTime();
+                    logActivity(p, 'Extension — Tower Incharge (' + effectiveSigner + ') approved night extension & forwarded to Night Site Supervisor.');
+                    notify(['night-supervisor'], pLabel(p) + ' night extension approved by Tower Incharge — awaiting Night Supervisor handover.', 'info', p.id);
+                } else if (isExc || roleKey === 'excavation-head') {
+                    if (ext.approvals) {
+                        ext.approvals.excavationHead = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                        if (ext.approvals.sectionHead) ext.approvals.sectionHead = ext.approvals.excavationHead;
+                    }
+                    ext.status = 'Pending EHS Approval';
+                    ext.stageEnteredAt = nowTime();
+                    logActivity(p, 'Extension — Excavation Head (' + effectiveSigner + ') approved & forwarded to EHS Safety.');
+                    notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension approved by Excavation Head — awaiting EHS verification.', 'info', p.id);
+                } else {
+                    if (ext.approvals) ext.approvals.sectionHead = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                    ext.status = 'Pending EHS Approval';
+                    ext.stageEnteredAt = nowTime();
+                    logActivity(p, 'Extension — ' + approverLabel + ' (' + effectiveSigner + ') approved.');
+                    notify(['ehs-manager', 'ehs-officer'], pLabel(p) + ' extension approved by ' + approverLabel + ' — awaiting EHS verification.', 'info', p.id);
+                }
             } else if (roleKey === 'ehs-manager' || roleKey === 'ehs-officer' || roleKey === 'ehs-supervisor' || roleKey === 'ehs-head' || roleKey === 'ehs') {
                 const ehsField = (roleKey === 'ehs-officer') ? 'ehsOfficer' : 'ehsManager';
                 ext.approvals[ehsField] = { status: 'approved', by: effectiveSigner, at: nowTime(), gps, comment, sig };
@@ -14031,6 +14171,7 @@
                 logActivity(p, 'Extension APPROVED by EHS (' + effectiveSigner + '). Validity extended from ' + fmtDateTime(oldExpiry) + ' to ' + fmtDateTime(p.validTill) + '. Work may continue.');
                 notify(stakeholdersFor(p), pLabel(p) + ' extension APPROVED — validity now extends to ' + fmtDateTime(p.validTill) + '.', 'success', p.id);
             }
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
             executeServerTransition(p, { action: 'EXT_STAGE_APPROVED', targetStatus: p.status, gps, comments: comment, extensionMinutes: ext.minutes });
             showToast('Extension approval recorded.', 'ok');
             saveState();
@@ -14056,8 +14197,12 @@
             const approverLabel = (roleKey === 'excavation-head') ? 'Excavation Head' :
                 ((roleKey === 'quality-engineer') ? 'Quality Engineer (Section Head)' :
                 ((roleKey === 'pm') ? 'P&M Engineer' :
+                ((roleKey === 'mep') ? 'MEP Engineer' :
+                ((roleKey === 'it' || roleKey === 'it-in-charge') ? 'IT In-Charge' :
+                ((roleKey === 'project-manager') ? 'Project Manager' :
+                ((roleKey === 'night-supervisor') ? 'Night Site Supervisor' :
                 ((roleKey === 'section-head' || roleKey === 'hw-section-head') ? (isExc ? 'Excavation Head' : 'Tower Incharge') :
-                ((rInfo && rInfo.label) || 'Approver'))));
+                ((rInfo && rInfo.label) || 'Approver'))))))));
             const effectiveSigner = signerName || (currentUser && currentUser.name) || approverLabel;
             ext.status = 'Returned for Correction';
             ext.rejectionOrigin = {
@@ -14073,11 +14218,20 @@
             if (ext.approvals) {
                 if (roleKey === 'site-engineer') {
                     ext.approvals.siteEngineer = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                } else if (roleKey === 'mep') {
+                    ext.approvals.mep = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
                 } else if (roleKey === 'pm') {
                     ext.approvals.pm = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                } else if (roleKey === 'it' || roleKey === 'it-in-charge') {
+                    ext.approvals.it = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                } else if (roleKey === 'project-manager') {
+                    ext.approvals.projectManager = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
+                } else if (roleKey === 'night-supervisor') {
+                    ext.approvals.nightSupervisor = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
                 } else if (roleKey === 'quality-engineer') {
                     ext.approvals.qualityEngineer = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
-                } else if (roleKey === 'section-head' || roleKey === 'hw-section-head') {
+                } else if (roleKey === 'section-head' || roleKey === 'hw-section-head' || roleKey === 'excavation-head') {
+                    if (roleKey === 'excavation-head') ext.approvals.excavationHead = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
                     ext.approvals.sectionHead = { status: 'rejected', by: effectiveSigner, at: nowTime(), gps, comment, sig };
                 } else if (roleKey === 'ehs-manager' || roleKey === 'ehs-officer' || roleKey === 'ehs') {
                     const key = (roleKey === 'ehs-officer') ? 'ehsOfficer' : 'ehsManager';
@@ -14090,6 +14244,7 @@
             notify([initiatorRole], pLabel(p) + ' extension request returned for correction by ' + approverLabel + ': "' + comment + '" — revise and resubmit.', 'warn', p.id);
             notify(stakeholdersFor(p), pLabel(p) + ' extension request returned to ' + initiatorLabel + ' for correction by ' + approverLabel + '.', 'warn', p.id);
             showToast('Extension returned to ' + initiatorLabel + ' for correction.', 'info');
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
             executeServerTransition(p, { action: 'EXT_RETURN', targetStatus: p.status, roleKey, gps, comments: comment });
             saveState();
         }
@@ -14223,11 +14378,20 @@
             const effectiveSigner = signerName || (currentUser && currentUser.name) || p.createdBy || (isElectrical ? 'Licensed Electrician' : (isLifting ? 'Lifting Supervisor' : (isNight ? 'Night Site Supervisor' : roleInfo('site-supervisor').label)));
             p.closure = { gps, photo, remarks, sig, signerName: effectiveSigner, closedAt: t, by: effectiveSigner, closedOnSunday: !!closedOnSunday, fireWatch: !!fireWatch, guardrailReFix: !!guardrailReFix, confinedClosure: !!confinedClosure, blastingPostClearance: !!blastingPostClearance, blastingClearanceConfirmed: !!blastingPostClearance, electricalSurrender: !!electricalSurrender, electricalClosureConfirmed: !!electricalSurrender, generalHousekeeping: !!generalHousekeeping, generalHousekeepingConfirmed: !!generalHousekeeping, liftingDemob: !!liftingDemob, liftingDemobilizationConfirmed: !!liftingDemob, nightClosure: !!nightClosure, nightClosureConfirmed: !!nightClosure };
             p.surrender = { gps, photo, remarks, sig, signerName: effectiveSigner, surrenderedAt: t, by: effectiveSigner, closedOnSunday: !!closedOnSunday, fireWatch: !!fireWatch, guardrailReFix: !!guardrailReFix, confinedClosure: !!confinedClosure, blastingPostClearance: !!blastingPostClearance, blastingClearanceConfirmed: !!blastingPostClearance, electricalSurrender: !!electricalSurrender, electricalClosureConfirmed: !!electricalSurrender, generalHousekeeping: !!generalHousekeeping, generalHousekeepingConfirmed: !!generalHousekeeping, liftingDemob: !!liftingDemob, liftingDemobilizationConfirmed: !!liftingDemob, nightClosure: !!nightClosure, nightClosureConfirmed: !!nightClosure };
+            
+            // 1. Stage 1 Write: Persist full closure & surrender evidence to Firestore while status is STILL 'Active'.
+            if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
+
+            // 2. Set terminal status and user notifications
             p.status = 'Completed (Surrendered)';
             logActivity(p, 'Permittee (' + effectiveSigner + ') confirmed area made safe, men & materials removed' + (isElectrical ? ' and verified all electrical personnel withdrawn, apparatus made safe, lockouts surrendered' : '') + (isLifting ? ' and lifting demobilization & safety certified (crane stowed, rigging gears stored, area safe)' : '') + (blastingPostClearance ? ' and post-blast clearance verified (exclusion perimeter checked, all personnel accounted for, zero misfires confirmed)' : '') + (confinedClosure ? ' and confined space safely evacuated, equipment removed & openings secured' : '') + (fireWatch ? ' and continuous 1-hr fire watch verified' : '') + (guardrailReFix ? ' and all guard rails, edge protections & floor opening covers safely re-fixed' : '') + (generalHousekeeping ? ' and housekeeping & area clearance certified (tools/rigging demobilized, debris cleared, safe handover)' : '') + (nightClosure ? ' and night shift safely concluded (personnel evacuated, lighting towers de-energized/secured)' : '') + (closedOnSunday ? ' [Sunday Closure Authorized as per Valid Time Window]' : '') + '. Digitally signed under DPDP consent. Permit CLOSED and formally SURRENDERED to EHS.');
             notify(stakeholdersFor(p), pLabel(p) + ' closed & formally SURRENDERED to EHS by ' + effectiveSigner + (closedOnSunday ? ' (Sunday Closure as per Valid Time)' : '') + '. Lifecycle complete. The official Permit Report PDF is now available.', 'success', p.id);
             showToast('Permit closed & surrendered. Lifecycle complete — the official Permit Report PDF is ready to download from the top-right button.', 'ok');
+            
+            // 3. Fire server transition to record tamper-proof activity log and status
             executeServerTransition(p, { action: 'PERMIT_SURRENDERED', targetStatus: 'Completed (Surrendered)', gps, comments: remarks });
+            
+            // 4. Stage 2 Direct Write Fallback (persists terminal status if Cloud Functions offline)
             if (typeof persistPermitToFirestore === 'function') persistPermitToFirestore(p);
             saveState();
             return true;
@@ -20038,12 +20202,14 @@ return '<span class="badge st-' + statusClass(s) + '">' + s + '</span>';
             return PERMITS.filter(p => {
                 const pProj = normalizeProjectId(p.projectId || p.project);
                 if (!userCanAccessProject(pProj)) return false;
-                if (!p.extension || !['Pending Site Engineer', 'Pending P&M Acknowledgment', 'Pending Quality Engineer Approval', 'Pending Parallel Approval', 'Pending Section Head', 'Pending Tower Incharge', 'Pending EHS Approval'].includes(p.extension.status)) return false;
-                if (roleKey === 'pm') return p.extension.status === 'Pending P&M Acknowledgment';
+                if (!p.extension || !['Pending Site Engineer', 'Pending P&M Acknowledgment', 'Pending Quality Engineer Approval', 'Pending Parallel Approval', 'Pending Section Head', 'Pending Tower Incharge', 'Pending MEP Acknowledgment', 'Pending Project Manager Acknowledgment', 'Pending Night Handover', 'Pending EHS Approval'].includes(p.extension.status)) return false;
+                if (roleKey === 'pm') return p.extension.status === 'Pending P&M Acknowledgment' || (p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && p.extension.approvals.pm && p.extension.approvals.pm.status === 'pending');
                 if (roleKey === 'quality-engineer') return p.extension.status === 'Pending Quality Engineer Approval';
                 if (roleKey === 'site-engineer') return p.extension.status === 'Pending Site Engineer' && p.extension.approvals && p.extension.approvals.siteEngineer && p.extension.approvals.siteEngineer.status === 'pending';
-                if (roleKey === 'mep') return (p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && p.extension.approvals.mep && p.extension.approvals.mep.status === 'pending');
-                if (['pm', 'it'].includes(roleKey) || roleKey === 'it-in-charge') return p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && ((p.extension.approvals[roleKey] && p.extension.approvals[roleKey].status === 'pending') || (p.extension.approvals.it && p.extension.approvals.it.status === 'pending'));
+                if (roleKey === 'mep') return (p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && p.extension.approvals.mep && p.extension.approvals.mep.status === 'pending') || p.extension.status === 'Pending MEP Acknowledgment';
+                if (roleKey === 'it' || roleKey === 'it-in-charge') return p.extension.status === 'Pending Parallel Approval' && p.extension.approvals && p.extension.approvals.it && p.extension.approvals.it.status === 'pending';
+                if (roleKey === 'project-manager') return p.extension.status === 'Pending Project Manager Acknowledgment';
+                if (roleKey === 'night-supervisor') return p.extension.status === 'Pending Night Handover';
                 if (roleKey === 'excavation-head') return ptypeOf(p) === 'excavation' && (p.extension.status === 'Pending Section Head');
                 if (roleKey === 'hw-section-head') return ptypeOf(p) !== 'excavation' && (p.extension.status === 'Pending Section Head' || p.extension.status === 'Pending Tower Incharge');
                 if (roleKey === 'section-head') return (p.extension.status === 'Pending Section Head' || p.extension.status === 'Pending Tower Incharge');
@@ -26448,22 +26614,125 @@ function trackerHtml(p) {
                             '</div>';
                     }
                 }
-                // Stage: Pending P&M Engineer Step 2 Acknowledgment
-                else if (ext.status === 'Pending P&M Acknowledgment') {
+                // Stage: Pending Site Engineer Re-Acknowledgment
+                else if (ext.status === 'Pending Site Engineer') {
                     const isReAck = !!ext.isReAck;
-                    const origLabel = ext.rejectionOrigin ? ext.rejectionOrigin.roleLabel : 'Quality Engineer (Section Head)';
-                    if (rk === 'pm') {
+                    const origLabel = ext.rejectionOrigin ? ext.rejectionOrigin.roleLabel : shTitle;
+                    if (rk === 'site-engineer') {
                         html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(21,101,192,0.06);">' +
-                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--blue);"></i> ' + (isReAck ? 'Extension Request: P&M Engineer Step 2 Re-Acknowledgment' : 'Extension Request: P&M Engineer Step 2 Acknowledgment') + '</div>' +
-                            '<div class="aa-desc"><b>Permittee Electrician ' + (isReAck ? 'revised extension request' : 'requested extension') + ':</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Inspect batching plant electrical installations and re-acknowledge to ' + (isReAck ? ('return directly to ' + escapeHtml(origLabel)) : 'forward to Quality Engineer (Section Head)') + '. Gated by GPS and digital signature.</div>' +
+                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--blue);"></i> ' + (isReAck ? 'Extension Request: Site Engineer Re-Acknowledgment' : 'Extension Request: Site Engineer Acknowledgment') + '</div>' +
+                            '<div class="aa-desc"><b>Supervisor ' + (isReAck ? 'revised extension request' : 'requested extension') + ':</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Inspect site safety conditions and re-acknowledge to ' + (isReAck ? ('return directly to ' + escapeHtml(origLabel)) : ('forward to ' + shTitle)) + '. Gated by GPS and digital signature.</div>' +
                             '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> ' + (isReAck ? ('Re-Acknowledge &amp; Return to ' + escapeHtml(origLabel)) : 'Step 2 Acknowledge Extension') + '</button>' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> ' + (isReAck ? ('Re-Acknowledge &amp; Return to ' + escapeHtml(origLabel)) : 'Re-Acknowledge Extension') + '</button>' +
                             '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
                             '</div></div>';
                     } else if (rk !== 'admin' && rk !== 'super-admin') {
                         html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
-                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting P&M Engineer Step 2 ' + (isReAck ? 'Re-Acknowledgment' : 'Acknowledgment') + '</div>' +
-                            '<div class="aa-desc">Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting Step 2 ' + (isReAck ? 're-acknowledgment' : 'acknowledgment') + ' by the <b>P&M Engineer</b>' + (isReAck ? (' before returning to ' + escapeHtml(origLabel)) : ' before routing to Quality Engineer') + '.</div>' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting Site Engineer ' + (isReAck ? 'Re-Acknowledgment' : 'Acknowledgment') + '</div>' +
+                            '<div class="aa-desc">Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting Step 1 ' + (isReAck ? 're-acknowledgment' : 'acknowledgment') + ' by the <b>Site Engineer</b>' + (isReAck ? (' before returning to ' + escapeHtml(origLabel)) : '') + '.</div>' +
+                            '</div>';
+                    }
+                }
+                // Stage: Pending Parallel Approval (Excavation MEP · P&M · IT Gate)
+                else if (ext.status === 'Pending Parallel Approval') {
+                    const normRk = normalizeRoleKey(rk || (currentUser && (currentUser.key || currentUser.role)));
+                    const myField = CHAIN_ROLE_FIELD[normRk] || CHAIN_ROLE_FIELD[rk] || normRk;
+                    const isParallelApprover = ['mep', 'pm', 'it'].includes(myField);
+                    const mySlot = isParallelApprover && ext.approvals && ext.approvals[myField];
+                    const canActParallel = isParallelApprover && mySlot && mySlot.status === 'pending';
+
+                    if (canActParallel) {
+                        html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(21,101,192,0.06);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--blue);"></i> Extension Request: Parallel Clearance Required (' + (roleInfo(myField) ? roleInfo(myField).label : myField.toUpperCase()) + ')</div>' +
+                            '<div class="aa-desc"><b>Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Parallel gate: MEP, P&amp;M, and IT must all approve before the extension routes to Excavation Head. Gated by GPS and digital signature.</div>' +
+                            '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> Approve Extension</button>' +
+                            '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
+                            '</div></div>';
+                    } else if (rk !== 'admin' && rk !== 'super-admin') {
+                        const pendingDisciplines = ['mep', 'pm', 'it'].filter(d => ext.approvals && ext.approvals[d] && ext.approvals[d].status === 'pending');
+                        const pendingLabels = pendingDisciplines.map(d => (roleInfo(d) ? roleInfo(d).label : d.toUpperCase())).join(', ');
+                        const mySlotStatus = isParallelApprover && mySlot && mySlot.status;
+                        let statusNote = '';
+                        if (mySlotStatus === 'approved') {
+                            statusNote = '<div style="margin-top:6px;font-size:12px;color:var(--green);font-weight:600;"><i class="fa-solid fa-circle-check"></i> Your clearance (' + (roleInfo(myField) ? roleInfo(myField).label : myField.toUpperCase()) + ') is approved and on file.</div>';
+                        }
+                        html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting Parallel Discipline Clearances</div>' +
+                            '<div class="aa-desc">Parallel clearance required from: <b>' + (pendingLabels || 'MEP, P&amp;M, IT') + '</b> before routing to Excavation Head.' + statusNote + '</div>' +
+                            '</div>';
+                    }
+                }
+                // Stage: Pending MEP Acknowledgment (Shaft Work / Site Electrical)
+                else if (ext.status === 'Pending MEP Acknowledgment') {
+                    const isMep = rk === 'mep';
+                    const isShaftWork = ptypeOf(p) === 'shaft';
+                    const nextStageLabel = isShaftWork ? 'Tower Incharge' : 'EHS Safety';
+                    if (isMep) {
+                        html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(21,101,192,0.06);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--blue);"></i> Extension Request: MEP Engineer Acknowledgment</div>' +
+                            '<div class="aa-desc"><b>Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Acknowledge extension to route to ' + nextStageLabel + '. Gated by GPS and digital signature.</div>' +
+                            '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> Acknowledge Extension</button>' +
+                            '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
+                            '</div></div>';
+                    } else if (rk !== 'admin' && rk !== 'super-admin') {
+                        html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting MEP Engineer Acknowledgment</div>' +
+                            '<div class="aa-desc">Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting review and acknowledgment by the <b>MEP Engineer</b>.</div>' +
+                            '</div>';
+                    }
+                }
+                // Stage: Pending Section Head / Tower Incharge / Excavation Head Review
+                else if (ext.status === 'Pending Section Head') {
+                    const targetShRole = shRoleFor(p);
+                    const isShRole = (rk === targetShRole) || ((isShaft || isGr || isHw || isConfined || isGeneral || isLifting || isElectrical || isBlasting) && (rk === 'hw-section-head' || rk === 'section-head')) || (isExcavation && rk === 'excavation-head');
+                    const isCritLift = (ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan') && (p.liftingClassification === 'critical' || p.ptwCode === 'PTW-009B' || Number(p.loadWeight || p.loadWeightMT || 0) > 5.0 || Boolean(p.tandemLift || p.isTandem));
+                    const isNightP = ptypeOf(p) === 'nightshift';
+                    const prevAck = isExcavation ? 'Cleared by parallel disciplines (MEP · P&amp;M · IT)' : ('Re-acknowledged by Site Engineer (' + escapeHtml((ext.approvals && ext.approvals.siteEngineer && ext.approvals.siteEngineer.by) || 'Site Engineer') + ')');
+                    const nextDest = isCritLift ? 'P&amp;M Engineer for crane &amp; rigging review' : (isNightP ? 'Night Site Supervisor for handover confirmation' : 'EHS Safety for final endorsement');
+                    const extShAckDesc = '<b>Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. ' + prevAck + '. Approve to route to ' + nextDest + ', or Reject to return for correction.';
+                    const extShAwaitingDesc = 'Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). ' + prevAck + '. Awaiting review and endorsement by <b>' + shTitle + '</b>.';
+                    if (isShRole) {
+                        html += '<div class="approval-action-card" style="border-color:var(--purple);background:var(--purple-bg);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--purple);"></i> Extension Request: ' + shTitle + ' Review</div>' +
+                            '<div class="aa-desc">' + extShAckDesc + '</div>' +
+                            '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> Approve Extension</button>' +
+                            '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
+                            '</div></div>';
+                    } else if (rk !== 'admin' && rk !== 'super-admin') {
+                        html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting ' + shTitle + ' Review</div>' +
+                            '<div class="aa-desc">' + extShAwaitingDesc + '</div>' +
+                            '</div>';
+                    }
+                }
+                // Stage: Pending P&M Engineer Acknowledgment (Batching Plant Step 2 or Critical Lift)
+                else if (ext.status === 'Pending P&M Acknowledgment') {
+                    const isReAck = !!ext.isReAck;
+                    const isCritLift = (ptypeOf(p) === 'lifting' || ptypeOf(p) === 'liftplan');
+                    const origLabel = ext.rejectionOrigin ? ext.rejectionOrigin.roleLabel : (isCritLift ? 'Tower Incharge' : 'Quality Engineer (Section Head)');
+                    if (rk === 'pm') {
+                        const titleText = isCritLift ? 'Extension Request: P&amp;M Engineer Crane &amp; Rigging Verification' : (isReAck ? 'Extension Request: P&M Engineer Step 2 Re-Acknowledgment' : 'Extension Request: P&M Engineer Step 2 Acknowledgment');
+                        const descText = isCritLift
+                            ? ('<b>Lifting Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Tower Incharge endorsed critical lift extension. Inspect crane fitness certificates (Form 10/11), rigging plan (' + (p.riggingStressPercent || '—') + '% SWL tension), and ground bearing. Acknowledge to route to Project Manager (Step 5). Gated by GPS and digital signature.')
+                            : ('<b>Permittee Electrician ' + (isReAck ? 'revised extension request' : 'requested extension') + ':</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Inspect batching plant electrical installations and re-acknowledge to ' + (isReAck ? ('return directly to ' + escapeHtml(origLabel)) : 'forward to Quality Engineer (Section Head)') + '. Gated by GPS and digital signature.');
+                        const btnText = isCritLift ? 'Acknowledge &amp; Forward to Project Manager' : (isReAck ? ('Re-Acknowledge &amp; Return to ' + escapeHtml(origLabel)) : 'Step 2 Acknowledge Extension');
+                        html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(21,101,192,0.06);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--blue);"></i> ' + titleText + '</div>' +
+                            '<div class="aa-desc">' + descText + '</div>' +
+                            '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> ' + btnText + '</button>' +
+                            '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
+                            '</div></div>';
+                    } else if (rk !== 'admin' && rk !== 'super-admin') {
+                        const awaitDesc = isCritLift
+                            ? ('Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Tower Incharge endorsed. Awaiting crane fitness &amp; rigging review by the <b>P&amp;M Engineer</b>.')
+                            : ('Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting Step 2 ' + (isReAck ? 're-acknowledgment' : 'acknowledgment') + ' by the <b>P&M Engineer</b>' + (isReAck ? (' before returning to ' + escapeHtml(origLabel)) : ' before routing to Quality Engineer') + '.');
+                        html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting P&M Engineer Review</div>' +
+                            '<div class="aa-desc">' + awaitDesc + '</div>' +
                             '</div>';
                     }
                 }
@@ -26486,43 +26755,39 @@ function trackerHtml(p) {
                             '</div>';
                     }
                 }
-                // Stage 1: Pending Site Engineer Re-Acknowledgment
-                else if (ext.status === 'Pending Site Engineer') {
-                    const isReAck = !!ext.isReAck;
-                    const origLabel = ext.rejectionOrigin ? ext.rejectionOrigin.roleLabel : shTitle;
-                    if (rk === 'site-engineer') {
-                        html += '<div class="approval-action-card" style="border-color:var(--blue);background:rgba(21,101,192,0.06);">' +
-                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--blue);"></i> ' + (isReAck ? 'Extension Request: Site Engineer Re-Acknowledgment' : 'Extension Request: Site Engineer Acknowledgment') + '</div>' +
-                            '<div class="aa-desc"><b>Supervisor ' + (isReAck ? 'revised extension request' : 'requested extension') + ':</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Inspect site safety conditions and re-acknowledge to ' + (isReAck ? ('return directly to ' + escapeHtml(origLabel)) : ('forward to ' + shTitle)) + '. Gated by GPS and digital signature.</div>' +
+                // Stage: Pending Project Manager Acknowledgment (Critical Lift Plan)
+                else if (ext.status === 'Pending Project Manager Acknowledgment') {
+                    const isPmExec = rk === 'project-manager';
+                    if (isPmExec) {
+                        html += '<div class="approval-action-card" style="border-color:#DC2626;background:rgba(220,38,38,0.06);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-user-tie" style="color:#DC2626;"></i> Extension Request: Project Manager Executive Acknowledgment</div>' +
+                            '<div class="aa-desc"><b>Lifting Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Critical lift extension verified by P&amp;M Engineer. Executive acknowledgment by <b>Project Manager</b> is required before forwarding to EHS Safety.</div>' +
                             '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> ' + (isReAck ? ('Re-Acknowledge &amp; Return to ' + escapeHtml(origLabel)) : 'Re-Acknowledge Extension') + '</button>' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> Acknowledge &amp; Forward to EHS</button>' +
                             '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
                             '</div></div>';
                     } else if (rk !== 'admin' && rk !== 'super-admin') {
                         html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
-                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting Site Engineer ' + (isReAck ? 'Re-Acknowledgment' : 'Acknowledgment') + '</div>' +
-                            '<div class="aa-desc">Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting Step 1 ' + (isReAck ? 're-acknowledgment' : 'acknowledgment') + ' by the <b>Site Engineer</b>' + (isReAck ? (' before returning to ' + escapeHtml(origLabel)) : '') + '.</div>' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting Project Manager Executive Acknowledgment</div>' +
+                            '<div class="aa-desc">Critical lift extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting statutory executive acknowledgment by the <b>Project Manager</b>.</div>' +
                             '</div>';
                     }
                 }
-                // Stage 2: Pending Tower Incharge Review
-                else if (ext.status === 'Pending Section Head') {
-                    const targetShRole = shRoleFor(p);
-                    const isShRole = (rk === targetShRole) || ((isShaft || isGr || isHw || isConfined || isGeneral) && (rk === 'hw-section-head' || rk === 'section-head'));
-                    const extShAckDesc = '<b>Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Re-acknowledged by Site Engineer (' + escapeHtml((ext.approvals && ext.approvals.siteEngineer && ext.approvals.siteEngineer.by) || 'Site Engineer') + '). Approve to route to EHS Safety for final endorsement, or Reject to cancel extension.';
-                    const extShAwaitingDesc = 'Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Re-acknowledged by Site Engineer. Awaiting review and endorsement by <b>' + shTitle + '</b>.';
-                    if (isShRole) {
-                        html += '<div class="approval-action-card" style="border-color:var(--purple);background:var(--purple-bg);">' +
-                            '<div class="aa-title"><i class="fa-solid fa-stopwatch" style="color:var(--purple);"></i> Extension Request: ' + shTitle + ' Review</div>' +
-                            '<div class="aa-desc">' + extShAckDesc + '</div>' +
+                // Stage: Pending Night Handover (Night Shift Work)
+                else if (ext.status === 'Pending Night Handover') {
+                    const isNightSup = rk === 'night-supervisor';
+                    if (isNightSup) {
+                        html += '<div class="approval-action-card" style="border-color:var(--indigo, #4F46E5);background:rgba(79,70,229,0.06);">' +
+                            '<div class="aa-title"><i class="fa-solid fa-moon" style="color:#4F46E5;"></i> Extension Request: Night Shift Handover Confirmation</div>' +
+                            '<div class="aa-desc"><b>Supervisor requested extension:</b> "' + escapeHtml(ext.reason) + '" &middot; Requested: +' + extDurTxt + '. Endorsed by Tower Incharge. Confirm night shift handover and equipment status before forwarding to EHS Safety.</div>' +
                             '<div style="display:flex;gap:10px;flex-wrap:wrap;">' +
-                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> Approve Extension</button>' +
+                            '<button class="btn btn-green" onclick="openApprovalGPS(\'' + p.id + '\',\'approve-ext\')"><i class="fa-solid fa-check"></i> Confirm Handover &amp; Forward to EHS</button>' +
                             '<button class="btn btn-danger" onclick="openApprovalGPS(\'' + p.id + '\',\'reject-ext\')"><i class="fa-solid fa-ban"></i> Reject Extension</button>' +
                             '</div></div>';
                     } else if (rk !== 'admin' && rk !== 'super-admin') {
                         html += '<div class="approval-action-card" style="border-color:var(--border);background:var(--card-bg);">' +
-                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting ' + shTitle + ' Review</div>' +
-                            '<div class="aa-desc">' + extShAwaitingDesc + '</div>' +
+                            '<div class="aa-title"><i class="fa-solid fa-clock"></i> Extension Request: Awaiting Night Shift Handover</div>' +
+                            '<div class="aa-desc">Extension requested: "' + escapeHtml(ext.reason) + '" (+' + extDurTxt + '). Awaiting night shift handover confirmation by the <b>Night Site Supervisor</b>.</div>' +
                             '</div>';
                     }
                 }
@@ -26701,6 +26966,25 @@ function trackerHtml(p) {
                 }
                 if (p.extension.status === 'Pending Site Engineer' && rk !== 'site-engineer') {
                     showToast('Access Denied: Only Site Engineer can re-acknowledge extension.', 'err');
+                    return;
+                }
+                if (p.extension.status === 'Pending Parallel Approval') {
+                    const isParallelRole = ['mep', 'pm', 'it', 'it-in-charge'].includes(rk);
+                    if (!isParallelRole) {
+                        showToast('Access Denied: Only designated parallel discipline engineers (MEP · P&M · IT) can act on this extension stage.', 'err');
+                        return;
+                    }
+                }
+                if (p.extension.status === 'Pending MEP Acknowledgment' && rk !== 'mep') {
+                    showToast('Access Denied: Only MEP Engineer can act on this extension stage.', 'err');
+                    return;
+                }
+                if (p.extension.status === 'Pending Project Manager Acknowledgment' && rk !== 'project-manager') {
+                    showToast('Access Denied: Only Project Manager can act on this extension stage.', 'err');
+                    return;
+                }
+                if (p.extension.status === 'Pending Night Handover' && rk !== 'night-supervisor') {
+                    showToast('Access Denied: Only Night Site Supervisor can act on night extension handover.', 'err');
                     return;
                 }
                 if (p.extension.status === 'Pending Section Head') {
